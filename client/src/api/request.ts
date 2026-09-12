@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import { useAuthStore } from '@/stores/auth'
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({
@@ -8,11 +9,12 @@ const request: AxiosInstance = axios.create({
 })
 
 // ===== 请求拦截器：自动加 token =====
+// 从 Pinia store 读 token（持久化由 pinia-plugin-persistedstate 负责）
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('token')
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
+    const auth = useAuthStore()
+    if (auth.token && config.headers) {
+      config.headers.Authorization = `Bearer ${auth.token}`
     }
     return config
   },
@@ -24,13 +26,13 @@ request.interceptors.response.use(
   (response) => response.data,  // 直接返回 data，调用方少一层 .data
   (error: AxiosError) => {
     console.error('[API Error]', error.response?.status, error.message)
-    
-    // 401 = token 失效，清掉
+
+    // 401 = token 失效，从 store 清登录态
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      // TODO 阶段 8：这里跳登录页
+      const auth = useAuthStore()
+      auth.logout()
     }
-    
+
     return Promise.reject(error)
   }
 )
