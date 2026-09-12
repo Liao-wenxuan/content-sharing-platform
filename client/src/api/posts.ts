@@ -37,15 +37,22 @@ export interface FeedResponse {
 }
 
 // ===== API 方法 =====
+// 注意：request 的响应拦截器 (response) => response.data 在 runtime 已经解包，
+// 但 axios v1 的 TS 类型推断不会自动传播，所以这里显式标注返回类型 + as unknown as 强转。
+// 详见: https://github.com/axios/axios/issues/1510
 
 export const postsApi = {
   // 发布笔记
-  createPost(payload: CreatePostPayload) {
-    return request.post<Post>('/posts', payload)
+  async createPost(payload: CreatePostPayload): Promise<Post> {
+    const res = await request.post<Post>('/posts', payload)
+    return res as unknown as Post
   },
 
   // 获取 Feed 列表
-  getFeed(params: { page?: number; pageSize?: number } = {}) {
-    return request.get<FeedResponse>('/posts/feed', { params })
+  async getFeed(
+    params: { page?: number; pageSize?: number } = {}
+  ): Promise<FeedResponse> {
+    const res = await request.get<FeedResponse>('/posts/feed', { params })
+    return res as unknown as FeedResponse
   }
 }
