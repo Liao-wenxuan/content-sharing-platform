@@ -9,6 +9,9 @@ const errorMsg = ref('')
 const page = ref(1)
 const hasMore = ref(false)
 
+// 顶部 tabbar（静态即可，不接路由）
+const activeTab = ref<'discover' | 'follow' | 'local'>('discover')
+
 async function loadFeed(reset: boolean) {
   if (reset) {
     page.value = 1
@@ -37,13 +40,10 @@ async function loadMore() {
   await loadFeed(false)
 }
 
-// 相对时间：刚刚 / X 分钟前 / X 小时前 / X 天前 / 日期
-// 后端已统一返回 ISO 8601 + Z（如 "2026-09-13T01:00:00.000Z"），直接 new Date() 即可
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr)
   const now = new Date()
   const diff = (now.getTime() - d.getTime()) / 1000
-
   if (diff < 60) return '刚刚'
   if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
@@ -51,7 +51,6 @@ function formatTime(dateStr: string): string {
   return d.toLocaleDateString('zh-CN')
 }
 
-// 头像：用昵称首字 + 渐变背景
 function avatarText(nickname?: string): string {
   return nickname?.[0]?.toUpperCase() || '?'
 }
@@ -63,7 +62,27 @@ onMounted(() => {
 
 <template>
   <div class="home">
-    <h1>首页 Feed</h1>
+    <!-- 顶部 tabbar：发现 / 关注 / 同城 -->
+    <div class="tabbar">
+      <button
+        :class="['tab', { active: activeTab === 'follow' }]"
+        @click="activeTab = 'follow'"
+      >
+        关注
+      </button>
+      <button
+        :class="['tab', { active: activeTab === 'discover' }]"
+        @click="activeTab = 'discover'"
+      >
+        发现
+      </button>
+      <button
+        :class="['tab', { active: activeTab === 'local' }]"
+        @click="activeTab = 'local'"
+      >
+        同城
+      </button>
+    </div>
 
     <div v-if="loading && posts.length === 0" class="state loading">
       加载中...
@@ -81,29 +100,27 @@ onMounted(() => {
         class="post-link"
       >
         <article class="post-card">
-          <header class="post-header">
-            <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
-            <div class="meta">
-              <div class="nickname">{{ post.author?.nickname || '未知用户' }}</div>
-              <div class="time">{{ formatTime(post.createdAt) }}</div>
-            </div>
-          </header>
-
-          <div class="content">{{ post.content }}</div>
-
-          <div v-if="post.imageUrls && post.imageUrls.length > 0" class="images">
-            <img
-              v-for="(url, i) in post.imageUrls"
-              :key="i"
-              :src="url"
-              :alt="`图片${i + 1}`"
-              loading="lazy"
-            />
+          <!-- 图片封面：有图时占主位 -->
+          <div v-if="post.imageUrls && post.imageUrls.length > 0" class="cover">
+            <img :src="post.imageUrls[0]" :alt="`封面`" loading="lazy" />
+            <span v-if="post.imageUrls.length > 1" class="cover-badge">
+              +{{ post.imageUrls.length }}
+            </span>
           </div>
 
-          <div v-if="post.topicTag" class="topic">
+          <!-- 话题标签（顶部，可选） -->
+          <div v-if="post.topicTag" class="topic-tag">
             #{{ post.topicTag }}
           </div>
+
+          <!-- 内容（限 2 行） -->
+          <div class="content">{{ post.content }}</div>
+
+          <!-- 底部作者信息 -->
+          <footer class="author">
+            <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
+            <span class="nickname">{{ post.author?.nickname || '未知用户' }}</span>
+          </footer>
         </article>
       </router-link>
 
@@ -124,52 +141,141 @@ onMounted(() => {
 
 <style scoped>
 .home {
-  max-width: 600px;
+  max-width: 720px;
   margin: 0 auto;
-  padding: 30px 20px;
+  padding: 12px 16px;
 }
 
-h1 {
-  margin-bottom: 24px;
-  color: #333;
-}
-
-.feed {
+/* ===== 顶部 tabbar ===== */
+.tabbar {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  justify-content: center;
+  gap: 40px;
+  padding: 8px 0 12px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 12px;
 }
 
-/* 让整张卡片可点 + 去掉 <a> 默认下划线 */
+.tab {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #999;
+  cursor: pointer;
+  padding: 4px 0;
+  position: relative;
+  transition: color 0.2s;
+}
+
+.tab:hover {
+  color: #666;
+}
+
+.tab.active {
+  color: #333;
+  font-weight: 600;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 3px;
+  background: #ff2442;
+  border-radius: 2px;
+}
+
+/* ===== 双列瀑布流 ===== */
+.feed {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .post-link {
   text-decoration: none;
   color: inherit;
   display: block;
-  border-radius: 8px;
-}
-
-.post-link:hover .post-card {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .post-card {
   background: white;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 16px;
-  transition: box-shadow 0.2s;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s, transform 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 
-.post-header {
+.post-link:hover .post-card {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+/* 图片封面 */
+.cover {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: #f5f5f5;
+  position: relative;
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* 话题标签 */
+.topic-tag {
+  font-size: 12px;
+  color: #ff2442;
+  padding: 8px 10px 0;
+  font-weight: 500;
+}
+
+/* 内容（限 2 行） */
+.content {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #333;
+  padding: 6px 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  flex: 1;
+}
+
+/* 作者信息 */
+.author {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 6px;
+  padding: 8px 10px 10px;
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: linear-gradient(135deg, #ff2442, #ff8e3c);
   color: white;
@@ -177,61 +283,21 @@ h1 {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 10px;
   flex-shrink: 0;
 }
 
-.meta {
-  flex: 1;
-  min-width: 0;
-}
-
 .nickname {
-  font-weight: 600;
-  font-size: 14px;
-  color: #333;
-}
-
-.time {
   font-size: 12px;
-  color: #999;
-  margin-top: 2px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.content {
-  font-size: 15px;
-  line-height: 1.6;
-  color: #333;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin-bottom: 12px;
-}
-
-.images {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.images img {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: 4px;
-  background: #f5f5f5;
-}
-
-.topic {
-  display: inline-block;
-  color: #1989fa;
-  font-size: 13px;
-  background: #e8f3ff;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
+/* 状态条：跨两列 */
 .state {
+  grid-column: 1 / -1;
   text-align: center;
   padding: 20px;
   color: #999;
@@ -261,5 +327,15 @@ h1 {
 .load-more-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 480px) {
+  .home {
+    padding: 8px 12px;
+  }
+  .tabbar {
+    gap: 28px;
+  }
 }
 </style>
