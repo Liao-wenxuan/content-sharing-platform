@@ -62,7 +62,6 @@ onMounted(() => {
   loadPost()
 })
 
-// 路由参数变化时重新加载（用户点不同笔记时）
 watch(() => route.params.id, () => {
   loadPost()
 })
@@ -81,7 +80,7 @@ watch(() => route.params.id, () => {
 
     <article v-else-if="post" class="post-card">
       <header class="post-header">
-        <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
+        <div class="avatar avatar-lg">{{ avatarText(post.author?.nickname) }}</div>
         <div class="meta">
           <div class="nickname">{{ post.author?.nickname || '未知用户' }}</div>
           <div class="time" :title="formatExactTime(post.createdAt)">
@@ -117,27 +116,29 @@ watch(() => route.params.id, () => {
 .detail {
   max-width: 600px;
   margin: 0 auto;
-  padding: 30px 20px;
+  padding: 24px 20px;
 }
 
 .back-btn {
   background: none;
   border: none;
-  color: #1989fa;
+  color: var(--muted-foreground);
   cursor: pointer;
-  font-size: 14px;
-  padding: 8px 0;
+  font-size: 13px;
+  padding: 6px 0;
   margin-bottom: 16px;
+  font-family: inherit;
+  transition: color 0.15s;
 }
 
 .back-btn:hover {
-  text-decoration: underline;
+  color: var(--foreground);
 }
 
 .post-card {
-  background: white;
-  border: 1px solid #eee;
-  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   padding: 24px;
 }
 
@@ -145,21 +146,27 @@ watch(() => route.params.id, () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .avatar {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff2442, #ff8e3c);
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 14px;
   flex-shrink: 0;
+}
+
+.avatar-lg {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
 }
 
 .meta {
@@ -169,13 +176,13 @@ watch(() => route.params.id, () => {
 
 .nickname {
   font-weight: 600;
-  font-size: 16px;
-  color: #333;
+  font-size: 15px;
+  color: var(--foreground);
 }
 
 .time {
-  font-size: 13px;
-  color: #999;
+  font-size: 12px;
+  color: var(--muted-foreground);
   margin-top: 2px;
   cursor: help;
 }
@@ -183,7 +190,7 @@ watch(() => route.params.id, () => {
 .content {
   font-size: 16px;
   line-height: 1.7;
-  color: #333;
+  color: var(--foreground);
   white-space: pre-wrap;
   word-wrap: break-word;
   margin-bottom: 16px;
@@ -200,37 +207,38 @@ watch(() => route.params.id, () => {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  border-radius: 6px;
-  background: #f5f5f5;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--muted);
   cursor: pointer;
 }
 
 .topic {
   display: inline-block;
-  color: #1989fa;
-  font-size: 14px;
-  background: #e8f3ff;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  background: var(--muted);
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   margin-bottom: 12px;
+  font-weight: 500;
 }
 
 .post-footer {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border);
   padding-top: 12px;
   margin-top: 16px;
-  color: #999;
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
 .state {
   text-align: center;
   padding: 40px 20px;
-  color: #999;
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 
 .state.error {
-  color: #e74c3c;
+  color: var(--destructive);
 }
 </style>

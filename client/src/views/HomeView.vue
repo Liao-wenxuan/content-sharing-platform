@@ -108,11 +108,6 @@ onMounted(() => {
             </span>
           </div>
 
-          <!-- 话题标签（顶部，可选） -->
-          <div v-if="post.topicTag" class="topic-tag">
-            #{{ post.topicTag }}
-          </div>
-
           <!-- 内容（限 2 行） -->
           <div class="content">{{ post.content }}</div>
 
@@ -120,6 +115,7 @@ onMounted(() => {
           <footer class="author">
             <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
             <span class="nickname">{{ post.author?.nickname || '未知用户' }}</span>
+            <span class="time">{{ formatTime(post.createdAt) }}</span>
           </footer>
         </article>
       </router-link>
@@ -146,53 +142,54 @@ onMounted(() => {
   padding: 12px 16px;
 }
 
-/* ===== 顶部 tabbar ===== */
+/* ===== 顶部 tabbar（shadcn 风格：克制 + 下划线） ===== */
 .tabbar {
   display: flex;
   justify-content: center;
   gap: 40px;
-  padding: 8px 0 12px;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 12px;
+  padding: 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
 }
 
 .tab {
   background: none;
   border: none;
-  font-size: 16px;
-  color: #999;
+  font-size: 15px;
+  color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px 0;
   position: relative;
-  transition: color 0.2s;
+  transition: color 0.15s;
+  font-family: inherit;
 }
 
 .tab:hover {
-  color: #666;
+  color: var(--foreground);
 }
 
 .tab.active {
-  color: #333;
+  color: var(--foreground);
   font-weight: 600;
 }
 
 .tab.active::after {
   content: '';
   position: absolute;
-  bottom: -12px;
+  bottom: -14px;
   left: 50%;
   transform: translateX(-50%);
-  width: 18px;
-  height: 3px;
-  background: #ff2442;
-  border-radius: 2px;
+  width: 16px;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 1px;
 }
 
 /* ===== 双列瀑布流 ===== */
 .feed {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 12px;
 }
 
 .post-link {
@@ -202,18 +199,19 @@ onMounted(() => {
 }
 
 .post-card {
-  background: white;
-  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
   display: flex;
   flex-direction: column;
 }
 
 .post-link:hover .post-card {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+  border-color: var(--muted-foreground);
 }
 
 /* 图片封面 */
@@ -221,7 +219,7 @@ onMounted(() => {
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--muted);
   position: relative;
 }
 
@@ -235,7 +233,7 @@ onMounted(() => {
   position: absolute;
   right: 6px;
   bottom: 6px;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.75);
   color: white;
   font-size: 11px;
   padding: 2px 6px;
@@ -243,20 +241,12 @@ onMounted(() => {
   font-weight: 500;
 }
 
-/* 话题标签 */
-.topic-tag {
-  font-size: 12px;
-  color: #ff2442;
-  padding: 8px 10px 0;
-  font-weight: 500;
-}
-
 /* 内容（限 2 行） */
 .content {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
-  color: #333;
-  padding: 6px 10px;
+  color: var(--foreground);
+  padding: 10px 12px 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -265,20 +255,20 @@ onMounted(() => {
   flex: 1;
 }
 
-/* 作者信息 */
+/* 作者信息（底部一行） */
 .author {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px 10px;
+  padding: 6px 12px 10px;
 }
 
 .avatar {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff2442, #ff8e3c);
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,10 +279,18 @@ onMounted(() => {
 
 .nickname {
   font-size: 12px;
-  color: #666;
+  color: var(--foreground);
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+.time {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
 }
 
 /* 状态条：跨两列 */
@@ -300,28 +298,29 @@ onMounted(() => {
   grid-column: 1 / -1;
   text-align: center;
   padding: 20px;
-  color: #999;
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 
 .state.error {
-  color: #e74c3c;
+  color: var(--destructive);
 }
 
 .load-more-btn {
-  background: white;
-  border: 1px solid #ddd;
-  padding: 10px 24px;
-  border-radius: 20px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  padding: 8px 24px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 14px;
-  color: #666;
-  transition: all 0.2s;
+  color: var(--foreground);
+  transition: all 0.15s;
+  font-family: inherit;
 }
 
 .load-more-btn:hover:not(:disabled) {
-  border-color: #ff2442;
-  color: #ff2442;
+  background: var(--muted);
+  border-color: var(--foreground);
 }
 
 .load-more-btn:disabled {

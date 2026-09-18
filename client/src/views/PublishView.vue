@@ -13,7 +13,6 @@ const imageUrlsText = ref('')
 const submitting = ref(false)
 const errorMsg = ref('')
 
-// 页面加载时检查登录
 onMounted(() => {
   if (!auth.isLoggedIn) {
     router.push('/login')
@@ -21,7 +20,6 @@ onMounted(() => {
 })
 
 async function handleSubmit() {
-  // 1. 客户端预校验
   const text = content.value.trim()
   if (!text) {
     errorMsg.value = '内容不能为空'
@@ -32,13 +30,11 @@ async function handleSubmit() {
     return
   }
 
-  // 2. 解析图片 URL（逗号或换行分隔）
   const imageUrls = imageUrlsText.value
     .split(/[\n,]/)
     .map(s => s.trim())
     .filter(s => s.length > 0)
 
-  // 3. 提交
   submitting.value = true
   errorMsg.value = ''
 
@@ -65,7 +61,7 @@ async function handleSubmit() {
 
     <form @submit.prevent="handleSubmit">
       <div class="field">
-        <label>内容（必填，500 字以内）</label>
+        <label>内容 <span class="required">*</span></label>
         <textarea
           v-model="content"
           rows="6"
@@ -76,7 +72,7 @@ async function handleSubmit() {
       </div>
 
       <div class="field">
-        <label>话题标签（可选）</label>
+        <label>话题标签</label>
         <input
           v-model="topicTag"
           placeholder="例如：前端开发"
@@ -85,11 +81,11 @@ async function handleSubmit() {
       </div>
 
       <div class="field">
-        <label>图片 URL（可选，多个用逗号或换行分隔）</label>
+        <label>图片 URL</label>
         <textarea
           v-model="imageUrlsText"
           rows="3"
-          placeholder="https://example.com/img1.jpg&#10;https://example.com/img2.jpg"
+          placeholder="多个 URL 用逗号或换行分隔"
         />
       </div>
 
@@ -106,12 +102,14 @@ async function handleSubmit() {
 .publish {
   max-width: 600px;
   margin: 0 auto;
-  padding: 30px 20px;
+  padding: 24px 20px;
 }
 
 h1 {
   margin-bottom: 24px;
-  color: #333;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .field {
@@ -121,27 +119,38 @@ h1 {
 .field label {
   display: block;
   margin-bottom: 8px;
-  font-weight: 600;
-  color: #333;
+  font-weight: 500;
+  color: var(--foreground);
   font-size: 14px;
+}
+
+.required {
+  color: var(--destructive);
 }
 
 .field input,
 .field textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   font-size: 14px;
   font-family: inherit;
-  box-sizing: border-box;
+  background: var(--background);
+  color: var(--foreground);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .field input:focus,
 .field textarea:focus {
-  border-color: #ff2442;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 0.05);
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color: var(--muted-foreground);
 }
 
 .field textarea {
@@ -151,38 +160,40 @@ h1 {
 .counter {
   text-align: right;
   font-size: 12px;
-  color: #999;
+  color: var(--muted-foreground);
   margin-top: 4px;
 }
 
 .error {
-  color: #e74c3c;
+  color: var(--destructive);
   margin-bottom: 12px;
   font-size: 14px;
-  background: #fff5f5;
+  background: #fef2f2;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: var(--radius);
+  border: 1px solid #fecaca;
 }
 
 button {
-  background: #ff2442;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-foreground);
   border: none;
-  padding: 12px 24px;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   width: 100%;
-  transition: background 0.2s;
+  font-family: inherit;
+  transition: opacity 0.15s;
 }
 
 button:hover:not(:disabled) {
-  background: #e0203a;
+  opacity: 0.9;
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 </style>

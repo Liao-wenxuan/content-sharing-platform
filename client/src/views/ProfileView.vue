@@ -13,7 +13,6 @@ const loading = ref(false)
 const errorMsg = ref('')
 const total = ref(0)
 
-// 解析路由里的 :id。"me" 用当前登录用户的 id，否则转 number
 const targetId = computed<number | null>(() => {
   const id = route.params.id
   if (id === 'me') {
@@ -80,10 +79,10 @@ watch(() => route.params.id, () => {
 <template>
   <div class="profile">
     <header class="profile-header">
-      <div class="avatar-large">{{ avatarText(profileUser?.nickname) }}</div>
+      <div class="avatar avatar-lg">{{ avatarText(profileUser?.nickname) }}</div>
       <h1>{{ profileUser?.nickname || '个人主页' }}</h1>
       <p class="stats">
-        <span v-if="!loading">共发布了 <strong>{{ total }}</strong> 篇笔记</span>
+        <span v-if="!loading">共 <strong>{{ total }}</strong> 篇笔记</span>
       </p>
     </header>
 
@@ -104,10 +103,10 @@ watch(() => route.params.id, () => {
       >
         <article class="post-card">
           <div class="content">{{ post.content }}</div>
-          <div class="meta">
+          <footer class="meta">
             <span class="time">{{ formatTime(post.createdAt) }}</span>
             <span v-if="post.topicTag" class="topic">#{{ post.topicTag }}</span>
-          </div>
+          </footer>
         </article>
       </router-link>
     </div>
@@ -118,51 +117,59 @@ watch(() => route.params.id, () => {
 .profile {
   max-width: 600px;
   margin: 0 auto;
-  padding: 30px 20px;
+  padding: 24px 20px;
 }
 
 .profile-header {
   text-align: center;
   padding: 24px 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border);
   margin-bottom: 24px;
 }
 
-.avatar-large {
-  width: 80px;
-  height: 80px;
+.avatar {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff2442, #ff8e3c);
-  color: white;
-  display: inline-flex;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 32px;
-  margin-bottom: 12px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.avatar-lg {
+  width: 72px;
+  height: 72px;
+  font-size: 28px;
+  margin: 0 auto 12px;
 }
 
 .profile-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 22px;
-  color: #333;
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--foreground);
 }
 
 .stats {
-  color: #999;
-  font-size: 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
   margin: 0;
 }
 
 .stats strong {
-  color: #ff2442;
+  color: var(--foreground);
   font-weight: 600;
 }
 
 .posts {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .post-link {
@@ -171,22 +178,23 @@ watch(() => route.params.id, () => {
   display: block;
 }
 
-.post-link:hover .post-card {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+.post-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  transition: box-shadow 0.15s, border-color 0.15s;
 }
 
-.post-card {
-  background: white;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 16px;
-  transition: box-shadow 0.2s;
+.post-link:hover .post-card {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--muted-foreground);
 }
 
 .content {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
-  color: #333;
+  color: var(--foreground);
   white-space: pre-wrap;
   word-wrap: break-word;
   margin-bottom: 8px;
@@ -198,36 +206,32 @@ watch(() => route.params.id, () => {
 
 .meta {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   font-size: 12px;
-  color: #999;
+  color: var(--muted-foreground);
 }
 
 .topic {
-  color: #1989fa;
-  background: #e8f3ff;
-  padding: 2px 6px;
+  color: var(--foreground);
+  background: var(--muted);
+  padding: 2px 8px;
   border-radius: 4px;
 }
 
 .state {
   text-align: center;
   padding: 40px 20px;
-  color: #999;
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 
 .state.error {
-  color: #e74c3c;
+  color: var(--destructive);
 }
 
 .state.empty a {
-  color: #1989fa;
-  text-decoration: none;
-}
-
-.state.empty a:hover {
+  color: var(--foreground);
   text-decoration: underline;
 }
 </style>
