@@ -38,8 +38,9 @@ async function loadMore() {
 }
 
 // 相对时间：刚刚 / X 分钟前 / X 小时前 / X 天前 / 日期
+// 后端已统一返回 ISO 8601 + Z（如 "2026-09-13T01:00:00.000Z"），直接 new Date() 即可
 function formatTime(dateStr: string): string {
-  const d = new Date(dateStr.replace(' ', 'T'))  // SQLite 的 "YYYY-MM-DD HH:MM:SS" 转 ISO
+  const d = new Date(dateStr)
   const now = new Date()
   const diff = (now.getTime() - d.getTime()) / 1000
 
@@ -63,44 +64,48 @@ onMounted(() => {
 <template>
   <div class="home">
     <h1>首页 Feed</h1>
-<!---->
+
     <div v-if="loading && posts.length === 0" class="state loading">
       加载中...
-    
-</div>
-
-
+    </div>
 
     <div v-if="errorMsg" class="state error">
       {{ errorMsg }}
     </div>
 
     <div v-if="!loading || posts.length > 0" class="feed">
-      <article v-for="post in posts" :key="post.id" class="post-card">
-        <header class="post-header">
-          <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
-          <div class="meta">
-            <div class="nickname">{{ post.author?.nickname || '未知用户' }}</div>
-            <div class="time">{{ formatTime(post.createdAt) }}</div>
+      <router-link
+        v-for="post in posts"
+        :key="post.id"
+        :to="`/post/${post.id}`"
+        class="post-link"
+      >
+        <article class="post-card">
+          <header class="post-header">
+            <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
+            <div class="meta">
+              <div class="nickname">{{ post.author?.nickname || '未知用户' }}</div>
+              <div class="time">{{ formatTime(post.createdAt) }}</div>
+            </div>
+          </header>
+
+          <div class="content">{{ post.content }}</div>
+
+          <div v-if="post.imageUrls && post.imageUrls.length > 0" class="images">
+            <img
+              v-for="(url, i) in post.imageUrls"
+              :key="i"
+              :src="url"
+              :alt="`图片${i + 1}`"
+              loading="lazy"
+            />
           </div>
-        </header>
 
-        <div class="content">{{ post.content }}</div>
-
-        <div v-if="post.imageUrls && post.imageUrls.length > 0" class="images">
-          <img
-            v-for="(url, i) in post.imageUrls"
-            :key="i"
-            :src="url"
-            :alt="`图片${i + 1}`"
-            loading="lazy"
-          />
-        </div>
-
-        <div v-if="post.topicTag" class="topic">
-          #{{ post.topicTag }}
-        </div>
-      </article>
+          <div v-if="post.topicTag" class="topic">
+            #{{ post.topicTag }}
+          </div>
+        </article>
+      </router-link>
 
       <div v-if="hasMore" class="state">
         <button class="load-more-btn" :disabled="loadingMore" @click="loadMore">
@@ -135,16 +140,24 @@ h1 {
   gap: 16px;
 }
 
+/* 让整张卡片可点 + 去掉 <a> 默认下划线 */
+.post-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  border-radius: 8px;
+}
+
+.post-link:hover .post-card {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
 .post-card {
   background: white;
   border: 1px solid #eee;
   border-radius: 8px;
   padding: 16px;
   transition: box-shadow 0.2s;
-}
-
-.post-card:hover {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .post-header {

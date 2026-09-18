@@ -54,5 +54,11 @@ export const postsApi = {
   ): Promise<FeedResponse> {
     const res = await request.get<FeedResponse>('/posts/feed', { params })
     return res as unknown as FeedResponse
+  },
+
+  // 获取单篇笔记详情
+  async getById(id: number): Promise<Post> {
+    const res = await request.get<Post>(`/posts/${id}`)
+    return res as unknown as Post
   }
 }
