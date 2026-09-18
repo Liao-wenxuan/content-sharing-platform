@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import db from '../lib/db'
+import { requireAuth } from '../middleware/auth'
 
 const router = Router()
 
@@ -91,5 +92,37 @@ router.post('/login', async (req: Request, res: Response) => {
     res.status(500).json({ message: err.message || '登录失败' })
   }
 })
+
+// ===== GET /me 拿当前登录用户信息 =====
+// 需要 Bearer token，由 requireAuth 中间件校验后挂 req.userId
+router.get('/me', requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) {
+      return res.status(401).json({ message: '未登录' })
+    }
+
+    const user = db.prepare(
+      'SELECT id, email, nickname, avatar FROM users WHERE id = ?'
+    ).get(userId) as any
+
+    if (!user) {
+      return res.status(404).json({ message: '用户不存在' })
+    }
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      nickname: user.nickname,
+      avatar: user.avatar
+    })
+  } catch (err: any) {
+    console.error('[Get Me Error]', err)
+    res.status(500).json({ message: err.message || '获取用户信息失败' })
+  }
+})
+
+// 注意：没有 /logout 路由。JWT 是无状态的，前端清 token 即可。
+// 后端不需要"踢人下线"——这是 JWT 的取舍：快但不灵活。
 
 export default router

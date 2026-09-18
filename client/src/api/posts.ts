@@ -36,6 +36,16 @@ export interface FeedResponse {
   pagination: FeedPagination
 }
 
+export interface UserPostsResponse {
+  user: {
+    id: number
+    nickname: string
+    avatar: string | null
+  }
+  list: Post[]
+  total: number
+}
+
 // ===== API 方法 =====
 // 注意：request 的响应拦截器 (response) => response.data 在 runtime 已经解包，
 // 但 axios v1 的 TS 类型推断不会自动传播，所以这里显式标注返回类型 + as unknown as 强转。
@@ -60,5 +70,17 @@ export const postsApi = {
   async getById(id: number): Promise<Post> {
     const res = await request.get<Post>(`/posts/${id}`)
     return res as unknown as Post
+  },
+
+  // 获取当前用户的帖子列表（需要 Bearer token）
+  async getMyPosts(): Promise<UserPostsResponse> {
+    const res = await request.get<UserPostsResponse>('/users/me/posts')
+    return res as unknown as UserPostsResponse
+  },
+
+  // 获取指定用户的帖子列表（公开）
+  async getUserPosts(userId: number): Promise<UserPostsResponse> {
+    const res = await request.get<UserPostsResponse>(`/users/${userId}/posts`)
+    return res as unknown as UserPostsResponse
   }
 }

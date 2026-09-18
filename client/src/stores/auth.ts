@@ -1,9 +1,9 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 
-// 用户类型（暂时简单定义，阶段 6 接入后端时扩展）
+// 用户类型 —— 与后端 /auth/me 和 /auth/register 返回的 userInfo 对齐
 export interface User {
-  id: string;
+  id: number;
   nickname: string;
   avatar: string | null;
 }
