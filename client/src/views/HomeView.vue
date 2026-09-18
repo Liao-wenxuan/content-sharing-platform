@@ -9,9 +9,6 @@ const errorMsg = ref('')
 const page = ref(1)
 const hasMore = ref(false)
 
-// 顶部 tabbar（静态即可，不接路由）
-const activeTab = ref<'discover' | 'follow' | 'local'>('discover')
-
 async function loadFeed(reset: boolean) {
   if (reset) {
     page.value = 1
@@ -62,28 +59,6 @@ onMounted(() => {
 
 <template>
   <div class="home">
-    <!-- 顶部 tabbar：发现 / 关注 / 同城 -->
-    <div class="tabbar">
-      <button
-        :class="['tab', { active: activeTab === 'follow' }]"
-        @click="activeTab = 'follow'"
-      >
-        关注
-      </button>
-      <button
-        :class="['tab', { active: activeTab === 'discover' }]"
-        @click="activeTab = 'discover'"
-      >
-        发现
-      </button>
-      <button
-        :class="['tab', { active: activeTab === 'local' }]"
-        @click="activeTab = 'local'"
-      >
-        同城
-      </button>
-    </div>
-
     <div v-if="loading && posts.length === 0" class="state loading">
       加载中...
     </div>
@@ -139,50 +114,7 @@ onMounted(() => {
 .home {
   max-width: 720px;
   margin: 0 auto;
-  padding: 12px 16px;
-}
-
-/* ===== 顶部 tabbar（shadcn 风格：克制 + 下划线） ===== */
-.tabbar {
-  display: flex;
-  justify-content: center;
-  gap: 40px;
-  padding: 8px 0 14px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
-}
-
-.tab {
-  background: none;
-  border: none;
-  font-size: 15px;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  padding: 4px 0;
-  position: relative;
-  transition: color 0.15s;
-  font-family: inherit;
-}
-
-.tab:hover {
-  color: var(--foreground);
-}
-
-.tab.active {
-  color: var(--foreground);
-  font-weight: 600;
-}
-
-.tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 16px;
-  height: 2px;
-  background: var(--primary);
-  border-radius: 1px;
+  padding: 24px 16px 12px;
 }
 
 /* ===== 双列瀑布流 ===== */
@@ -331,10 +263,7 @@ onMounted(() => {
 /* ===== 响应式 ===== */
 @media (max-width: 480px) {
   .home {
-    padding: 8px 12px;
-  }
-  .tabbar {
-    gap: 28px;
+    padding: 16px 12px 8px;
   }
 }
 </style>
