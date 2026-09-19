@@ -1,7 +1,32 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const isDark = ref(false)
+
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', isDark.value)
+}
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  applyTheme()
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+}
+
+onMounted(() => {
+  // URL 参数 ?theme=dark 优先（方便截图 + 调试）
+  const urlTheme = new URLSearchParams(window.location.search).get('theme')
+  if (urlTheme === 'dark') {
+    isDark.value = true
+  } else if (urlTheme === 'light') {
+    isDark.value = false
+  } else {
+    isDark.value = localStorage.getItem('theme') === 'dark'
+  }
+  applyTheme()
+})
 
 function handleLogout() {
   auth.logout()
@@ -13,10 +38,9 @@ function handleLogout() {
     <nav class="nav">
       <router-link to="/" class="nav-link">首页</router-link>
 
-      <!-- 关键：v-if/v-else 切换登录态显示 -->
-      <router-link v-if="!auth.isLoggedIn" to="/login" class="nav-link">
-        登录
-      </router-link>
+      <template v-if="!auth.isLoggedIn">
+        <router-link to="/login" class="nav-link">登录</router-link>
+      </template>
       <template v-else>
         <span class="user">@{{ auth.user?.nickname }}</span>
         <button @click="handleLogout" class="logout-btn">退出</button>
@@ -24,6 +48,14 @@ function handleLogout() {
 
       <router-link to="/publish" class="nav-link">发布</router-link>
       <router-link to="/profile/me" class="nav-link">我的</router-link>
+
+      <button
+        @click="toggleTheme"
+        class="theme-btn"
+        :title="isDark ? '切换到亮色' : '切换到暗色'"
+      >
+        {{ isDark ? '☀' : '☾' }}
+      </button>
     </nav>
 
     <main class="main">
@@ -43,6 +75,7 @@ function handleLogout() {
   position: sticky;
   top: 0;
   z-index: 10;
+  transition: background-color 0.2s, border-color 0.2s;
 }
 
 .nav-link {
@@ -79,10 +112,32 @@ function handleLogout() {
   border-radius: var(--radius);
   cursor: pointer;
   font-size: 13px;
+  font-family: inherit;
   transition: all 0.15s;
 }
 
 .logout-btn:hover {
+  background: var(--muted);
+  color: var(--foreground);
+  border-color: var(--foreground);
+}
+
+/* 主题切换按钮：推到 nav 最右 */
+.theme-btn {
+  margin-left: auto;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.theme-btn:hover {
   background: var(--muted);
   color: var(--foreground);
   border-color: var(--foreground);

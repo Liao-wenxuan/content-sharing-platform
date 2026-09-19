@@ -59,6 +59,11 @@ onMounted(() => {
 
 <template>
   <div class="home">
+    <header class="page-header">
+      <h1 class="page-title">发现</h1>
+      <p class="page-subtitle">分享你的世界，发现有趣的内容</p>
+    </header>
+
     <div v-if="loading && posts.length === 0" class="state loading">
       加载中...
     </div>
@@ -115,6 +120,26 @@ onMounted(() => {
   max-width: 720px;
   margin: 0 auto;
   padding: 24px 16px 12px;
+}
+
+/* ===== 页头大标题（shadcn 风格） ===== */
+.page-header {
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--foreground);
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--muted-foreground);
+  margin: 0;
 }
 
 /* ===== 双列瀑布流 ===== */
