@@ -97,6 +97,34 @@ onMounted(() => {
             <span class="nickname">{{ post.author?.nickname || '未知用户' }}</span>
             <span class="time">{{ formatTime(post.createdAt) }}</span>
           </footer>
+
+          <!-- 互动数据：点赞 + 评论 -->
+          <div class="meta">
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24" class="meta-icon" aria-hidden="true">
+                <path
+                  d="M12 21s-7.5-4.6-9.5-9.1C1.1 8.2 3 5 6.3 5c1.9 0 3.4 1 4.2 2.4l1.5 1.9 1.5-1.9C14.3 6 15.8 5 17.7 5 21 5 22.9 8.2 21.5 11.9 19.5 16.4 12 21 12 21z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              {{ post.likeCount }}
+            </span>
+            <span class="meta-item">
+              <svg viewBox="0 0 24 24" class="meta-icon" aria-hidden="true">
+                <path
+                  d="M21 12c0 4.4-4 8-9 8a9.7 9.7 0 0 1-3.8-.7L3 21l1.4-4.5A7.7 7.7 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              {{ post.commentCount }}
+            </span>
+          </div>
         </article>
       </router-link>
 
@@ -250,6 +278,30 @@ onMounted(() => {
   font-size: 11px;
   color: var(--muted-foreground);
   white-space: nowrap;
+}
+
+/* ===== 互动数据（点赞 / 评论） ===== */
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px 10px;
+  margin-top: -4px; /* 紧贴 author 行 */
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-icon {
+  width: 13px;
+  height: 13px;
+  display: block;
 }
 
 /* 状态条：跨两列 */

@@ -21,6 +21,10 @@ export interface Post {
   imageUrls: string[]
   topicTag: string | null
   createdAt: string
+  likeCount: number
+  commentCount: number
+  // 当前用户是否赞过（只在登录用户调 getById 时返回 true；feed/getUserPosts 不返回）
+  liked?: boolean
   author?: PostAuthor
 }
 
@@ -47,11 +51,26 @@ export interface UserPostsResponse {
   total: number
 }
 
-// ===== API 方法 =====
-// 注意：request 的响应拦截器 (response) => response.data 在 runtime 已经解包，
-// 但 axios v1 的 TS 类型推断不会自动传播，所以这里显式标注返回类型 + as unknown as 强转。
-// 详见: https://github.com/axios/axios/issues/1510
+export interface Comment {
+  id: number
+  postId: number
+  userId: number
+  content: string
+  createdAt: string
+  author: PostAuthor
+}
 
+export interface CommentsResponse {
+  list: Comment[]
+  total: number
+}
+
+export interface LikeResponse {
+  liked: boolean
+  likeCount: number
+}
+
+// ===== API 方法 =====
 export const postsApi = {
   // 发布笔记
   async createPost(payload: CreatePostPayload): Promise<Post> {
@@ -83,5 +102,35 @@ export const postsApi = {
   async getUserPosts(userId: number): Promise<UserPostsResponse> {
     const res = await request.get<UserPostsResponse>(`/users/${userId}/posts`)
     return res as unknown as UserPostsResponse
+  },
+
+  // 点赞（幂等：已赞则不重复）
+  async likePost(postId: number): Promise<LikeResponse> {
+    const res = await request.post(`/posts/${postId}/like`)
+    return res as unknown as LikeResponse
+  },
+
+  // 取消点赞
+  async unlikePost(postId: number): Promise<LikeResponse> {
+    const res = await request.delete(`/posts/${postId}/like`)
+    return res as unknown as LikeResponse
+  },
+
+  // 获取点赞数（公开）
+  async getPostLikes(postId: number): Promise<LikeResponse> {
+    const res = await request.get(`/posts/${postId}/likes`)
+    return res as unknown as LikeResponse
+  },
+
+  // 列出评论
+  async getComments(postId: number): Promise<CommentsResponse> {
+    const res = await request.get(`/posts/${postId}/comments`)
+    return res as unknown as CommentsResponse
+  },
+
+  // 发评论
+  async postComment(postId: number, content: string): Promise<Comment> {
+    const res = await request.post(`/posts/${postId}/comments`, { content })
+    return res as unknown as Comment
   }
 }
