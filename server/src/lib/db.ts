@@ -7,6 +7,9 @@ const dbPath = path.join(__dirname, '../../data.db')
 // 打开数据库（不存在会自动创建）
 const db = new Database(dbPath)
 
+// 启用外键约束
+db.pragma('foreign_keys = ON')
+
 // 启动时建 users 表
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -24,7 +27,6 @@ db.exec(`
 try {
   db.exec(`ALTER TABLE users ADD COLUMN cover TEXT`)
 } catch (err: any) {
-  // 列已存在则忽略，不影响启动
   if (!String(err.message).includes('duplicate column')) {
     throw err
   }
@@ -42,6 +44,37 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id)
   )
 `)
+
+// 启动时建 likes 表（点赞）
+db.exec(`
+  CREATE TABLE IF NOT EXISTS likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    post_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, post_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+  )
+`)
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id)`)
+db.exec(`CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id)`)
+
+// 启动时建 comments 表
+db.exec(`
+  CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+  )
+`)
+
+db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id)`)
 
 console.log('✅ DB connected:', dbPath)
 

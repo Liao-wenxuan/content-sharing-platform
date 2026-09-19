@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
-import { requireAuth } from '../middleware/auth'
+import { requireAuth, optionalAuth } from '../middleware/auth'
 import { toISO } from '../lib/time'
 
 const router = Router()
@@ -66,10 +66,13 @@ router.get('/feed', (req: Request, res: Response) => {
     // 3. 查当前页（JOIN users 拿作者信息）
     // 注意：ORDER BY 加 id DESC 作为 tie-break，
     // 因为 created_at 只到秒，同一秒内发的多篇笔记排序会不稳定（导致翻页漏/重）
+    // like_count 用子查询算（避免大表 JOIN 性能问题）
     const rows = db.prepare(`
       SELECT
         p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
-        u.nickname AS author_nickname, u.avatar AS author_avatar
+        u.nickname AS author_nickname, u.avatar AS author_avatar,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
       FROM posts p
       JOIN users u ON p.user_id = u.id
       ORDER BY p.created_at DESC, p.id DESC
@@ -84,6 +87,8 @@ router.get('/feed', (req: Request, res: Response) => {
       imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
       topicTag: row.topic_tag,
       createdAt: toISO(row.created_at),
+      likeCount: row.like_count,
+      commentCount: row.comment_count,
       author: {
         id: row.user_id,
         nickname: row.author_nickname,
@@ -109,7 +114,7 @@ router.get('/feed', (req: Request, res: Response) => {
 
 // ===== GET /:id 单篇笔记详情 =====
 // 注意：必须注册在 /feed 后面！Express 按顺序匹配，否则 /feed 会被当成 :id="feed"
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', optionalAuth, (req: Request, res: Response) => {
   try {
     // Express 5 + path-to-regexp v8 里 req.params.id 是 string | string[]
     // 但路由定义了 :id，所以运行时一定是 string
@@ -121,7 +126,9 @@ router.get('/:id', (req: Request, res: Response) => {
     const row = db.prepare(`
       SELECT
         p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
-        u.nickname AS author_nickname, u.avatar AS author_avatar
+        u.nickname AS author_nickname, u.avatar AS author_avatar,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
       FROM posts p
       JOIN users u ON p.user_id = u.id
       WHERE p.id = ?
@@ -131,6 +138,15 @@ router.get('/:id', (req: Request, res: Response) => {
       return res.status(404).json({ message: '笔记不存在' })
     }
 
+    // 登录用户额外查 liked
+    let liked = false
+    if (req.userId) {
+      const likeRow = db.prepare(
+        'SELECT 1 FROM likes WHERE user_id = ? AND post_id = ? LIMIT 1'
+      ).get(req.userId, id)
+      liked = !!likeRow
+    }
+
     res.json({
       id: row.id,
       userId: row.user_id,
@@ -138,6 +154,9 @@ router.get('/:id', (req: Request, res: Response) => {
       imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
       topicTag: row.topic_tag,
       createdAt: toISO(row.created_at),
+      likeCount: row.like_count,
+      commentCount: row.comment_count,
+      liked, // 当前用户是否赞过（匿名永远是 false）
       author: {
         id: row.user_id,
         nickname: row.author_nickname,
