@@ -26,3 +26,6 @@ NUL
 /package.json
 /package-lock.json
 /data.db
+# 截图（开发时的视觉记录，不入版本库）
+screenshots/
+**/screenshots/
