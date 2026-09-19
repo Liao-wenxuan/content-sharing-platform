@@ -41,6 +41,7 @@ export interface UserPostsResponse {
     id: number
     nickname: string
     avatar: string | null
+    cover: string | null
   }
   list: Post[]
   total: number

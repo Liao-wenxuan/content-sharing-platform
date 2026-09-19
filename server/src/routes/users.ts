@@ -15,7 +15,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
     }
 
     const user = db.prepare(
-      'SELECT id, nickname, avatar FROM users WHERE id = ?'
+      'SELECT id, nickname, avatar, cover FROM users WHERE id = ?'
     ).get(userId) as any
 
     if (!user) {
@@ -33,7 +33,8 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
       user: {
         id: user.id,
         nickname: user.nickname,
-        avatar: user.avatar
+        avatar: user.avatar,
+        cover: user.cover
       },
       list: rows.map(row => ({
         id: row.id,
@@ -60,7 +61,7 @@ router.get('/:id/posts', (req: Request, res: Response) => {
     }
 
     const user = db.prepare(
-      'SELECT id, nickname, avatar FROM users WHERE id = ?'
+      'SELECT id, nickname, avatar, cover FROM users WHERE id = ?'
     ).get(id) as any
 
     if (!user) {
@@ -78,7 +79,8 @@ router.get('/:id/posts', (req: Request, res: Response) => {
       user: {
         id: user.id,
         nickname: user.nickname,
-        avatar: user.avatar
+        avatar: user.avatar,
+        cover: user.cover
       },
       list: rows.map(row => ({
         id: row.id,

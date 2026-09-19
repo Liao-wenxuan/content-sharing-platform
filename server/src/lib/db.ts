@@ -15,9 +15,20 @@ db.exec(`
     password TEXT NOT NULL,
     nickname TEXT NOT NULL,
     avatar TEXT,
+    cover TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `)
+
+// 老库迁移：给 users 表加 cover 列（SQLite ALTER TABLE 不支持 IF NOT EXISTS，手动 try/catch）
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN cover TEXT`)
+} catch (err: any) {
+  // 列已存在则忽略，不影响启动
+  if (!String(err.message).includes('duplicate column')) {
+    throw err
+  }
+}
 
 // 启动时建 posts 表
 db.exec(`

@@ -7,7 +7,12 @@ import { postsApi, type Post } from '@/api/posts'
 const route = useRoute()
 const auth = useAuthStore()
 
-const profileUser = ref<{ id: number; nickname: string; avatar: string | null } | null>(null)
+const profileUser = ref<{
+  id: number
+  nickname: string
+  avatar: string | null
+  cover: string | null
+} | null>(null)
 const posts = ref<Post[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
@@ -20,6 +25,23 @@ const targetId = computed<number | null>(() => {
   }
   const num = Number(id)
   return isNaN(num) || num <= 0 ? null : num
+})
+
+// 封面图 fallback（picsum 随机图，保证没设 cover 也有图）
+const FALLBACK_COVERS = [
+  'https://picsum.photos/seed/cover1/800/300',
+  'https://picsum.photos/seed/cover2/800/300',
+  'https://picsum.photos/seed/cover3/800/300',
+  'https://picsum.photos/seed/cover4/800/300',
+  'https://picsum.photos/seed/cover5/800/300'
+]
+
+const coverUrl = computed(() => {
+  const c = profileUser.value?.cover
+  if (c) return c
+  // 没有 cover 时根据用户 id 选固定一张（保证稳定）
+  const idx = (profileUser.value?.id ?? 0) % FALLBACK_COVERS.length
+  return FALLBACK_COVERS[idx]
 })
 
 async function loadProfile() {
@@ -78,6 +100,11 @@ watch(() => route.params.id, () => {
 
 <template>
   <div class="profile">
+    <!-- 顶部封面 banner -->
+    <div class="cover-banner" :style="{ backgroundImage: `url(${coverUrl})` }">
+      <div class="cover-overlay"></div>
+    </div>
+
     <header class="profile-header">
       <div class="avatar avatar-lg">{{ avatarText(profileUser?.nickname) }}</div>
       <h1>{{ profileUser?.nickname || '个人主页' }}</h1>
@@ -117,14 +144,32 @@ watch(() => route.params.id, () => {
 .profile {
   max-width: 600px;
   margin: 0 auto;
-  padding: 24px 20px;
+  padding: 0;
 }
 
+/* ===== 顶部封面 banner ===== */
+.cover-banner {
+  height: 200px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--muted);
+  position: relative;
+}
+
+.cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+/* ===== 用户信息 ===== */
 .profile-header {
   text-align: center;
-  padding: 24px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 0 20px 24px;
+  margin-top: -36px;  /* 让头像一半压在 banner 上 */
   margin-bottom: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .avatar {
@@ -146,6 +191,8 @@ watch(() => route.params.id, () => {
   height: 72px;
   font-size: 28px;
   margin: 0 auto 12px;
+  border: 4px solid var(--background);
+  box-shadow: var(--shadow-md);
 }
 
 .profile-header h1 {
@@ -170,6 +217,7 @@ watch(() => route.params.id, () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 0 20px;
 }
 
 .post-link {
@@ -183,11 +231,12 @@ watch(() => route.params.id, () => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 
 .post-link:hover .post-card {
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
   border-color: var(--muted-foreground);
 }
 

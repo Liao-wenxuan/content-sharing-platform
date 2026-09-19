@@ -6,6 +6,7 @@ export interface User {
   id: number;
   nickname: string;
   avatar: string | null;
+  cover: string | null;
 }
 
 export const useAuthStore = defineStore(

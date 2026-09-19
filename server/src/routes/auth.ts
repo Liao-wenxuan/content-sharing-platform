@@ -84,7 +84,8 @@ router.post('/login', async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         nickname: user.nickname,
-        avatar: user.avatar
+        avatar: user.avatar,
+        cover: user.cover
       }
     })
   } catch (err: any) {
@@ -103,7 +104,7 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
     }
 
     const user = db.prepare(
-      'SELECT id, email, nickname, avatar FROM users WHERE id = ?'
+      'SELECT id, email, nickname, avatar, cover FROM users WHERE id = ?'
     ).get(userId) as any
 
     if (!user) {
@@ -114,7 +115,8 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
       id: user.id,
       email: user.email,
       nickname: user.nickname,
-      avatar: user.avatar
+      avatar: user.avatar,
+      cover: user.cover
     })
   } catch (err: any) {
     console.error('[Get Me Error]', err)

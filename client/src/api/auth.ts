@@ -18,6 +18,7 @@ export interface UserInfo {
   email: string
   nickname: string
   avatar: string | null
+  cover: string | null
 }
 
 export interface LoginResponse {

@@ -53,7 +53,15 @@ async function handleSubmit() {
 <template>
   <div class="login-page">
     <div class="card">
-      <h1>{{ isRegister ? '注册' : '登录' }}</h1>
+      <div class="brand">
+        <div class="brand-logo">📝</div>
+        <h1 class="brand-name">内容社区</h1>
+        <p class="brand-slogan">发现、分享、记录</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2 class="form-title">{{ isRegister ? '注册' : '登录' }}</h2>
 
       <form @submit.prevent="handleSubmit">
         <input
@@ -114,9 +122,42 @@ async function handleSubmit() {
   box-shadow: var(--shadow-sm);
 }
 
-h1 {
-  margin: 0 0 24px;
-  font-size: 24px;
+/* ===== 品牌头部 ===== */
+.brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.brand-logo {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.brand-name {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--foreground);
+  letter-spacing: -0.02em;
+}
+
+.brand-slogan {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+/* ===== 分割线 ===== */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 24px 0;
+}
+
+/* ===== 表单标题 ===== */
+.form-title {
+  margin: 0 0 16px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--foreground);
   text-align: center;
