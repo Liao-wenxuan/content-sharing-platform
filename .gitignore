@@ -29,3 +29,6 @@ NUL
 # 截图（开发时的视觉记录，不入版本库）
 screenshots/
 **/screenshots/
+# 用户上传文件（运行时生成，不入版本库）
+uploads/
+**/uploads/
