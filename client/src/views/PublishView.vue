@@ -132,6 +132,17 @@ async function uploadImage(img: PendingImage) {
   const formData = new FormData()
   formData.append('files', img.file)
 
+  // DEBUG: 把 FormData 内容打到 console，方便排查 multer 解析失败
+  console.log('[Upload Debug] file:', img.file.name, img.file.size, 'bytes,', img.file.type)
+  console.log('[Upload Debug] FormData entries:')
+  for (const [k, v] of formData.entries()) {
+    if (v instanceof File) {
+      console.log(`  ${k} → File(${v.name}, ${v.size}, ${v.type})`)
+    } else {
+      console.log(`  ${k} →`, v)
+    }
+  }
+
   // 客户端超时保护：超过 UPLOAD_TIMEOUT_MS 自动 reject
   const timeoutController = new AbortController()
   const timeoutId = setTimeout(() => timeoutController.abort(), UPLOAD_TIMEOUT_MS)

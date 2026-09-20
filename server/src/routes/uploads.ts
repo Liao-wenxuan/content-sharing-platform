@@ -43,12 +43,14 @@ const upload = multer({
   }
 })
 
+// ===== multer 中间件 =====
+const uploadMiddleware = upload.array('files', 9)
+
 // ===== POST /api/uploads —— 单文件/多文件上传（鉴权）=====
-// 客户端 FormData field name: 'files'（多文件）或 'file'（单文件）
+// 客户端 FormData field name: 'files'
 // 返回：{ files: [{ url, filename, size }, ...] }
-router.post('/', requireAuth, (req: Request, res: Response) => {
-  // multer 中间件：先 parse，再回调
-  upload.array('files', 9)(req, res, (err: any) => {
+router.post('/', requireAuth, (req, res, next) => {
+  uploadMiddleware(req, res, (err: any) => {
     if (err) {
       // multer 错误（大小/类型/数量）
       const msg = err.code === 'LIMIT_FILE_SIZE'
@@ -56,11 +58,16 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
         : err.code === 'LIMIT_FILE_COUNT'
           ? '一次最多上传 9 张'
           : err.message || '上传失败'
+      console.error('[Upload] multer error:', err.code, err.message)
       return res.status(400).json({ message: msg })
     }
 
     const files = (req.files as Express.Multer.File[]) || []
+    // 调试日志：multer 解析完了但 files 是空，常见原因：
+    // - 浏览器发的 Content-Type 没有 boundary
+    // - FormData field name 拼错
     if (files.length === 0) {
+      console.error('[Upload] no files. content-type:', req.headers['content-type'], 'body keys:', Object.keys(req.body || {}))
       return res.status(400).json({ message: '没有收到文件' })
     }
 
