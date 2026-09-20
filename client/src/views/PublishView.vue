@@ -28,7 +28,7 @@ const images = ref<PendingImage[]>([])
 let nextImgId = 1
 
 const MAX_IMAGES = 9
-const MAX_SIZE_MB = 5
+const MAX_SIZE_MB = 10
 // 单图上传超时：60 秒，超时后自动 fail 让用户重试
 const UPLOAD_TIMEOUT_MS = 60_000
 

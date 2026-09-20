@@ -25,7 +25,15 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response) => response.data,  // 直接返回 data，调用方少一层 .data
   (error: AxiosError) => {
-    console.error('[API Error]', error.response?.status, error.message)
+    // 完整错误信息：状态码 + 后端 message + URL，方便排查
+    console.error(
+      '[API Error]',
+      error.response?.status,
+      error.config?.method?.toUpperCase(),
+      error.config?.url,
+      '→',
+      (error.response?.data as any)?.message || error.message
+    )
 
     // 401 = token 失效，从 store 清登录态
     if (error.response?.status === 401) {

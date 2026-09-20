@@ -30,7 +30,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024,  // 5MB
+    fileSize: 10 * 1024 * 1024,  // 10MB（浏览器整页截图经常 > 5MB）
     files: 9                     // 最多 9 张图
   },
   fileFilter: (_req, file, cb) => {
@@ -52,7 +52,7 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
     if (err) {
       // multer 错误（大小/类型/数量）
       const msg = err.code === 'LIMIT_FILE_SIZE'
-        ? '单个文件不能超过 5MB'
+        ? '单个文件不能超过 10MB'
         : err.code === 'LIMIT_FILE_COUNT'
           ? '一次最多上传 9 张'
           : err.message || '上传失败'
