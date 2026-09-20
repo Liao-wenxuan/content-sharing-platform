@@ -191,8 +191,9 @@ async function uploadImage(img: PendingImage) {
       resolve()
     })
 
-    xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
     xhr.open('POST', '/api/uploads')
+    // 必须在 open() 之后才能 setRequestHeader
+    xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
     xhr.send(formData)
   })
 }
