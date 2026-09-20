@@ -137,8 +137,10 @@ async function uploadImage(img: PendingImage) {
   const timeoutId = setTimeout(() => timeoutController.abort(), UPLOAD_TIMEOUT_MS)
 
   try {
+    // 关键 — 不手动设 Content-Type！
+    // axios 检测到 FormData 会自动设 'multipart/form-data; boundary=xxx'
+    // 我们手动写的话少了 boundary，后端 multer 解析失败会卡死
     const res = await request.post<{ files: { url: string }[] }>('/uploads', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       signal: timeoutController.signal,
       // axios onUploadProgress：loaded/total 实时更新
       onUploadProgress: (e: ProgressEvent) => {
