@@ -191,7 +191,10 @@ async function uploadImage(img: PendingImage) {
       resolve()
     })
 
-    xhr.open('POST', '/api/uploads')
+    // 用绝对 URL 而不是相对路径 — XHR 用相对路径会指向 5173（Vite dev），
+// 必须直接打 3000 后端，否则 Vite SPA 会返 404 index.html
+const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:3000/api'
+xhr.open('POST', `${API_BASE}/uploads`)
     // 必须在 open() 之后才能 setRequestHeader
     xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
     xhr.send(formData)
