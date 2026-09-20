@@ -132,55 +132,69 @@ async function uploadImage(img: PendingImage) {
   const formData = new FormData()
   formData.append('files', img.file)
 
-  // DEBUG: 把 FormData 内容打到 console，方便排查 multer 解析失败
-  console.log('[Upload Debug] file:', img.file.name, img.file.size, 'bytes,', img.file.type)
-  console.log('[Upload Debug] FormData entries:')
-  for (const [k, v] of formData.entries()) {
-    if (v instanceof File) {
-      console.log(`  ${k} → File(${v.name}, ${v.size}, ${v.type})`)
-    } else {
-      console.log(`  ${k} →`, v)
-    }
-  }
+  // 用 XHR 直接上传，绕开 axios 1.x 的 FormData/Content-Type 处理 bug
+  // （axios 1.x 在 instance 默认 Content-Type 是 'application/json' 时，
+  //  会把 FormData 转成 JSON 字符串发出去，multer 收不到文件）
+  return new Promise<void>((resolve) => {
+    const xhr = new XMLHttpRequest()
 
-  // 客户端超时保护：超过 UPLOAD_TIMEOUT_MS 自动 reject
-  const timeoutController = new AbortController()
-  const timeoutId = setTimeout(() => timeoutController.abort(), UPLOAD_TIMEOUT_MS)
-
-  try {
-    // 关键 — 不手动设 Content-Type！
-    // axios 检测到 FormData 会自动设 'multipart/form-data; boundary=xxx'
-    // 我们手动写的话少了 boundary，后端 multer 解析失败会卡死
-    const res = await request.post<{ files: { url: string }[] }>('/uploads', formData, {
-      signal: timeoutController.signal,
-      // axios onUploadProgress：loaded/total 实时更新
-      onUploadProgress: (e: ProgressEvent) => {
-        if (e.total && e.total > 0) {
-          img.progress = Math.min(100, Math.round((e.loaded / e.total) * 100))
-        }
+    // 进度
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        img.progress = Math.min(100, Math.round((e.loaded / e.total) * 100))
       }
     })
-    const uploaded = res.files?.[0]
-    if (uploaded) {
-      img.uploadedUrl = uploaded.url
-      img.progress = 100
-      img.status = 'done'
-    } else {
+
+    // 超时
+    xhr.timeout = UPLOAD_TIMEOUT_MS
+    xhr.addEventListener('timeout', () => {
       img.status = 'error'
-      img.errorMsg = '服务器返回为空'
-    }
-  } catch (err: any) {
-    img.status = 'error'
-    if (err.name === 'AbortError' || err.code === 'ECONNABORTED') {
       img.errorMsg = `上传超时（>${UPLOAD_TIMEOUT_MS / 1000}s）`
-    } else if (err.response?.data?.message) {
-      img.errorMsg = err.response.data.message
-    } else {
-      img.errorMsg = err.message || '上传失败'
-    }
-  } finally {
-    clearTimeout(timeoutId)
-  }
+      resolve()
+    })
+
+    // 完成
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          const uploaded = data.files?.[0]
+          if (uploaded) {
+            img.uploadedUrl = uploaded.url
+            img.progress = 100
+            img.status = 'done'
+          } else {
+            img.status = 'error'
+            img.errorMsg = '服务器返回为空'
+          }
+        } catch {
+          img.status = 'error'
+          img.errorMsg = '响应解析失败'
+        }
+      } else {
+        // 4xx/5xx — 尝试读 body 拿具体 message
+        let serverMsg = ''
+        try {
+          const body = JSON.parse(xhr.responseText)
+          serverMsg = body.message || ''
+        } catch { /* ignore */ }
+        img.status = 'error'
+        img.errorMsg = serverMsg || `HTTP ${xhr.status}`
+      }
+      resolve()
+    })
+
+    // 网络错误
+    xhr.addEventListener('error', () => {
+      img.status = 'error'
+      img.errorMsg = '网络错误'
+      resolve()
+    })
+
+    xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
+    xhr.open('POST', '/api/uploads')
+    xhr.send(formData)
+  })
 }
 
 async function retryImage(id: number) {
