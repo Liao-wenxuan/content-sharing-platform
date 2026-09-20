@@ -29,6 +29,12 @@ export interface LoginResponse {
 
 // ===== API 函数 =====
 
+export interface UpdateProfileParams {
+  nickname?: string
+  avatar?: string | null
+  cover?: string | null
+}
+
 export const authApi = {
   // 登录
   login: (data: LoginParams) =>
@@ -39,7 +45,11 @@ export const authApi = {
     request.post<LoginResponse>('/auth/register', data),
 
   // 拿当前登录用户（需要 Bearer token）
-  getCurrentUser: () => request.get<UserInfo>('/auth/me')
+  getCurrentUser: () => request.get<UserInfo>('/auth/me'),
+
+  // 修改当前用户资料（昵称 / 头像 / 封面）
+  updateProfile: (data: UpdateProfileParams) =>
+    request.put<UserInfo>('/users/me', data)
 
   // ❌ 没有 logout —— JWT 是无状态的，前端直接 store.logout() 清 token 即可
   //    App.vue 的"退出"按钮已经在用 auth.logout()

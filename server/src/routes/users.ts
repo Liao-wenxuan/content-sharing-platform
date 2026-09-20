@@ -5,6 +5,85 @@ import { toISO } from '../lib/time'
 
 const router = Router()
 
+// ===== PUT /me 修改当前用户资料（昵称 / 头像 / 封面）=====
+// body 可以包含 nickname / avatar / cover 中的任意字段，部分更新
+router.put('/me', requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) return res.status(401).json({ message: '未登录' })
+
+    const { nickname, avatar, cover } = req.body as {
+      nickname?: string
+      avatar?: string | null
+      cover?: string | null
+    }
+
+    // ===== 字段校验 =====
+    if (nickname !== undefined) {
+      if (typeof nickname !== 'string' || nickname.trim() === '') {
+        return res.status(400).json({ message: '昵称不能为空' })
+      }
+      if (nickname.length > 20) {
+        return res.status(400).json({ message: '昵称不能超过 20 字' })
+      }
+    }
+    if (avatar !== undefined && avatar !== null) {
+      if (typeof avatar !== 'string') {
+        return res.status(400).json({ message: '头像格式错误' })
+      }
+      if (avatar.length > 1000) {
+        return res.status(400).json({ message: '头像 URL 过长' })
+      }
+    }
+    if (cover !== undefined && cover !== null) {
+      if (typeof cover !== 'string') {
+        return res.status(400).json({ message: '封面格式错误' })
+      }
+      if (cover.length > 1000) {
+        return res.status(400).json({ message: '封面 URL 过长' })
+      }
+    }
+
+    // ===== 动态构造 UPDATE（部分更新）=====
+    const updates: string[] = []
+    const params: any[] = []
+    if (nickname !== undefined) {
+      updates.push('nickname = ?')
+      params.push(nickname.trim())
+    }
+    if (avatar !== undefined) {
+      updates.push('avatar = ?')
+      params.push(avatar)
+    }
+    if (cover !== undefined) {
+      updates.push('cover = ?')
+      params.push(cover)
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ message: '没有可更新的字段' })
+    }
+
+    params.push(userId)
+    db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params)
+
+    // ===== 返回更新后的 user（前端 auth store 用来刷新状态）=====
+    const user = db.prepare(
+      'SELECT id, nickname, avatar, cover FROM users WHERE id = ?'
+    ).get(userId) as any
+
+    res.json({
+      id: user.id,
+      nickname: user.nickname,
+      avatar: user.avatar,
+      cover: user.cover
+    })
+  } catch (err: any) {
+    console.error('[Update Profile Error]', err)
+    res.status(500).json({ message: err.message || '更新失败' })
+  }
+})
+
 // ===== GET /me/posts 当前用户的帖子列表 =====
 // 必须注册在 /:id/posts 前面！Express 按顺序匹配，"me" 是字面量优先于 :id 参数
 router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
