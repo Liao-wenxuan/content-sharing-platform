@@ -11,23 +11,26 @@ const auth = useAuthStore()
 // ===== 表单状态 =====
 const content = ref('')
 const topicTag = ref('')
-const uploading = ref(false)
 const submitting = ref(false)
 const errorMsg = ref('')
 
-// 待上传的图片：{ id, file, previewUrl, uploadedUrl, status }
+// 待上传的图片：{ id, file, previewUrl, uploadedUrl, status, progress }
 interface PendingImage {
   id: number
   file: File
   previewUrl: string        // 本地预览（URL.createObjectURL）
   uploadedUrl: string | null // 上传成功后服务器返回的 URL
   status: 'pending' | 'uploading' | 'done' | 'error'
+  progress: number          // 0-100 上传进度
+  errorMsg?: string         // 上传失败时的提示
 }
 const images = ref<PendingImage[]>([])
 let nextImgId = 1
 
 const MAX_IMAGES = 9
 const MAX_SIZE_MB = 5
+// 单图上传超时：60 秒，超时后自动 fail 让用户重试
+const UPLOAD_TIMEOUT_MS = 60_000
 
 // ===== 拖拽状态 =====
 const isDragOver = ref(false)
@@ -117,7 +120,59 @@ function addFiles(files: File[]) {
       status: 'pending'
     }
     images.value.push(img)
+    // 选完立即上传（不等点发布按钮）
+    uploadImage(img)
   }
+}
+
+async function uploadImage(img: PendingImage) {
+  img.status = 'uploading'
+  img.progress = 0
+  img.errorMsg = undefined
+  const formData = new FormData()
+  formData.append('files', img.file)
+
+  // 客户端超时保护：超过 UPLOAD_TIMEOUT_MS 自动 reject
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), UPLOAD_TIMEOUT_MS)
+
+  try {
+    const res = await request.post<{ files: { url: string }[] }>('/uploads', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      signal: timeoutController.signal,
+      // axios onUploadProgress：loaded/total 实时更新
+      onUploadProgress: (e: ProgressEvent) => {
+        if (e.total && e.total > 0) {
+          img.progress = Math.min(100, Math.round((e.loaded / e.total) * 100))
+        }
+      }
+    })
+    const uploaded = res.files?.[0]
+    if (uploaded) {
+      img.uploadedUrl = uploaded.url
+      img.progress = 100
+      img.status = 'done'
+    } else {
+      img.status = 'error'
+      img.errorMsg = '服务器返回为空'
+    }
+  } catch (err: any) {
+    img.status = 'error'
+    if (err.name === 'AbortError' || err.code === 'ECONNABORTED') {
+      img.errorMsg = `上传超时（>${UPLOAD_TIMEOUT_MS / 1000}s）`
+    } else if (err.response?.data?.message) {
+      img.errorMsg = err.response.data.message
+    } else {
+      img.errorMsg = err.message || '上传失败'
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function retryImage(id: number) {
+  const img = images.value.find(i => i.id === id)
+  if (img) await uploadImage(img)
 }
 
 function removeImage(id: number) {
@@ -139,39 +194,17 @@ async function handleSubmit() {
     errorMsg.value = '内容不能超过 500 字'
     return
   }
+  // 图全部上传完才能发布
+  if (!allUploaded.value) {
+    errorMsg.value = '请等待图片上传完成'
+    return
+  }
 
   errorMsg.value = ''
   submitting.value = true
 
   try {
-    // 1) 先上传所有待上传的图片
-    if (images.value.length > 0) {
-      uploading.value = true
-      const formData = new FormData()
-      for (const img of images.value) {
-        formData.append('files', img.file)
-      }
-
-      try {
-        const res = await request.post<{ files: { url: string }[] }>('/uploads', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        })
-        // 把 URL 挂回对应图片（按顺序）
-        res.files.forEach((f, i) => {
-          if (images.value[i]) {
-            images.value[i].uploadedUrl = f.url
-            images.value[i].status = 'done'
-          }
-        })
-      } catch (err: any) {
-        errorMsg.value = err.response?.data?.message || '图片上传失败'
-        return
-      } finally {
-        uploading.value = false
-      }
-    }
-
-    // 2) 创建 post（带上已上传的 URL 数组）
+    // 图片在选完时已经各自上传完毕，直接拿 URL 创建 post
     const imageUrls = images.value
       .map(i => i.uploadedUrl)
       .filter((u): u is string => !!u)
@@ -182,7 +215,6 @@ async function handleSubmit() {
       topicTag: topicTag.value.trim() || undefined
     })
 
-    alert('发布成功！')
     router.push('/')
   } catch (err: any) {
     errorMsg.value = err.response?.data?.message || '发布失败，请稍后再试'
@@ -262,11 +294,28 @@ async function handleSubmit() {
           >
             <img :src="img.previewUrl" :alt="img.file.name" />
 
-            <!-- 状态徽章 -->
-            <div v-if="img.status === 'pending'" class="badge pending">待上传</div>
-            <div v-else-if="img.status === 'uploading'" class="badge uploading">上传中…</div>
+            <!-- 状态徽章（点击重试 or 显示错误） -->
+            <button
+              v-if="img.status === 'pending'"
+              type="button"
+              class="badge pending"
+              disabled
+            >待上传</button>
+            <button
+              v-else-if="img.status === 'uploading'"
+              type="button"
+              class="badge uploading with-progress"
+              :style="{ '--progress': img.progress + '%' }"
+              disabled
+            >{{ img.progress }}%</button>
             <div v-else-if="img.status === 'done'" class="badge done">✓</div>
-            <div v-else-if="img.status === 'error'" class="badge error">失败</div>
+            <button
+              v-else-if="img.status === 'error'"
+              type="button"
+              class="badge error"
+              :title="img.errorMsg"
+              @click="retryImage(img.id)"
+            >重试</button>
 
             <!-- 删除按钮 -->
             <button
@@ -282,7 +331,7 @@ async function handleSubmit() {
       <div v-if="errorMsg" class="error">{{ errorMsg }}</div>
 
       <button type="submit" class="submit-btn" :disabled="!canSubmit">
-        {{ submitting ? (uploading ? '上传图片中...' : '发布中...') : '发布' }}
+        {{ submitting ? '发布中...' : '发布' }}
       </button>
     </form>
   </div>
@@ -447,6 +496,31 @@ h1 {
   background: rgba(0, 0, 0, 0.7);
   color: white;
   backdrop-filter: blur(4px);
+  border: none;
+  font-family: inherit;
+  cursor: default;
+}
+
+button.badge.error {
+  cursor: pointer;
+}
+
+button.badge.error:hover {
+  background: rgba(239, 68, 68, 1);
+}
+
+/* 上传中：渐变进度条（背景进度从 0% 到 var(--progress)） */
+.badge.with-progress {
+  background: linear-gradient(
+    to right,
+    rgba(59, 130, 246, 0.95) 0%,
+    rgba(59, 130, 246, 0.95) var(--progress, 0%),
+    rgba(0, 0, 0, 0.55) var(--progress, 0%),
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
 }
 
 .badge.done {
