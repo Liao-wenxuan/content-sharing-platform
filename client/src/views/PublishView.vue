@@ -126,11 +126,13 @@ function addFiles(files: File[]) {
 }
 
 async function uploadImage(img: PendingImage) {
+  console.error('[Upload] START — file:', img.file.name, img.file.size, 'bytes,', img.file.type)
   img.status = 'uploading'
   img.progress = 0
   img.errorMsg = undefined
   const formData = new FormData()
   formData.append('files', img.file)
+  console.error('[Upload] FormData built, entries:', Array.from(formData.entries()).map(([k, v]) => `${k}=${v instanceof File ? `File(${v.size})` : v}`))
 
   // 用 XHR 直接上传，绕开 axios 1.x 的 FormData/Content-Type 处理 bug
   // （axios 1.x 在 instance 默认 Content-Type 是 'application/json' 时，
@@ -194,9 +196,12 @@ async function uploadImage(img: PendingImage) {
     // 用绝对 URL 而不是相对路径 — XHR 用相对路径会指向 5173（Vite dev），
 // 必须直接打 3000 后端，否则 Vite SPA 会返 404 index.html
 const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:3000/api'
-xhr.open('POST', `${API_BASE}/uploads`)
+console.error('[Upload] API_BASE:', API_BASE, 'token len:', auth.token?.length)
+
+    xhr.open('POST', `${API_BASE}/uploads`)
     // 必须在 open() 之后才能 setRequestHeader
     xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
+    console.error('[Upload] XHR opened, sending FormData...')
     xhr.send(formData)
   })
 }
