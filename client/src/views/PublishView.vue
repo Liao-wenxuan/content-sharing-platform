@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { postsApi } from '@/api/posts'
@@ -112,13 +112,16 @@ function addFiles(files: File[]) {
       continue
     }
 
-    const img: PendingImage = {
+    // 用 reactive() 包一层 —— Vue 3 的 ref()/reactive() 不会自动 proxy
+    // push 进去的对象，直接 mutate 闭包里的 plain object 不会触发 UI 更新
+    // （XHR onload 后 img.status='done' 但徽章永远卡在 uploading）。
+    const img = reactive<PendingImage>({
       id: nextImgId++,
       file,
       previewUrl: URL.createObjectURL(file),
       uploadedUrl: null,
       status: 'pending'
-    }
+    })
     images.value.push(img)
     // 选完立即上传（不等点发布按钮）
     uploadImage(img)
