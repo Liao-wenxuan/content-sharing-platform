@@ -2,10 +2,14 @@ import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestCo
 import { useAuthStore } from '@/stores/auth'
 
 // 创建 axios 实例
+// 注意：不要在 headers 里设 Content-Type — 否则 axios 1.x 会保留这个默认值，
+// 不会为 FormData 自动加 multipart/form-data + boundary，
+// 导致 multer 解析失败（multer 找不到 boundary 就把整个 body 当成空）。
+// Content-Type 应该由 axios 根据请求数据自动决定（JSON → application/json，
+// FormData → multipart/form-data; boundary=xxx）。
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:3000/api',
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
 })
 
 // ===== 请求拦截器：自动加 token =====
