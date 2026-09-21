@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
 import { toISO } from '../lib/time'
+import { NICKNAME_MAX_LENGTH } from '../constants'
 
 const router = Router()
 
@@ -23,8 +24,8 @@ router.put('/me', requireAuth, (req: Request, res: Response) => {
       if (typeof nickname !== 'string' || nickname.trim() === '') {
         return res.status(400).json({ message: '昵称不能为空' })
       }
-      if (nickname.length > 20) {
-        return res.status(400).json({ message: '昵称不能超过 20 字' })
+      if (nickname.length > NICKNAME_MAX_LENGTH) {
+        return res.status(400).json({ message: `昵称不能超过 ${NICKNAME_MAX_LENGTH} 字` })
       }
     }
     if (avatar !== undefined && avatar !== null) {

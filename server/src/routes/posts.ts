@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
 import { toISO } from '../lib/time'
+import { POST_CONTENT_MAX_LENGTH } from '../constants'
 
 const router = Router()
 
@@ -17,8 +18,8 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return res.status(400).json({ message: '内容不能为空' })
     }
-    if (content.length > 500) {
-      return res.status(400).json({ message: '内容不能超过 500 字' })
+    if (content.length > POST_CONTENT_MAX_LENGTH) {
+      return res.status(400).json({ message: `内容不能超过 ${POST_CONTENT_MAX_LENGTH} 字` })
     }
 
     const imageUrlsJson = imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0

@@ -4,6 +4,15 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { postsApi } from '@/api/posts'
 import request from '@/api/request'
+import {
+  POST_CONTENT_MAX_LENGTH,
+  NICKNAME_MAX_LENGTH,
+  UPLOAD_MAX_IMAGES,
+  UPLOAD_MAX_SIZE_MB,
+  UPLOAD_MAX_SIZE_BYTES,
+  UPLOAD_TIMEOUT_MS,
+  DEFAULT_API_BASE
+} from '@/constants'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -27,10 +36,9 @@ interface PendingImage {
 const images = ref<PendingImage[]>([])
 let nextImgId = 1
 
-const MAX_IMAGES = 9
-const MAX_SIZE_MB = 10
-// 单图上传超时：60 秒，超时后自动 fail 让用户重试
-const UPLOAD_TIMEOUT_MS = 60_000
+// 上传限制（client + server 防御性校验；值在 src/constants.ts）
+const MAX_IMAGES = UPLOAD_MAX_IMAGES
+const MAX_SIZE_MB = UPLOAD_MAX_SIZE_MB
 
 // ===== 拖拽状态 =====
 const isDragOver = ref(false)
@@ -42,7 +50,7 @@ const allUploaded = computed(() =>
 
 const canSubmit = computed(() =>
   content.value.trim().length > 0 &&
-  content.value.trim().length <= 500 &&
+  content.value.trim().length <= POST_CONTENT_MAX_LENGTH &&
   allUploaded.value &&
   !submitting.value
 )
@@ -107,7 +115,7 @@ function addFiles(files: File[]) {
       continue
     }
     // 大小校验
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+    if (file.size > UPLOAD_MAX_SIZE_BYTES) {
       errorMsg.value = `已跳过超大文件（>${MAX_SIZE_MB}MB）：${file.name}`
       continue
     }
@@ -201,7 +209,7 @@ async function uploadImage(img: PendingImage) {
 
     // 用绝对 URL 而不是相对路径 — XHR 用相对路径会指向 5173（Vite dev），
     // 必须直接打 3000 后端，否则 Vite SPA 会返 404 index.html
-    const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:3000/api'
+    const API_BASE = (import.meta.env.VITE_API_BASE as string) || DEFAULT_API_BASE
 
     xhr.open('POST', `${API_BASE}/uploads`)
     // 必须在 open() 之后才能 setRequestHeader
@@ -230,8 +238,8 @@ async function handleSubmit() {
     errorMsg.value = '内容不能为空'
     return
   }
-  if (text.length > 500) {
-    errorMsg.value = '内容不能超过 500 字'
+  if (text.length > POST_CONTENT_MAX_LENGTH) {
+    errorMsg.value = `内容不能超过 ${POST_CONTENT_MAX_LENGTH} 字`
     return
   }
   // 图全部上传完才能发布
@@ -275,10 +283,10 @@ async function handleSubmit() {
         <textarea
           v-model="content"
           rows="5"
-          maxlength="500"
+          :maxlength="POST_CONTENT_MAX_LENGTH"
           placeholder="说点什么吧..."
         />
-        <div class="counter">{{ content.length }} / 500</div>
+        <div class="counter">{{ content.length }} / {{ POST_CONTENT_MAX_LENGTH }}</div>
       </div>
 
       <!-- 话题 -->

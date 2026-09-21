@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
 import { toISO } from '../lib/time'
+import { COMMENT_MAX_LENGTH } from '../constants'
 
 const router = Router({ mergeParams: true })
 
@@ -55,8 +56,8 @@ router.post('/:postId/comments', requireAuth, (req: Request, res: Response) => {
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return res.status(400).json({ message: '评论内容不能为空' })
     }
-    if (content.length > 500) {
-      return res.status(400).json({ message: '评论不能超过 500 字' })
+    if (content.length > COMMENT_MAX_LENGTH) {
+      return res.status(400).json({ message: `评论不能超过 ${COMMENT_MAX_LENGTH} 字` })
     }
 
     // 检查 post 是否存在

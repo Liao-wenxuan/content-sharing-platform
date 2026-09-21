@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { randomBytes } from 'crypto'
 import { requireAuth } from '../middleware/auth'
+import { UPLOAD_MAX_FILES, UPLOAD_MAX_SIZE_BYTES } from '../constants'
 
 const router = Router()
 
@@ -30,8 +31,8 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024,  // 10MB（浏览器整页截图经常 > 5MB）
-    files: 9                     // 最多 9 张图
+    fileSize: UPLOAD_MAX_SIZE_BYTES,
+    files: UPLOAD_MAX_FILES
   },
   fileFilter: (_req, file, cb) => {
     // 只允许 image/*
@@ -44,7 +45,7 @@ const upload = multer({
 })
 
 // ===== multer 中间件 =====
-const uploadMiddleware = upload.array('files', 9)
+const uploadMiddleware = upload.array('files', UPLOAD_MAX_FILES)
 
 // ===== POST /api/uploads —— 单文件/多文件上传（鉴权）=====
 // 客户端 FormData field name: 'files'

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post } from '@/api/posts'
+import { NICKNAME_MAX_LENGTH } from '@/constants'
 
 const route = useRoute()
 const router = useRouter()
@@ -161,8 +162,8 @@ async function submitEdit() {
     editError.value = '昵称不能为空'
     return
   }
-  if (nickname.length > 20) {
-    editError.value = '昵称不能超过 20 字'
+  if (nickname.length > NICKNAME_MAX_LENGTH) {
+    editError.value = `昵称不能超过 ${NICKNAME_MAX_LENGTH} 字`
     return
   }
 
@@ -456,11 +457,11 @@ const emptyHint = computed(() => {
             <input
               v-model="editNickname"
               type="text"
-              maxlength="20"
+              :maxlength="NICKNAME_MAX_LENGTH"
               placeholder="你的昵称"
               :disabled="editSubmitting"
             />
-            <div class="counter">{{ editNickname.length }} / 20</div>
+            <div class="counter">{{ editNickname.length }} / {{ NICKNAME_MAX_LENGTH }}</div>
           </div>
 
           <div class="field">

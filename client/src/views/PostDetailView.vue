@@ -3,6 +3,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { postsApi, type Post, type Comment } from '@/api/posts'
 import { useAuthStore } from '@/stores/auth'
+import { COMMENT_MAX_LENGTH } from '@/constants'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,8 +114,8 @@ async function submitComment() {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
-  if (text.length > 500) {
-    commentError.value = '评论不能超过 500 字'
+  if (text.length > COMMENT_MAX_LENGTH) {
+    commentError.value = `评论不能超过 ${COMMENT_MAX_LENGTH} 字`
     return
   }
 
@@ -276,14 +277,14 @@ watch(() => route.params.id, () => {
               class="composer-input"
               placeholder="说点什么..."
               rows="2"
-              maxlength="500"
+              :maxlength="COMMENT_MAX_LENGTH"
               @input="onCommentInput"
               :disabled="submittingComment"
             ></textarea>
           </div>
           <div class="composer-actions">
-            <span class="counter" :class="{ over: commentLength > 500 }">
-              {{ commentLength }} / 500
+            <span class="counter" :class="{ over: commentLength > COMMENT_MAX_LENGTH }">
+              {{ commentLength }} / {{ COMMENT_MAX_LENGTH }}
             </span>
             <button
               class="submit-btn"
