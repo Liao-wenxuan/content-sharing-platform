@@ -63,11 +63,7 @@ router.post('/', requireAuth, (req, res, next) => {
     }
 
     const files = (req.files as Express.Multer.File[]) || []
-    // 调试日志：multer 解析完了但 files 是空，常见原因：
-    // - 浏览器发的 Content-Type 没有 boundary
-    // - FormData field name 拼错
     if (files.length === 0) {
-      console.error('[Upload] no files. content-type:', req.headers['content-type'], 'body keys:', Object.keys(req.body || {}))
       return res.status(400).json({ message: '没有收到文件' })
     }
 

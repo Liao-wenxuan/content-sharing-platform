@@ -129,13 +129,11 @@ function addFiles(files: File[]) {
 }
 
 async function uploadImage(img: PendingImage) {
-  console.log('[Upload] START — file:', img.file.name, img.file.size, 'bytes,', img.file.type)
   img.status = 'uploading'
   img.progress = 0
   img.errorMsg = undefined
   const formData = new FormData()
   formData.append('files', img.file)
-  console.log('[Upload] FormData built, entries:', Array.from(formData.entries()).map(([k, v]) => `${k}=${v instanceof File ? `File(${v.size})` : v}`))
 
   // 用 XHR 直接上传，绕开 axios 1.x 的 FormData/Content-Type 处理 bug
   // （axios 1.x 在 instance 默认 Content-Type 是 'application/json' 时，
@@ -153,7 +151,6 @@ async function uploadImage(img: PendingImage) {
     // 超时
     xhr.timeout = UPLOAD_TIMEOUT_MS
     xhr.addEventListener('timeout', () => {
-      console.error('[Upload] TIMEOUT after', UPLOAD_TIMEOUT_MS, 'ms')
       img.status = 'error'
       img.errorMsg = `上传超时（>${UPLOAD_TIMEOUT_MS / 1000}s）`
       resolve()
@@ -161,7 +158,6 @@ async function uploadImage(img: PendingImage) {
 
     // 完成
     xhr.addEventListener('load', () => {
-      console.log('[Upload] LOAD — status:', xhr.status, 'response:', xhr.responseText?.slice(0, 200))
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const data = JSON.parse(xhr.responseText)
@@ -193,7 +189,6 @@ async function uploadImage(img: PendingImage) {
 
     // 网络错误
     xhr.addEventListener('error', () => {
-      console.error('[Upload] ERROR — likely CORS or network failure')
       img.status = 'error'
       img.errorMsg = '网络错误'
       resolve()
@@ -201,19 +196,16 @@ async function uploadImage(img: PendingImage) {
 
     // 请求被中止
     xhr.addEventListener('abort', () => {
-      console.error('[Upload] ABORT')
       resolve()
     })
 
     // 用绝对 URL 而不是相对路径 — XHR 用相对路径会指向 5173（Vite dev），
     // 必须直接打 3000 后端，否则 Vite SPA 会返 404 index.html
     const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:3000/api'
-    console.log('[Upload] API_BASE:', API_BASE, 'token len:', auth.token?.length)
 
     xhr.open('POST', `${API_BASE}/uploads`)
     // 必须在 open() 之后才能 setRequestHeader
     xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
-    console.log('[Upload] XHR opened, sending FormData...')
     xhr.send(formData)
   })
 }
