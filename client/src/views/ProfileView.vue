@@ -20,9 +20,25 @@ const loading = ref(false)
 const errorMsg = ref('')
 const total = ref(0)
 
-// ===== TAB：笔记 / 收藏（收藏先做空状态占位）=====
-type TabKey = 'posts' | 'favorites'
+// ===== 三栏统计（暂无 follow API，固定 0）=====
+const stats = ref({
+  following: 2,   // 占位：以后接 follow 表
+  followers: 0,
+  likes: 0
+})
+
+// ===== TAB：笔记 / 评论 / 收藏 / 赞过 =====
+type TabKey = 'posts' | 'comments' | 'favorites' | 'likes'
 const activeTab = ref<TabKey>('posts')
+
+// ===== 子筛选：公开 / 私密 / 合集 =====
+type Scope = 'public' | 'private' | 'collections'
+const activeScope = ref<Scope>('public')
+const counts = computed(() => ({
+  public: posts.value.length,
+  private: 0,
+  collections: 0
+}))
 
 // ===== 编辑 modal =====
 const showEditModal = ref(false)
@@ -45,28 +61,51 @@ const isOwner = computed(() =>
   auth.user !== null && profileUser.value !== null && auth.user.id === profileUser.value.id
 )
 
-// ===== 封面图 fallback（picsum 随机图，保证没设 cover 也有图）=====
-const FALLBACK_COVERS = [
-  'https://picsum.photos/seed/cover1/800/300',
-  'https://picsum.photos/seed/cover2/800/300',
-  'https://picsum.photos/seed/cover3/800/300',
-  'https://picsum.photos/seed/cover4/800/300',
-  'https://picsum.photos/seed/cover5/800/300'
-]
-
-const coverUrl = computed(() => {
-  const c = profileUser.value?.cover
-  if (c) return c
-  const idx = (profileUser.value?.id ?? 0) % FALLBACK_COVERS.length
-  return FALLBACK_COVERS[idx]
-})
-
 const avatarUrl = computed(() => profileUser.value?.avatar || null)
 
+// ===== 你可能感兴趣的人（暂无推荐 API，先 mock）=====
+interface SuggestedUser {
+  id: number
+  nickname: string
+  avatar: string | null
+  postCount: number
+}
+const suggested = ref<SuggestedUser[]>([
+  { id: 101, nickname: '小多', avatar: null, postCount: 109 },
+  { id: 102, nickname: '几月几日天气晴', avatar: null, postCount: 12 },
+  { id: 103, nickname: '小丸子的妈妈', avatar: null, postCount: 52 }
+])
+const suggestionDismissed = ref(false)
+
+// ===== 小红书号 =====
+const xhsIdCopyState = ref<'idle' | 'copied'>('idle')
+
+async function copyXhsId() {
+  const id = profileUser.value?.id
+  if (!id) return
+  try {
+    await navigator.clipboard.writeText(String(id))
+    xhsIdCopyState.value = 'copied'
+    setTimeout(() => (xhsIdCopyState.value = 'idle'), 1500)
+  } catch {
+    /* 剪贴板不可用（http / 权限）静默 */
+  }
+}
+
+// ===== 浏览记录 / 钱包 占位路由 =====
+const handleBrowseHistory = () => {
+  // TODO: 跳 /profile/me/history
+  router.push('/profile/me')
+}
+const handleWallet = () => {
+  // TODO: 跳 /profile/me/wallet
+  router.push('/profile/me')
+}
+
+// ===== 加载 =====
 async function loadProfile() {
   const id = targetId.value
   if (id === null) {
-    // /profile/me 在未登录时 → 跳登录页
     if (route.params.id === 'me' && !auth.isLoggedIn) {
       router.push({ path: '/login', query: { redirect: route.fullPath } })
       return
@@ -79,7 +118,8 @@ async function loadProfile() {
   errorMsg.value = ''
   posts.value = []
   profileUser.value = null
-  activeTab.value = 'posts' // 切用户时重置 TAB
+  activeTab.value = 'posts'
+  activeScope.value = 'public'
 
   try {
     const data = id === auth.user?.id
@@ -135,15 +175,12 @@ async function submitEdit() {
       cover: editCover.value.trim() || null
     })
 
-    // 1) 刷新 profileUser（页面顶部展示）
     profileUser.value = {
       id: updated.id,
       nickname: updated.nickname,
       avatar: updated.avatar,
       cover: updated.cover
     }
-
-    // 2) 同步 Pinia store（全局头像/昵称刷新，比如 nav 栏）
     auth.user = {
       ...auth.user!,
       nickname: updated.nickname,
@@ -182,71 +219,185 @@ onMounted(() => {
 watch(() => route.params.id, () => {
   loadProfile()
 })
+
+// ===== 空状态提示（按 tab/scope 给出差异化描述）=====
+const emptyHint = computed(() => {
+  if (activeTab.value === 'comments') return '还没有发过评论'
+  if (activeTab.value === 'favorites') return '收藏功能即将上线 ✨'
+  if (activeTab.value === 'likes') return '还没有赞过任何笔记'
+  if (activeScope.value === 'private') return '私密笔记即将上线'
+  if (activeScope.value === 'collections') return '合集功能即将上线'
+  return '还没有内容'
+})
 </script>
 
 <template>
   <div class="profile">
-    <!-- 顶部封面 banner -->
-    <div class="cover-banner" :style="{ backgroundImage: `url(${coverUrl})` }">
-      <div class="cover-overlay"></div>
-    </div>
-
-    <header class="profile-header">
-      <img
-        v-if="avatarUrl"
-        :src="avatarUrl"
-        :alt="profileUser?.nickname"
-        class="avatar-img avatar-lg"
-        @error="($event.target as HTMLImageElement).style.display='none'"
-      />
-      <div v-else class="avatar avatar-lg">{{ avatarText(profileUser?.nickname) }}</div>
-
-      <h1>{{ profileUser?.nickname || '个人主页' }}</h1>
-
-      <p class="stats">
-        <span v-if="!loading">共 <strong>{{ total }}</strong> 篇笔记</span>
-      </p>
-
-      <!-- 编辑按钮（仅自己可见） -->
-      <button v-if="isOwner" class="edit-btn" @click="openEdit">
-        <svg viewBox="0 0 24 24" class="edit-icon" aria-hidden="true">
+    <!-- ===== 顶部条（per-page header） ===== -->
+    <header class="topbar">
+      <button class="icon-btn" aria-label="菜单">☰</button>
+      <button v-if="isOwner" class="edit-pill" @click="openEdit">
+        <svg viewBox="0 0 24 24" class="edit-pencil" aria-hidden="true">
           <path
             d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
             fill="currentColor"
           />
         </svg>
-        编辑资料
+        编辑主页
       </button>
+      <div class="topbar-spacer"></div>
+      <button class="icon-btn" aria-label="二维码">▦</button>
+      <button class="icon-btn" aria-label="分享">↗</button>
     </header>
 
-    <!-- TAB：笔记 / 收藏 -->
+    <!-- ===== 用户信息 ===== -->
+    <section class="user-info">
+      <div class="avatar-wrap">
+        <img
+          v-if="avatarUrl"
+          :src="avatarUrl"
+          :alt="profileUser?.nickname"
+          class="avatar-img"
+          @error="($event.target as HTMLImageElement).style.display='none'"
+        />
+        <div v-else class="avatar avatar-sm">{{ avatarText(profileUser?.nickname) }}</div>
+        <span v-if="isOwner" class="upload-hint">上传头像</span>
+      </div>
+
+      <div class="user-text">
+        <div class="nickname-row">
+          <h1>{{ profileUser?.nickname || '个人主页' }}</h1>
+          <button v-if="isOwner" class="icon-btn small" aria-label="编辑昵称">✎</button>
+        </div>
+        <div class="xhs-id-row">
+          <span class="xhs-label">小红书号:</span>
+          <span class="xhs-id">{{ profileUser?.id ?? '—' }}</span>
+          <button class="icon-btn small" :title="xhsIdCopyState === 'copied' ? '已复制' : '复制'" @click="copyXhsId">
+            {{ xhsIdCopyState === 'copied' ? '✓' : '⎘' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 三栏统计 ===== -->
+    <div class="stats">
+      <button class="stat-cell">
+        <strong>{{ stats.following }}</strong>
+        <span>关注</span>
+      </button>
+      <button class="stat-cell">
+        <strong>{{ stats.followers }}</strong>
+        <span>粉丝</span>
+      </button>
+      <button class="stat-cell">
+        <strong>{{ stats.likes }}</strong>
+        <span>获赞与收藏</span>
+      </button>
+    </div>
+
+    <!-- ===== Bio ===== -->
+    <p class="bio">这个人很懒</p>
+
+    <!-- ===== 浏览记录 / 钱包 cards ===== -->
+    <div class="quick-cards">
+      <button class="quick-card" @click="handleBrowseHistory">
+        <svg viewBox="0 0 24 24" class="qc-icon" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
+          <path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+        <div class="qc-label">浏览记录</div>
+        <div class="qc-sub">看过的笔记</div>
+      </button>
+      <button class="quick-card" @click="handleWallet">
+        <svg viewBox="0 0 24 24" class="qc-icon" aria-hidden="true">
+          <rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
+          <path d="M16 12h2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+        <div class="qc-label">钱包</div>
+        <div class="qc-sub">查看详情</div>
+      </button>
+    </div>
+
+    <!-- ===== 你可能感兴趣的人 ===== -->
+    <section v-if="!suggestionDismissed" class="suggestions">
+      <header class="suggestions-header">
+        <h2>你可能感兴趣的人 <span class="info-dot" aria-label="说明">ⓘ</span></h2>
+        <button class="icon-btn small" aria-label="关闭" @click="suggestionDismissed = true">×</button>
+      </header>
+      <div class="suggestion-list">
+        <div v-for="u in suggested" :key="u.id" class="suggestion-item">
+          <div class="avatar avatar-xs">{{ avatarText(u.nickname) }}</div>
+          <div class="sug-name">{{ u.nickname }}</div>
+          <div class="sug-count">笔记 {{ u.postCount }}</div>
+          <button class="follow-btn">关注</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB ===== -->
     <nav class="tabs">
       <button
         class="tab"
         :class="{ active: activeTab === 'posts' }"
         @click="activeTab = 'posts'"
       >
-        <span>笔记</span>
-        <span class="tab-count">{{ total }}</span>
+        笔记
+      </button>
+      <button
+        class="tab"
+        :class="{ active: activeTab === 'comments' }"
+        @click="activeTab = 'comments'"
+      >
+        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+        评论
       </button>
       <button
         class="tab"
         :class="{ active: activeTab === 'favorites' }"
         @click="activeTab = 'favorites'"
       >
-        <span>收藏</span>
-        <span class="tab-count">0</span>
+        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+        收藏
+      </button>
+      <button
+        class="tab"
+        :class="{ active: activeTab === 'likes' }"
+        @click="activeTab = 'likes'"
+      >
+        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+        赞过
       </button>
     </nav>
 
-    <!-- 内容区 -->
-    <div v-if="loading" class="state">加载中...</div>
+    <!-- ===== 子筛选 ===== -->
+    <nav class="sub-tabs">
+      <button
+        class="sub-tab"
+        :class="{ active: activeScope === 'public' }"
+        @click="activeScope = 'public'"
+      >公开 <span>{{ counts.public }}</span></button>
+      <button
+        class="sub-tab"
+        :class="{ active: activeScope === 'private' }"
+        @click="activeScope = 'private'"
+      >
+        <svg viewBox="0 0 24 24" class="lock-icon" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+        私密 <span>{{ counts.private }}</span>
+      </button>
+      <button
+        class="sub-tab"
+        :class="{ active: activeScope === 'collections' }"
+        @click="activeScope = 'collections'"
+      >合集 <span>{{ counts.collections }}</span></button>
+    </nav>
 
+    <!-- ===== 内容区 ===== -->
+    <div v-if="loading" class="state">加载中...</div>
     <div v-if="errorMsg" class="state error">{{ errorMsg }}</div>
 
     <!-- 笔记 TAB：双列瀑布流 -->
     <div
-      v-if="!loading && !errorMsg && activeTab === 'posts'"
+      v-if="!loading && !errorMsg && activeTab === 'posts' && activeScope === 'public'"
       class="post-grid"
     >
       <router-link
@@ -277,24 +428,18 @@ watch(() => route.params.id, () => {
       </div>
     </div>
 
-    <!-- 收藏 TAB：空状态占位 -->
+    <!-- 其他 tab / 子筛选的空状态 -->
     <div
-      v-if="!loading && !errorMsg && activeTab === 'favorites'"
-      class="favorites-empty"
+      v-if="!loading && !errorMsg && (activeTab !== 'posts' || activeScope !== 'public')"
+      class="empty-state"
     >
-      <div class="favorites-icon">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </div>
-      <p class="favorites-title">收藏功能即将上线</p>
-      <p class="favorites-desc">登录后可收藏喜欢的笔记，敬请期待 ✨</p>
+      <svg viewBox="0 0 64 64" class="empty-icon" aria-hidden="true">
+        <rect x="14" y="20" width="36" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="2" />
+        <path d="M14 28h36" stroke="currentColor" stroke-width="2" />
+        <path d="M22 36h20M22 42h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      </svg>
+      <p class="empty-title">暂无内容</p>
+      <p class="empty-desc">{{ emptyHint }}</p>
     </div>
 
     <!-- ===== 编辑资料 modal ===== -->
@@ -367,33 +512,88 @@ watch(() => route.params.id, () => {
   padding: 0 0 24px;
 }
 
-/* ===== 顶部封面 banner ===== */
-.cover-banner {
-  height: 220px;
-  background-size: cover;
-  background-position: center;
-  background-color: var(--muted);
-  position: relative;
+/* ===== 顶部条 ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--background);
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
-.cover-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.35) 100%);
+.topbar-spacer {
+  flex: 1;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--foreground);
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  background: var(--muted);
+}
+
+.icon-btn.small {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+}
+
+.edit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.edit-pill:hover {
+  background: var(--muted);
+}
+
+.edit-pencil {
+  width: 14px;
+  height: 14px;
 }
 
 /* ===== 用户信息 ===== */
-.profile-header {
-  text-align: center;
-  padding: 0 20px 20px;
-  margin-top: -40px;  /* 让头像压在 banner 上 */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px 0;
+}
+
+.avatar-wrap {
   position: relative;
-  z-index: 1;
+  flex-shrink: 0;
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
   border-radius: 50%;
   background: var(--primary);
   color: var(--primary-foreground);
@@ -401,76 +601,252 @@ watch(() => route.params.id, () => {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 14px;
   flex-shrink: 0;
 }
 
+.avatar-sm {
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
+}
+
+.avatar-xs {
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
+}
+
 .avatar-img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
   object-fit: cover;
 }
 
-.avatar-lg {
-  width: 80px;
-  height: 80px;
-  font-size: 30px;
-  margin: 0 auto 12px;
-  border: 4px solid var(--background);
-  box-shadow: var(--shadow-md);
-  display: block;
+.upload-hint {
+  position: absolute;
+  inset: auto 0 -8px;
+  margin: 0 auto;
+  width: max-content;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  background: var(--background);
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
 }
 
-.profile-header h1 {
-  margin: 0 0 6px;
-  font-size: 22px;
+.user-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.nickname-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nickname-row h1 {
+  margin: 0;
+  font-size: 18px;
   font-weight: 700;
   color: var(--foreground);
-  letter-spacing: -0.01em;
 }
 
-.stats {
+.xhs-id-row {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   color: var(--muted-foreground);
-  font-size: 13px;
-  margin: 0 0 14px;
+  font-size: 12px;
 }
 
-.stats strong {
+.xhs-id {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 三栏统计 ===== */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 14px 20px 0;
+  border-bottom: 0;
+}
+
+.stat-cell {
+  background: transparent;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 0;
+  cursor: pointer;
+  font-family: inherit;
   color: var(--foreground);
+  transition: background 0.15s;
+}
+
+.stat-cell:hover {
+  background: var(--muted);
+  border-radius: var(--radius);
+}
+
+.stat-cell strong {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-cell span {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* ===== Bio ===== */
+.bio {
+  margin: 12px 20px 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
+/* ===== Quick cards ===== */
+.quick-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 14px 20px 0;
+}
+
+.quick-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--foreground);
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.quick-card:hover {
+  background: var(--muted);
+  border-color: var(--muted-foreground);
+}
+
+.qc-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.qc-label {
+  font-size: 14px;
   font-weight: 600;
 }
 
-.edit-btn {
+.qc-sub {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 1px;
+}
+
+/* ===== Suggestions ===== */
+.suggestions {
+  margin: 16px 16px 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.suggestions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.suggestions-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: var(--background);
-  border: 1px solid var(--border);
+  gap: 4px;
+}
+
+.info-dot {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.suggestion-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sug-name {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--foreground);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 6px 14px;
-  border-radius: var(--radius);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sug-count {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.follow-btn {
+  margin-top: 4px;
+  padding: 4px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
   font-family: inherit;
   transition: all 0.15s;
 }
 
-.edit-btn:hover {
-  background: var(--muted);
-  border-color: var(--muted-foreground);
+.follow-btn:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
-.edit-icon {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-/* ===== TAB ===== */
+/* ===== Tabs ===== */
 .tabs {
   display: flex;
+  align-items: center;
   border-bottom: 1px solid var(--border);
-  margin: 0 0 16px;
-  padding: 0 20px;
+  margin: 18px 0 0;
+  padding: 0 8px;
+  gap: 4px;
 }
 
 .tab {
@@ -488,7 +864,7 @@ watch(() => route.params.id, () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tab:hover {
@@ -506,33 +882,66 @@ watch(() => route.params.id, () => {
   left: 50%;
   bottom: -1px;
   transform: translateX(-50%);
-  width: 28px;
+  width: 24px;
   height: 2px;
-  background: var(--foreground);
+  background: var(--primary);
   border-radius: 1px;
 }
 
-.tab-count {
-  font-size: 11px;
-  background: var(--muted);
+.tab-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== Sub Tabs ===== */
+.sub-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 20px 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sub-tab {
+  background: none;
+  border: none;
   color: var(--muted-foreground);
-  padding: 1px 6px;
-  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 0;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+
+.sub-tab:hover {
+  color: var(--foreground);
+}
+
+.sub-tab.active {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.sub-tab span {
   font-variant-numeric: tabular-nums;
 }
 
-.tab.active .tab-count {
-  background: var(--foreground);
-  color: var(--background);
+.lock-icon {
+  width: 12px;
+  height: 12px;
 }
 
-/* ===== 帖子瀑布流（与 HomeView 风格一致） ===== */
+/* ===== Post grid（与原版一致） ===== */
 .post-grid {
   display: grid;
-  /* minmax(0, 1fr) 而不是 1fr：避免内容 min-width 把 grid 撑出父容器 */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 0 16px;
+  padding: 12px 16px;
 }
 
 .post-link {
@@ -546,9 +955,7 @@ watch(() => route.params.id, () => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.2s ease;
+  transition: box-shadow 0.25s, transform 0.25s, border-color 0.2s;
   display: flex;
   flex-direction: column;
 }
@@ -608,10 +1015,6 @@ watch(() => route.params.id, () => {
   font-variant-numeric: tabular-nums;
 }
 
-.time {
-  white-space: nowrap;
-}
-
 .topic {
   background: var(--muted);
   padding: 2px 6px;
@@ -620,8 +1023,8 @@ watch(() => route.params.id, () => {
   color: var(--foreground);
 }
 
-/* ===== 收藏空状态 ===== */
-.favorites-empty {
+/* ===== Empty state ===== */
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -631,31 +1034,22 @@ watch(() => route.params.id, () => {
   color: var(--muted-foreground);
 }
 
-.favorites-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
+.empty-icon {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 12px;
+  opacity: 0.6;
 }
 
-.favorites-icon svg {
-  width: 28px;
-  height: 28px;
-}
-
-.favorites-title {
-  font-size: 15px;
+.empty-title {
+  font-size: 14px;
   font-weight: 600;
   color: var(--foreground);
   margin: 0 0 4px;
 }
 
-.favorites-desc {
-  font-size: 13px;
+.empty-desc {
+  font-size: 12px;
   margin: 0;
 }
 
@@ -677,7 +1071,7 @@ watch(() => route.params.id, () => {
   text-decoration: underline;
 }
 
-/* ===== Modal ===== */
+/* ===== Modal（与原版一致） ===== */
 .modal-mask {
   position: fixed;
   inset: 0;
@@ -758,15 +1152,11 @@ watch(() => route.params.id, () => {
   margin-bottom: 16px;
 }
 
-.field:last-child {
-  margin-bottom: 0;
-}
-
 .field label {
   display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
   font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
   color: var(--foreground);
 }
 
@@ -779,94 +1169,77 @@ watch(() => route.params.id, () => {
   font-family: inherit;
   background: var(--background);
   color: var(--foreground);
-  outline: none;
   transition: border-color 0.15s;
-  box-sizing: border-box;
 }
 
 .field input:focus {
-  border-color: var(--ring);
+  outline: none;
+  border-color: var(--primary);
 }
 
 .field input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .counter {
-  text-align: right;
   font-size: 11px;
   color: var(--muted-foreground);
+  text-align: right;
   margin-top: 4px;
-  font-variant-numeric: tabular-nums;
 }
 
 .preview {
   margin-top: 8px;
   border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid var(--border);
   background: var(--muted);
 }
 
-.preview img {
-  display: block;
-  width: 100%;
-}
-
 .preview-avatar img {
-  width: 80px;
-  height: 80px;
+  width: 60px;
+  height: 60px;
   object-fit: cover;
-  margin: 8px auto;
   border-radius: 50%;
 }
 
 .preview-cover img {
-  aspect-ratio: 8 / 3;
+  width: 100%;
+  height: 80px;
   object-fit: cover;
 }
 
 .error {
   color: var(--destructive);
   font-size: 13px;
-  background: rgba(239, 68, 68, 0.08);
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  padding: 8px 0;
 }
 
 .modal-footer {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
   padding: 12px 20px;
   border-top: 1px solid var(--border);
 }
 
 .btn {
-  padding: 8px 18px;
+  flex: 1;
+  padding: 8px 16px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.15s;
   border: 1px solid transparent;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  transition: all 0.15s;
 }
 
 .btn-secondary {
   background: var(--background);
-  color: var(--foreground);
   border-color: var(--border);
+  color: var(--foreground);
 }
 
-.btn-secondary:hover:not(:disabled) {
+.btn-secondary:hover {
   background: var(--muted);
 }
 
@@ -876,24 +1249,11 @@ watch(() => route.params.id, () => {
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.9;
+  filter: brightness(1.05);
 }
 
-/* ===== 响应式 ===== */
-@media (max-width: 480px) {
-  .cover-banner {
-    height: 180px;
-  }
-  .profile-header {
-    margin-top: -36px;
-  }
-  .avatar-lg {
-    width: 64px;
-    height: 64px;
-    font-size: 24px;
-  }
-  .modal {
-    max-height: 95vh;
-  }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
