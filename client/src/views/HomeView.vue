@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { postsApi, type Post } from '@/api/posts'
+import HomeTopTabs from '@/components/HomeTopTabs.vue'
 
 const posts = ref<Post[]>([])
 const loading = ref(false)
@@ -59,7 +60,11 @@ onMounted(() => {
 
 <template>
   <div class="home">
-    <header class="page-header">
+    <!-- 顶部双层 tab 栏（频道 + 分类） -->
+    <HomeTopTabs />
+
+    <!-- 兼容旧的 page-header 样式 hook（虽然不再渲染，但保持 css 不报错） -->
+    <header v-show="false" class="page-header">
       <h1 class="page-title">发现</h1>
       <p class="page-subtitle">分享你的世界，发现有趣的内容</p>
     </header>
@@ -150,6 +155,40 @@ onMounted(() => {
   padding: 24px 16px 12px;
 }
 
+/* ===== 顶部栏（汉堡按钮 + 大标题）===== */
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.menu-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.menu-btn:hover {
+  background: var(--muted);
+}
+
+.menu-btn svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
 /* ===== 页头大标题（shadcn 风格） ===== */
 .page-header {
   margin-bottom: 20px;
@@ -159,7 +198,7 @@ onMounted(() => {
   font-size: 30px;
   font-weight: 700;
   color: var(--foreground);
-  margin: 0 0 4px;
+  margin: 0;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
@@ -167,7 +206,7 @@ onMounted(() => {
 .page-subtitle {
   font-size: 14px;
   color: var(--muted-foreground);
-  margin: 0;
+  margin: 4px 0 0;
 }
 
 /* ===== 双列瀑布流 ===== */
