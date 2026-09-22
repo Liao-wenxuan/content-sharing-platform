@@ -1,81 +1,75 @@
 import Database from 'better-sqlite3'
 import path from 'path'
+import { initSchema } from './schema'
 
-// 数据库文件路径（项目根的 data.db）
-const dbPath = path.join(__dirname, '../../data.db')
+/**
+ * DB 模块设计
+ *
+ * - 默认导出是一个 Proxy，转发到当前 _db 实例
+ * - 生产 / dev 启动时自动建 file DB + 跑迁移
+ * - 测试可以用 setTestDb() 替换成 :memory: 实例，不污染真实数据
+ *
+ * 为什么用 Proxy 而不是直接 export db：
+ * - 直接 export 后，测试要么污染真实 DB，要么得 vi.mock（ESM mock 麻烦）
+ * - Proxy 让 routes 完全无感知，db.prepare(...).run(...) 一行不用改
+ */
 
-// 打开数据库（不存在会自动创建）
-const db = new Database(dbPath)
+let _db: Database.Database | null = null
 
-// 启用外键约束
-db.pragma('foreign_keys = ON')
+function createDefaultDb(): Database.Database {
+  const dbPath = path.join(__dirname, '../../data.db')
+  const db = new Database(dbPath)
+  initSchema(db)
 
-// 启动时建 users 表
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    nickname TEXT NOT NULL,
-    avatar TEXT,
-    cover TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`)
-
-// 老库迁移：给 users 表加 cover 列（SQLite ALTER TABLE 不支持 IF NOT EXISTS，手动 try/catch）
-try {
-  db.exec(`ALTER TABLE users ADD COLUMN cover TEXT`)
-} catch (err: any) {
-  if (!String(err.message).includes('duplicate column')) {
-    throw err
+  // 老库迁移：password → password_hash
+  const cols = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
+  const names = new Set(cols.map(c => c.name))
+  if (names.has('password') && !names.has('password_hash')) {
+    db.exec(`ALTER TABLE users RENAME COLUMN password TO password_hash`)
+    console.log('[DB] Migrated: users.password → users.password_hash')
   }
+  if (!names.has('cover')) {
+    try {
+      db.exec(`ALTER TABLE users ADD COLUMN cover TEXT`)
+      console.log('[DB] Migrated: users.cover column added')
+    } catch (err: any) {
+      if (!String(err.message).includes('duplicate column')) throw err
+    }
+  }
+
+  console.log('✅ DB connected:', dbPath)
+  return db
 }
 
-// 启动时建 posts 表
-db.exec(`
-  CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    image_urls TEXT,
-    topic_tag TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`)
+function getDb(): Database.Database {
+  if (!_db) _db = createDefaultDb()
+  return _db
+}
 
-// 启动时建 likes 表（点赞）
-db.exec(`
-  CREATE TABLE IF NOT EXISTS likes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    post_id INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, post_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-  )
-`)
+/**
+ * 测试用：替换默认 db 实例为 :memory: 或测试 DB。
+ * 用法：tests/setup.ts 里 beforeAll(() => setTestDb(new Database(':memory:')))
+ */
+export function setTestDb(db: Database.Database): void {
+  _db = db
+}
 
-db.exec(`CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id)`)
-db.exec(`CREATE INDEX IF NOT EXISTS idx_likes_user ON likes(user_id)`)
+/** 测试用：还原为 null，下次访问会重新创建默认 DB */
+export function resetDb(): void {
+  _db = null
+}
 
-// 启动时建 comments 表
-db.exec(`
-  CREATE TABLE IF NOT EXISTS comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
-  )
-`)
+// Proxy：所有方法调用转发到当前 _db 实例
+const handler: ProxyHandler<Database.Database> = {
+  get(_target, prop, _receiver) {
+    const target = getDb() as any
+    const value = target[prop]
+    if (typeof value === 'function') {
+      return value.bind(target)
+    }
+    return value
+  },
+}
 
-db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id)`)
-
-console.log('✅ DB connected:', dbPath)
-
-export default db
+const dbProxy = new Proxy({} as Database.Database, handler)
+export default dbProxy
