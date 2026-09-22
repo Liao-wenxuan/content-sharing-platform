@@ -11,7 +11,10 @@
 | 互动 | 点赞 (可选登录态) / 评论 (登录态) / 评论列表 |
 | 个人主页 | banner / 头像 / 三栏统计 / 浏览记录 + 钱包入口 / 推荐关注 / 4 个 tab + 公开/私密/合集筛选 / 编辑资料 modal |
 | 消息 | 三个分类卡片 (赞和收藏 / 新增关注 / 评论和@) + 活动流 + 推荐关注 + 通知开关（UI 框架已搭好） |
-| 主题 | 暗色 / 亮色切换 (URL 参数可强制) |
+| 侧边栏 | 小红书风格抽屉（9 个分组菜单 + 3 个底部圆形按钮 + 暗色独立配色） |
+| 首页 tab | 双层 tab 栏：上层频道（关注 / 发现 / 雅安）/ 下层分类（推荐 / 视频 / 热点 / 直播 / 短剧 / 经验） |
+| 设置 | 设置页（5 组设置项 + 深色模式切换 + 退出登录 + 协议链接） |
+| 主题 | 暗色 / 亮色切换 (URL 参数可强制 + localStorage 持久化) |
 
 > 路线图见 [docs/architecture.md](docs/architecture.md#路线图)
 
@@ -77,11 +80,13 @@ content-sharing-platform/
 
 ## 🎯 设计决策（简历可以聊的点）
 
-- **不引 UI 库**：所有交互组件（dropzone / modal / tabs / bottom nav）手写，证明能直接落地设计稿
+- **不引 UI 库**：所有交互组件（dropzone / modal / tabs / bottom nav / sidebar / drawer）手写，证明能直接落地设计稿
 - **不引 ORM**：手写 SQL（`better-sqlite3.prepare(...).all()`），同步接口比 async 好读
 - **不引 Tailwind**：CSS variables 主题切换 + scoped CSS，便于改设计 token
 - **防御性校验**：所有限制（content ≤ 500 字、图 ≤ 10MB）双端校验，client 立即反馈 + server 拒绝非法请求
 - **Vue 3 reactivity 坑**：uploaded image 对象用 `reactive()` 显式包一层，绕开 `ref([]).push(plain)` 不会自动 proxy 子项的陷阱（详见 [docs/architecture.md](docs/architecture.md#踩过的坑)）
+- **后端 hardening**：dotenv + 启动期 env 校验、express-rate-limit（auth 5/min，写接口 20/min）、统一错误中间件（multer / JSON parse / 404）、password 列名迁移到 password_hash
+- **可测试架构**：db 模块用 Proxy 模式让测试注入 `:memory:` 实例，schema 抽成函数生产测试共用；vitest 覆盖 auth / posts / likes 31 个 case
 
 ## 📚 文档
 
