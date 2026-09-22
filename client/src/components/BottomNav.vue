@@ -51,15 +51,6 @@ const tabs: Tab[] = [
     icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'
   }
 ]
-
-// 未登录时访问 /profile/me → 自动跳 /login（在路由里处理）
-// 这里提供一个点击拦截：如果未登录，强制去 login
-const handleProfile = (e: MouseEvent) => {
-  // Pinia 状态在 setup 之外访问要确保 Pinia 已激活；用 useAuthStore 更安全
-  // 这里仅路由跳转，由 router 守卫接管
-  void e
-}
-void handleProfile  // 占位防 lint 报未用
 </script>
 
 <template>
