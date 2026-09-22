@@ -2,16 +2,14 @@ import { Router, type Request, type Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import db from '../lib/db'
+import { env } from '../lib/env'
 import { requireAuth } from '../middleware/auth'
+import { authLimiter } from '../middleware/rateLimit'
 
 const router = Router()
 
-// JWT 密钥（生产环境用 .env 文件管理）
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-please-change-in-prod'
-const TOKEN_EXPIRES_IN = '7d'
-
 // ===== POST /register =====
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, nickname } = req.body
 
@@ -30,17 +28,23 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     // 3. 密码哈希（10 轮加盐，业界标准）
-    const hashedPassword = await bcrypt.hash(password, 10)
+    const passwordHash = await bcrypt.hash(password, 10)
 
-    // 4. 插入数据库
+    // 4. 插入数据库（password_hash 列存 bcrypt hash，不是明文）
     const result = db.prepare(`
-      INSERT INTO users (email, password, nickname) VALUES (?, ?, ?)
-    `).run(email, hashedPassword, nickname)
+      INSERT INTO users (email, password_hash, nickname) VALUES (?, ?, ?)
+    `).run(email, passwordHash, nickname)
 
     const userId = result.lastInsertRowid as number
 
     // 5. 生成 token（7 天有效）
-    const token = jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: TOKEN_EXPIRES_IN })
+    // 注：显式标 as jwt.SignOptions —— TS 7 + 老版 @types/jsonwebtoken 9 的 overload
+    // 推导在对象属性读取时会把 options 推到 SignCallback 重载，强制 cast 解决
+    const token = jwt.sign(
+      { userId, email },
+      env.JWT_SECRET,
+      { expiresIn: env.TOKEN_EXPIRES_IN } as jwt.SignOptions
+    )
 
     // 6. 返回
     res.status(201).json({
@@ -54,7 +58,7 @@ router.post('/register', async (req: Request, res: Response) => {
 })
 
 // ===== POST /login =====
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body
 
@@ -65,16 +69,16 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // 2. 验证密码（bcrypt 自动处理加盐比对）
-    const valid = await bcrypt.compare(password, user.password)
+    const valid = await bcrypt.compare(password, user.password_hash)
     if (!valid) {
       return res.status(401).json({ message: '邮箱或密码错误' })
     }
 
-    // 3. 生成 token
+    // 3. 生成 token（as SignOptions 详见 register 接口的注释）
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: TOKEN_EXPIRES_IN }
+      env.JWT_SECRET,
+      { expiresIn: env.TOKEN_EXPIRES_IN } as jwt.SignOptions
     )
 
     // 4. 返回

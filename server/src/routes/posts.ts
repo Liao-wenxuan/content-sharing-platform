@@ -1,12 +1,13 @@
 import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
+import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { POST_CONTENT_MAX_LENGTH } from '../constants'
 
 const router = Router()
 
-router.post('/', requireAuth, (req: Request, res: Response) => {
+router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
   try {
     const userId = req.userId
     if (!userId) {

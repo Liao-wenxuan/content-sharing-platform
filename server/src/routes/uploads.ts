@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { randomBytes } from 'crypto'
 import { requireAuth } from '../middleware/auth'
+import { uploadLimiter } from '../middleware/rateLimit'
 import { UPLOAD_MAX_FILES, UPLOAD_MAX_SIZE_BYTES } from '../constants'
 
 const router = Router()
@@ -50,7 +51,7 @@ const uploadMiddleware = upload.array('files', UPLOAD_MAX_FILES)
 // ===== POST /api/uploads —— 单文件/多文件上传（鉴权）=====
 // 客户端 FormData field name: 'files'
 // 返回：{ files: [{ url, filename, size }, ...] }
-router.post('/', requireAuth, (req, res, next) => {
+router.post('/', uploadLimiter, requireAuth, (req, res, next) => {
   uploadMiddleware(req, res, (err: any) => {
     if (err) {
       // multer 错误（大小/类型/数量）

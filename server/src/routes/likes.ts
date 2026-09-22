@@ -1,12 +1,13 @@
 import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
+import { writeLimiter } from '../middleware/rateLimit'
 
 // mergeParams: true 让我们在 mount 在 /api/posts 下时能拿到 :postId
 const router = Router({ mergeParams: true })
 
 // POST /api/posts/:postId/like —— 点赞（幂等：已赞则不重复创建）
-router.post('/:postId/like', requireAuth, (req: Request, res: Response) => {
+router.post('/:postId/like', writeLimiter, requireAuth, (req: Request, res: Response) => {
   try {
     // Express 5 + path-to-regexp v8: req.params.id 是 string | string[]，运行时是 string
     const postId = parseInt(String(req.params.postId))
@@ -36,7 +37,7 @@ router.post('/:postId/like', requireAuth, (req: Request, res: Response) => {
 })
 
 // DELETE /api/posts/:postId/like —— 取消点赞（幂等：未赞则不报错）
-router.delete('/:postId/like', requireAuth, (req: Request, res: Response) => {
+router.delete('/:postId/like', writeLimiter, requireAuth, (req: Request, res: Response) => {
   try {
     const postId = parseInt(String(req.params.postId))
     const userId = req.userId

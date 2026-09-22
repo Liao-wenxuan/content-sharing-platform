@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
+import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { COMMENT_MAX_LENGTH } from '../constants'
 
@@ -44,7 +45,7 @@ router.get('/:postId/comments', (req: Request, res: Response) => {
 })
 
 // ===== POST /api/posts/:postId/comments —— 发评论（鉴权） =====
-router.post('/:postId/comments', requireAuth, (req: Request, res: Response) => {
+router.post('/:postId/comments', writeLimiter, requireAuth, (req: Request, res: Response) => {
   try {
     const postId = parseInt(String(req.params.postId))
     const userId = req.userId

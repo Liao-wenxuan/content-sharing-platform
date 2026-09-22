@@ -1,7 +1,6 @@
 import { type Request, type Response, type NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
-
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-please-change-in-prod'
+import { env } from '../lib/env'
 
 // 把 token 解析逻辑抽出来，requireAuth 和 optionalAuth 共用
 function tryAttachUser(req: Request): boolean {
@@ -10,7 +9,7 @@ function tryAttachUser(req: Request): boolean {
 
   const token = authHeader.slice(7)
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; email: string }
+    const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: number; email: string }
     req.userId = decoded.userId
     return true
   } catch {
