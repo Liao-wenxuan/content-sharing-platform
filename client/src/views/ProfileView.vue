@@ -2,6 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useSidebarStore } from '@/stores/sidebar'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post } from '@/api/posts'
 import { NICKNAME_MAX_LENGTH } from '@/constants'
@@ -9,6 +10,7 @@ import { NICKNAME_MAX_LENGTH } from '@/constants'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const sidebar = useSidebarStore()
 
 const profileUser = ref<{
   id: number
@@ -236,7 +238,11 @@ const emptyHint = computed(() => {
   <div class="profile">
     <!-- ===== 顶部条（per-page header） ===== -->
     <header class="topbar">
-      <button class="icon-btn" aria-label="菜单">☰</button>
+      <button
+        class="icon-btn"
+        aria-label="打开侧边栏"
+        @click="sidebar.open()"
+      >☰</button>
       <button v-if="isOwner" class="edit-pill" @click="openEdit">
         <svg viewBox="0 0 24 24" class="edit-pencil" aria-hidden="true">
           <path
