@@ -3,6 +3,7 @@ import { onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import BottomNav from '@/components/BottomNav.vue'
 import Sidebar from '@/components/Sidebar.vue'
+import ToastHost from '@/components/ToastHost.vue'
 
 const auth = useAuthStore()
 
@@ -28,6 +29,9 @@ onMounted(() => {
 
     <!-- 侧边栏：Teleport 到 body，独立层级 -->
     <Sidebar />
+
+    <!-- 全局 toast 通知（独立层级） -->
+    <ToastHost />
   </div>
 </template>
 
