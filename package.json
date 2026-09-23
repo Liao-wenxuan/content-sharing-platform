@@ -1,0 +1,25 @@
+{
+  "name": "content-sharing-platform-root",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Root-level tooling: lint, format, git hooks. Client + server each have their own package.json for runtime deps.",
+  "scripts": {
+    "lint": "eslint . --ext .ts,.vue",
+    "lint:fix": "eslint . --ext .ts,.vue --fix",
+    "format": "prettier --write \"**/*.{ts,vue,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,vue,json,md,css}\"",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.8.0",
+    "@typescript-eslint/parser": "^8.8.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-vue": "^9.28.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "vue-eslint-parser": "^9.4.3"
+  }
+}
