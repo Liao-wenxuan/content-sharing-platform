@@ -2,7 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { postsApi, type Post } from '@/api/posts'
 import HomeTopTabs from '@/components/HomeTopTabs.vue'
+import { useRelativeTime } from '@/composables/useRelativeTime'
 
+const { formatTime } = useRelativeTime()
 const posts = ref<Post[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -36,17 +38,6 @@ async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
   page.value++
   await loadFeed(false)
-}
-
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN')
 }
 
 function avatarText(nickname?: string): string {
