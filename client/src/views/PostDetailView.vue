@@ -4,10 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { postsApi, type Post, type Comment } from '@/api/posts'
 import { useAuthStore } from '@/stores/auth'
 import { COMMENT_MAX_LENGTH } from '@/constants'
+import { useRelativeTime } from '@/composables/useRelativeTime'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { formatTime } = useRelativeTime()
 
 // ===== 状态 =====
 const post = ref<Post | null>(null)
@@ -139,18 +141,6 @@ function onCommentInput() {
 }
 
 // ===== 工具函数 =====
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000
-
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN')
-}
-
 function formatExactTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString('zh-CN', { hour12: false })
 }
