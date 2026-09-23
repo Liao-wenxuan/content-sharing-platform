@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+# commitlint: 强制 conventional commits 格式
+npx --no-install commitlint --edit "$1"

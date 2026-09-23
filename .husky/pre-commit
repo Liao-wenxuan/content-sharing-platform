@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+
+# lint-staged: 对暂存文件跑 eslint --fix + prettier --write
+npx --no-install lint-staged
