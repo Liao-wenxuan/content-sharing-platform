@@ -1,0 +1,17 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+dist/
+client/dist/
+server/dist/
+coverage/
+
+server/data.db
+server/data.db-journal
+server/uploads/
+
+package-lock.json
+yarn.lock
+
+.husky/
+screenshots/
