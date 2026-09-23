@@ -1,0 +1,25 @@
+# Build / cache / deps
+node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+server/dist/
+server/coverage/
+
+# Generated
+server/data.db
+server/data.db-journal
+server/uploads/
+client/.vite-cache/
+
+# Lock files (size + don't lint)
+client/package-lock.json
+server/package-lock.json
+
+# Sensitive / local
+server/.env
+.env
+
+# Test fixtures
+test-upload-2x2.png
+screenshots/
