@@ -6,11 +6,13 @@ import { useSidebarStore } from '@/stores/sidebar'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post } from '@/api/posts'
 import { NICKNAME_MAX_LENGTH } from '@/constants'
+import { useRelativeTime } from '@/composables/useRelativeTime'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const sidebar = useSidebarStore()
+const { formatTime } = useRelativeTime()
 
 const profileUser = ref<{
   id: number
@@ -200,17 +202,6 @@ async function submitEdit() {
 }
 
 // ===== 工具函数 =====
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 604800) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN')
-}
-
 function avatarText(nickname?: string): string {
   return nickname?.[0]?.toUpperCase() || '?'
 }
