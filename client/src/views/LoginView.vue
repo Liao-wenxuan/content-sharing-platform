@@ -1,11 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
+// 登录/注册成功后跳转目标：优先 ?redirect，否则首页
+// 防御：redirect 只接受站内路径（避免开放重定向）
+function resolveRedirect(): string {
+  const r = route.query.redirect
+  if (typeof r === 'string' && r.startsWith('/') && !r.startsWith('//')) {
+    return r
+  }
+  return '/'
+}
 
 const email = ref('')
 const password = ref('')
@@ -40,7 +51,7 @@ async function handleSubmit() {
         })
 
     auth.login(res.userInfo, res.accessToken)
-    router.push('/')
+    router.push(resolveRedirect())
   } catch (err: any) {
     console.error('登录失败', err)
     errorMsg.value = err.response?.data?.message || '请求失败，请检查后端是否启动'
