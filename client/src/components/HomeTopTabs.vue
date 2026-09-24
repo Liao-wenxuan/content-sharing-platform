@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useAuthStore } from '@/stores/auth'
+import { useHomeTabsStore } from '@/stores/homeTabs'
 
 const sidebar = useSidebarStore()
 const auth = useAuthStore()
+const homeTabs = useHomeTabsStore()
 
 // 头像首字母 fallback（用昵称首字）
 const avatarInitial = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || '?')
@@ -15,7 +17,6 @@ const channels = [
   { key: 'discover', label: '发现' },
   { key: 'ya', label: '雅安' }
 ]
-const activeChannel = ref('discover')
 
 // ===== 下层：分类 tab =====
 const categories = [
@@ -26,22 +27,13 @@ const categories = [
   { key: 'drama', label: '短剧' },
   { key: 'exp', label: '经验', hasMore: true } // ▾ 下拉
 ]
-const activeCategory = ref('recommend')
-
-// 频道 / 分类切换 — 通过 v-model:channel / v-model:category 暴露给父组件
-const emit = defineEmits<{
-  'update:channel': [key: string]
-  'update:category': [key: string]
-}>()
 
 function selectChannel(key: string) {
-  activeChannel.value = key
-  emit('update:channel', key)
+  homeTabs.channel = key
 }
 
 function selectCategory(key: string) {
-  activeCategory.value = key
-  emit('update:category', key)
+  homeTabs.category = key
 }
 
 // 搜索按钮（暂打 console 占位）
@@ -99,12 +91,12 @@ function onSearch() {
           :key="ch.key"
           type="button"
           class="channel-tab"
-          :class="{ active: activeChannel === ch.key }"
+          :class="{ active: homeTabs.channel === ch.key }"
           @click="selectChannel(ch.key)"
         >
           <span class="channel-label">{{ ch.label }}</span>
           <span v-if="ch.badge" class="channel-badge">{{ ch.badge }}</span>
-          <span v-if="activeChannel === ch.key" class="channel-underline" />
+          <span v-if="homeTabs.channel === ch.key" class="channel-underline" />
         </button>
       </div>
 
@@ -129,7 +121,7 @@ function onSearch() {
         :key="cat.key"
         type="button"
         class="category-tab"
-        :class="{ active: activeCategory === cat.key }"
+        :class="{ active: homeTabs.category === cat.key }"
         @click="selectCategory(cat.key)"
       >
         <span>{{ cat.label }}</span>
@@ -144,6 +136,9 @@ function onSearch() {
   position: sticky;
   top: 0;
   z-index: 30;
+  /* 全宽 viewport 铺满：100% 跟随 <html>，不依赖父容器宽度 */
+  width: 100%;
+  max-width: 100vw;
   /* Liquid glass 顶栏：透出底色 + 模糊 */
   background: var(--glass-bg);
   backdrop-filter: blur(28px) saturate(180%);
@@ -333,5 +328,62 @@ function onSearch() {
 .caret {
   font-size: 10px;
   opacity: 0.8;
+}
+
+/* ===== 响应式适配 ===== */
+/* 桌面：频道 tab gap 大、分类 padding 舒展 */
+@media (min-width: 1024px) {
+  .top-row {
+    padding: 0 24px;
+  }
+  .channel-tabs {
+    gap: 32px;
+  }
+  .category-row {
+    padding: 0 24px;
+    gap: 22px;
+  }
+}
+
+/* 平板：紧凑一点 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .top-row {
+    padding: 0 16px;
+  }
+  .channel-tabs {
+    gap: 22px;
+  }
+}
+
+/* 手机：紧凑、内边距更小 */
+@media (max-width: 480px) {
+  .top-row {
+    height: 48px;
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .channel-tabs {
+    gap: 16px;
+  }
+  .channel-tab {
+    font-size: 14px;
+  }
+  .category-row {
+    height: 38px;
+    padding: 0 12px;
+    gap: 14px;
+  }
+  .category-tab {
+    font-size: 13px;
+    padding: 4px 6px;
+  }
+  .circle-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .circle-btn svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 </style>
