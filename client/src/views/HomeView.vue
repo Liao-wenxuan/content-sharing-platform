@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { postsApi, type Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import { useHomeTabsStore } from '@/stores/homeTabs'
+import EmptyState from '@/components/EmptyState.vue'
 
 const { formatTime } = useRelativeTime()
 const homeTabs = useHomeTabsStore()
@@ -41,6 +42,10 @@ async function loadFeed(reset: boolean) {
   }
 }
 
+function reload() {
+  return loadFeed(true)
+}
+
 async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
   page.value++
@@ -71,13 +76,21 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
       <p class="page-subtitle">分享你的世界，发现有趣的内容</p>
     </header>
 
-    <div v-if="loading && posts.length === 0" class="state loading">加载中...</div>
+    <EmptyState
+      v-if="loading && posts.length === 0"
+      variant="loading"
+      title="正在加载笔记..."
+    />
 
-    <div v-if="errorMsg" class="state error">
-      {{ errorMsg }}
-    </div>
+    <EmptyState
+      v-else-if="errorMsg"
+      variant="error"
+      :title="errorMsg"
+      action="重试"
+      @action="reload"
+    />
 
-    <div v-if="!loading || posts.length > 0" class="feed">
+    <div v-else class="feed">
       <router-link v-for="post in posts" :key="post.id" :to="`/post/${post.id}`" class="post-link">
         <article class="post-card">
           <!-- 图片封面：有图时占主位 -->
@@ -134,7 +147,9 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
         </button>
       </div>
       <div v-else-if="posts.length > 0" class="state no-more">— 没有更多了 —</div>
-      <div v-else-if="!loading" class="state empty">还没有人发布笔记，快去发第一篇吧 ✨</div>
+      <div v-else class="state-empty-wrap">
+        <EmptyState icon="✨" title="还没有人发布笔记" hint="快去发第一篇吧" />
+      </div>
     </div>
   </div>
 </template>
@@ -359,6 +374,11 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
   padding: 20px;
   color: var(--muted-foreground);
   font-size: 14px;
+}
+
+/* EmptyState 包装：让组件在 grid 里跨两列 */
+.state-empty-wrap {
+  grid-column: 1 / -1;
 }
 
 .state.error {
