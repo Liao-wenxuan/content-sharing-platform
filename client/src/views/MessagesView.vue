@@ -530,4 +530,24 @@ onMounted(() => {
   border-color: var(--muted-foreground);
   color: var(--muted-foreground);
 }
+
+/* ===== 移动端适配 ===== */
+@supports (padding: max(0px)) {
+  .topbar {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+}
+@media (max-width: 480px) {
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .category-card {
+    margin: 0 12px 14px;
+    padding: 14px;
+  }
+  .user-card {
+    padding: 14px;
+  }
+}
 </style>
