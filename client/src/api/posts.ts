@@ -79,8 +79,18 @@ export const postsApi = {
   },
 
   // 获取 Feed 列表
+  // params:
+  //   page      分页
+  //   pageSize  每页条数
+  //   channel   频道过滤：discover(发现) / follow(关注) / ya(雅安) / etc.
+  //   category  分类过滤：recommend / video / hot / live / drama / exp
   async getFeed(
-    params: { page?: number; pageSize?: number } = {}
+    params: {
+      page?: number
+      pageSize?: number
+      channel?: string
+      category?: string
+    } = {}
   ): Promise<FeedResponse> {
     const res = await request.get<FeedResponse>('/posts/feed', { params })
     return res as unknown as FeedResponse
