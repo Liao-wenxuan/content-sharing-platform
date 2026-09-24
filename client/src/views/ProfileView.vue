@@ -1343,4 +1343,32 @@ const emptyHint = computed(() => {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ===== 移动端适配 ===== */
+@supports (padding: max(0px)) {
+  /* 适配 iPhone 顶部刘海 / 底部 home 条 */
+  .topbar {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  }
+}
+@media (max-width: 480px) {
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 6px;
+  }
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .edit-pill {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  .stats-section,
+  .tabs-section,
+  .post-grid {
+    padding: 0 12px;
+  }
+}
 </style>
