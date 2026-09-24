@@ -75,40 +75,17 @@ async function handleSubmit() {
       <h2 class="form-title">{{ isRegister ? '注册' : '登录' }}</h2>
 
       <form @submit.prevent="handleSubmit">
-        <input
-          v-model="email"
-          type="email"
-          placeholder="邮箱"
-          class="input"
-        />
-        <input
-          v-model="password"
-          type="password"
-          placeholder="密码"
-          class="input"
-        />
-        <input
-          v-if="isRegister"
-          v-model="nickname"
-          placeholder="昵称"
-          class="input"
-        />
+        <input v-model="email" type="email" placeholder="邮箱" class="input" />
+        <input v-model="password" type="password" placeholder="密码" class="input" />
+        <input v-if="isRegister" v-model="nickname" placeholder="昵称" class="input" />
 
         <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
-        <button
-          type="submit"
-          :disabled="loading"
-          class="btn"
-        >
-          {{ loading ? '处理中...' : (isRegister ? '注册' : '登录') }}
+        <button type="submit" :disabled="loading" class="btn">
+          {{ loading ? '处理中...' : isRegister ? '注册' : '登录' }}
         </button>
 
-        <button
-          type="button"
-          @click="isRegister = !isRegister"
-          class="toggle-btn"
-        >
+        <button type="button" @click="isRegister = !isRegister" class="toggle-btn">
           切换到{{ isRegister ? '登录' : '注册' }}
         </button>
       </form>
@@ -126,11 +103,14 @@ async function handleSubmit() {
 .card {
   width: 100%;
   max-width: 380px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  /* 玻璃登录卡 */
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 32px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
 }
 
 /* ===== 品牌头部 ===== */
@@ -190,7 +170,9 @@ form {
   background: var(--background);
   color: var(--foreground);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   box-sizing: border-box;
 }
 
@@ -207,10 +189,12 @@ form {
   color: var(--destructive);
   font-size: 13px;
   margin: 0;
-  background: #fef2f2;
+  /* 错误条用玻璃红，dark / light 都自然 */
+  background: rgba(239, 68, 68, 0.12);
+  backdrop-filter: blur(12px);
   padding: 8px 12px;
   border-radius: var(--radius);
-  border: 1px solid #fecaca;
+  border: 1px solid rgba(239, 68, 68, 0.35);
 }
 
 .btn {
