@@ -329,16 +329,24 @@ function goBack() {
 }
 
 .group-card {
-  background: var(--card);
-  border: 1px solid var(--border);
+  /* 玻璃设置卡：dark / light 都用同一 token */
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border-dk);
   border-radius: 12px;
   overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
 }
-
-/* dark mode 下卡片背景稍亮 */
-:global(.dark) .group-card {
-  background: #1f1f23;
-  border-color: #2a2a30;
+.group-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--glass-highlight) 50%, transparent 100%);
+  pointer-events: none;
 }
 
 .menu-item {
@@ -358,19 +366,12 @@ function goBack() {
 }
 
 .menu-item:not(:last-child) {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border-dk);
 }
-
-:global(.dark) .menu-item:not(:last-child) {
-  border-bottom-color: #2a2a30;
 }
 
 .menu-item:hover {
-  background: var(--muted);
-}
-
-:global(.dark) .menu-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--glass-bg-strong);
 }
 
 .menu-icon {
@@ -403,15 +404,18 @@ function goBack() {
   display: inline-block;
   width: 42px;
   height: 24px;
-  background: #d4d4d8;
+  /* 玻璃开关（关） */
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border-dk);
   border-radius: 999px;
   transition: background 0.2s;
-  flex-shrink: 0;
   cursor: pointer;
 }
 
 .switch.on {
-  background: #22c55e; /* 绿：深色模式开启 */
+  /* 玻璃开关（开）：绿色，保留品牌 */
+  background: rgba(34, 197, 94, 0.85);
+  border-color: rgba(34, 197, 94, 0.5);
 }
 
 .switch-knob {
