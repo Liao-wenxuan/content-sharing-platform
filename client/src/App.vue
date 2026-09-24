@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { onMounted, computed, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import BottomNav from '@/components/BottomNav.vue'
 import Sidebar from '@/components/Sidebar.vue'
@@ -10,9 +10,21 @@ import HomeTopTabs from '@/components/HomeTopTabs.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 
 // 只在 HomeView 显示顶部双层 tab 栏（脱离路由级 max-width，铺满 viewport）
 const showTopTabs = computed(() => route.name === 'home')
+
+// 路由切换时回到顶部（避免从详情页返回时还在中间位置）
+// 仅在 path 变化时触发；同 path 的 query 变化（如 tab 切换）保留滚动位置
+watch(
+  () => route.path,
+  () => {
+    nextTick(() => {
+      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+    })
+  }
+)
 
 // 主题初始化（具体切换逻辑搬到 SettingsView 里）
 onMounted(() => {
