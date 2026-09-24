@@ -18,6 +18,8 @@ defineProps<{
   hint?: string
   /** 主操作按钮文案（不传则不渲染） */
   action?: string
+  /** 紧凑模式：缩小 padding + glyph，适合内嵌在 section 内 */
+  compact?: boolean
 }>()
 
 defineEmits<{
@@ -26,7 +28,10 @@ defineEmits<{
 </script>
 
 <template>
-  <div class="empty-state" :class="`variant-${variant ?? 'empty'}`">
+  <div
+    class="empty-state"
+    :class="[`variant-${variant ?? 'empty'}`, { compact: compact }]"
+  >
     <div class="glyph" aria-hidden="true">
       <!-- 加载中：纯 CSS 旋转环 -->
       <span v-if="(variant ?? 'empty') === 'loading'" class="spinner" />
@@ -113,5 +118,32 @@ defineEmits<{
 
 .variant-error .title {
   color: var(--destructive);
+}
+
+/* 紧凑模式：内嵌在小 section 内 */
+.empty-state.compact {
+  padding: 24px 16px;
+  min-height: 0;
+  gap: 8px;
+}
+
+.empty-state.compact .glyph {
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+}
+
+.empty-state.compact .spinner {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
+}
+
+.empty-state.compact .title {
+  font-size: 14px;
+}
+
+.empty-state.compact .hint {
+  font-size: 13px;
 }
 </style>
