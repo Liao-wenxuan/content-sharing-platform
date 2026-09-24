@@ -643,4 +643,27 @@ button.badge.error:hover {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ===== 移动端适配 ===== */
+@supports (padding: max(0px)) {
+  .publish {
+    /* iPhone 顶部刘海 / 底部 home 条 */
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (max-width: 480px) {
+  .publish {
+    padding: 16px 12px 24px;
+  }
+  .field {
+    margin-bottom: 16px;
+  }
+  .counter {
+    font-size: 11px;
+  }
+  .preview-grid {
+    gap: 6px;
+  }
+}
 </style>
