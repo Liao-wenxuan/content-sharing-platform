@@ -28,14 +28,20 @@ const categories = [
 ]
 const activeCategory = ref('recommend')
 
-// 频道切换 —— 后端暂无关注/雅安专属 feed，暂只切 UI
+// 频道 / 分类切换 — 通过 v-model:channel / v-model:category 暴露给父组件
+const emit = defineEmits<{
+  'update:channel': [key: string]
+  'update:category': [key: string]
+}>()
+
 function selectChannel(key: string) {
   activeChannel.value = key
+  emit('update:channel', key)
 }
 
-// 分类切换
 function selectCategory(key: string) {
   activeCategory.value = key
+  emit('update:category', key)
 }
 
 // 搜索按钮（暂打 console 占位）
