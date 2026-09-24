@@ -27,11 +27,11 @@ const errorMsg = ref('')
 interface PendingImage {
   id: number
   file: File
-  previewUrl: string        // 本地预览（URL.createObjectURL）
+  previewUrl: string // 本地预览（URL.createObjectURL）
   uploadedUrl: string | null // 上传成功后服务器返回的 URL
   status: 'pending' | 'uploading' | 'done' | 'error'
-  progress: number          // 0-100 上传进度
-  errorMsg?: string         // 上传失败时的提示
+  progress: number // 0-100 上传进度
+  errorMsg?: string // 上传失败时的提示
 }
 const images = ref<PendingImage[]>([])
 let nextImgId = 1
@@ -44,15 +44,16 @@ const MAX_SIZE_MB = UPLOAD_MAX_SIZE_MB
 const isDragOver = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
-const allUploaded = computed(() =>
-  images.value.length === 0 || images.value.every(i => i.status === 'done')
+const allUploaded = computed(
+  () => images.value.length === 0 || images.value.every((i) => i.status === 'done')
 )
 
-const canSubmit = computed(() =>
-  content.value.trim().length > 0 &&
-  content.value.trim().length <= POST_CONTENT_MAX_LENGTH &&
-  allUploaded.value &&
-  !submitting.value
+const canSubmit = computed(
+  () =>
+    content.value.trim().length > 0 &&
+    content.value.trim().length <= POST_CONTENT_MAX_LENGTH &&
+    allUploaded.value &&
+    !submitting.value
 )
 
 // ===== 校验：登录 + 自动重定向 =====
@@ -64,7 +65,7 @@ onMounted(() => {
 
 // 组件卸载时清理所有 ObjectURL 防内存泄漏
 onUnmounted(() => {
-  images.value.forEach(img => URL.revokeObjectURL(img.previewUrl))
+  images.value.forEach((img) => URL.revokeObjectURL(img.previewUrl))
 })
 
 // ===== 文件选择 / 拖拽 =====
@@ -188,7 +189,9 @@ async function uploadImage(img: PendingImage) {
         try {
           const body = JSON.parse(xhr.responseText)
           serverMsg = body.message || ''
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         img.status = 'error'
         img.errorMsg = serverMsg || `HTTP ${xhr.status}`
       }
@@ -219,12 +222,12 @@ async function uploadImage(img: PendingImage) {
 }
 
 async function retryImage(id: number) {
-  const img = images.value.find(i => i.id === id)
+  const img = images.value.find((i) => i.id === id)
   if (img) await uploadImage(img)
 }
 
 function removeImage(id: number) {
-  const idx = images.value.findIndex(i => i.id === id)
+  const idx = images.value.findIndex((i) => i.id === id)
   if (idx === -1) return
   // 释放 ObjectURL
   URL.revokeObjectURL(images.value[idx].previewUrl)
@@ -253,9 +256,7 @@ async function handleSubmit() {
 
   try {
     // 图片在选完时已经各自上传完毕，直接拿 URL 创建 post
-    const imageUrls = images.value
-      .map(i => i.uploadedUrl)
-      .filter((u): u is string => !!u)
+    const imageUrls = images.value.map((i) => i.uploadedUrl).filter((u): u is string => !!u)
 
     await postsApi.createPost({
       content: text,
@@ -292,18 +293,16 @@ async function handleSubmit() {
       <!-- 话题 -->
       <div class="field">
         <label>话题标签</label>
-        <input
-          v-model="topicTag"
-          placeholder="例如：前端开发"
-          maxlength="20"
-        />
+        <input v-model="topicTag" placeholder="例如：前端开发" maxlength="20" />
       </div>
 
       <!-- 图片上传 -->
       <div class="field">
         <label>
           图片
-          <span class="hint">（{{ images.length }} / {{ MAX_IMAGES }}，单张 ≤ {{ MAX_SIZE_MB }}MB）</span>
+          <span class="hint"
+            >（{{ images.length }} / {{ MAX_IMAGES }}，单张 ≤ {{ MAX_SIZE_MB }}MB）</span
+          >
         </label>
 
         <!-- 上传区（拖拽 / 点击） -->
@@ -316,10 +315,7 @@ async function handleSubmit() {
           @dragleave="onDragLeave"
         >
           <svg viewBox="0 0 24 24" class="upload-icon" aria-hidden="true">
-            <path
-              d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
-              fill="currentColor"
-            />
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor" />
           </svg>
           <p class="dropzone-text">点击或拖拽图片到此处上传</p>
           <p class="dropzone-hint">支持 JPG / PNG / GIF / WebP</p>
@@ -335,27 +331,22 @@ async function handleSubmit() {
 
         <!-- 预览网格 -->
         <div v-if="images.length > 0" class="preview-grid">
-          <div
-            v-for="img in images"
-            :key="img.id"
-            class="preview-item"
-          >
+          <div v-for="img in images" :key="img.id" class="preview-item">
             <img :src="img.previewUrl" :alt="img.file.name" />
 
             <!-- 状态徽章（点击重试 or 显示错误） -->
-            <button
-              v-if="img.status === 'pending'"
-              type="button"
-              class="badge pending"
-              disabled
-            >待上传</button>
+            <button v-if="img.status === 'pending'" type="button" class="badge pending" disabled>
+              待上传
+            </button>
             <button
               v-else-if="img.status === 'uploading'"
               type="button"
               class="badge uploading with-progress"
               :style="{ '--progress': img.progress + '%' }"
               disabled
-            >{{ img.progress }}%</button>
+            >
+              {{ img.progress }}%
+            </button>
             <div v-else-if="img.status === 'done'" class="badge done">✓</div>
             <button
               v-else-if="img.status === 'error'"
@@ -363,7 +354,9 @@ async function handleSubmit() {
               class="badge error"
               :title="img.errorMsg"
               @click="retryImage(img.id)"
-            >重试</button>
+            >
+              重试
+            </button>
 
             <!-- 删除按钮 -->
             <button
@@ -371,7 +364,9 @@ async function handleSubmit() {
               class="remove-btn"
               aria-label="删除图片"
               @click="removeImage(img.id)"
-            >×</button>
+            >
+              ×
+            </button>
           </div>
         </div>
       </div>
@@ -433,7 +428,9 @@ h1 {
   background: var(--background);
   color: var(--foreground);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   box-sizing: border-box;
 }
 
@@ -480,12 +477,12 @@ h1 {
 
 .dropzone:hover {
   border-color: var(--muted-foreground);
-  background: var(--background);
+  background: var(--glass-bg-strong);
 }
 
 .dropzone.active {
   border-color: var(--primary);
-  background: var(--background);
+  background: var(--glass-bg-strong);
   transform: scale(1.01);
 }
 
@@ -600,7 +597,9 @@ button.badge.error:hover {
   align-items: center;
   justify-content: center;
   font-family: inherit;
-  transition: background 0.15s, transform 0.1s;
+  transition:
+    background 0.15s,
+    transform 0.1s;
   padding: 0;
 }
 
@@ -614,10 +613,12 @@ button.badge.error:hover {
   color: var(--destructive);
   margin-bottom: 12px;
   font-size: 13px;
-  background: rgba(239, 68, 68, 0.08);
+  /* 玻璃错误条 */
+  background: rgba(239, 68, 68, 0.1);
+  backdrop-filter: blur(12px);
   padding: 8px 12px;
   border-radius: var(--radius);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .submit-btn {
