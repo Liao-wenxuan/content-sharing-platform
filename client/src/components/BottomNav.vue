@@ -8,8 +8,8 @@ const route = useRoute()
 interface Tab {
   to: string
   label: string
-  icon: string  // simple SVG path d
-  match?: (path: string) => boolean  // 自定义激活判断；马匹/我的/消息 默认按 path prefix
+  icon: string // simple SVG path d
+  match?: (path: string) => boolean // 自定义激活判断；马匹/我的/消息 默认按 path prefix
 }
 
 const isActive = (path: string, match?: (p: string) => boolean) => {
@@ -38,7 +38,7 @@ const tabs: Tab[] = [
     to: '/publish',
     label: '发布',
     icon: 'M12 5v14M5 12h14',
-    match: () => false  // 永不 active 高亮
+    match: () => false // 永不 active 高亮
   },
   {
     to: '/messages',
@@ -71,7 +71,14 @@ const tabs: Tab[] = [
       </template>
       <template v-else>
         <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
-          <path :d="tab.icon" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          <path
+            :d="tab.icon"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
         <span class="tab-label">{{ tab.label }}</span>
       </template>
@@ -89,8 +96,15 @@ const tabs: Tab[] = [
   /* 5 等分，中间 + 占位与其余 4 个等宽 */
   grid-template-columns: repeat(4, 1fr) 1.4fr;
   align-items: center;
-  background: var(--background);
-  border-top: 1px solid var(--border);
+  /* Liquid glass 底部导航：半透明 + 模糊透出背景 */
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-top: 1px solid var(--glass-border-dk);
+  /* 顶部 1px 折射线 */
+  box-shadow:
+    0 -1px 0 var(--glass-highlight) inset,
+    var(--glass-shadow);
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
   z-index: 50;
 }
@@ -126,7 +140,7 @@ const tabs: Tab[] = [
 /* 中间 + 按钮：圆形 accent 色 */
 .tab.center {
   position: relative;
-  margin: -22px 0 0;     /* 向上凸出半个身位 */
+  margin: -22px 0 0; /* 向上凸出半个身位 */
   height: 56px;
 }
 

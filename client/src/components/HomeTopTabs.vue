@@ -144,9 +144,15 @@ function onSearch() {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: var(--background);
-  /* 让边框压在内容之上：1px 分隔线 */
-  border-bottom: 1px solid var(--border);
+  /* Liquid glass 顶栏：透出底色 + 模糊 */
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  /* 底部 1px 折射线：液态玻璃的标志性细节 */
+  border-bottom: 1px solid var(--glass-border-dk);
+  box-shadow:
+    0 1px 0 var(--glass-highlight) inset,
+    var(--glass-shadow);
 }
 
 .row {
@@ -178,7 +184,7 @@ function onSearch() {
 }
 
 .circle-btn:hover {
-  background: var(--muted);
+  background: var(--glass-bg-strong);
 }
 
 .circle-btn svg {
@@ -321,6 +327,7 @@ function onSearch() {
 .category-tab.active {
   color: var(--foreground);
   font-weight: 700;
+  background: var(--glass-bg-strong);
 }
 
 .caret {
