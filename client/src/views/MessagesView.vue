@@ -90,7 +90,7 @@ function avatarText(n?: string) {
   return n?.[0]?.toUpperCase() || '?'
 }
 
-function openCategory(id: typeof categories[number]['id']) {
+function openCategory(id: (typeof categories)[number]['id']) {
   // 暂时先跳到 profile / home —— 真接 notification 时再实现
   if (id === 'follows') router.push('/')
   else router.push('/profile/me')
@@ -115,15 +115,17 @@ onMounted(() => {
 
     <!-- 3 个分类卡片 -->
     <div class="categories">
-      <button
-        v-for="c in categories"
-        :key="c.id"
-        class="cat-card"
-        @click="openCategory(c.id)"
-      >
+      <button v-for="c in categories" :key="c.id" class="cat-card" @click="openCategory(c.id)">
         <span class="cat-icon" :style="{ background: c.accent }">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path :d="c.icon" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <path
+              :d="c.icon"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
         </span>
         <span class="cat-label">{{ c.label }}</span>
@@ -169,11 +171,7 @@ onMounted(() => {
     <div class="notif-row">
       <span class="bell-icon" aria-hidden="true">🔔</span>
       <span class="notif-text">打开通知，不再错过互动消息</span>
-      <button
-        class="notif-toggle"
-        :class="{ on: notificationEnabled }"
-        @click="toggleNotification"
-      >
+      <button class="notif-toggle" :class="{ on: notificationEnabled }" @click="toggleNotification">
         {{ notificationEnabled ? '已开启' : '开启' }}
       </button>
       <button class="dismiss-btn" aria-label="关闭" @click="dismiss(0)">×</button>
@@ -196,7 +194,10 @@ onMounted(() => {
   padding: 10px 16px;
   position: sticky;
   top: 0;
-  background: var(--background);
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border-dk);
   z-index: 5;
 }
 
