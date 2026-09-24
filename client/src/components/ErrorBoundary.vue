@@ -65,11 +65,14 @@ function reset() {
 .card {
   max-width: 420px;
   text-align: center;
-  background: var(--card);
-  border: 1px solid var(--border);
+  /* 玻璃卡：blur 透出底色 */
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 32px 24px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
 }
 
 .icon {

@@ -32,25 +32,26 @@ const toast = useToastStore()
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  background: rgba(0, 0, 0, 0.82);
-  color: #fff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  /* Liquid glass toast：跟随主题（dark 黑玻璃 / light 白玻璃） */
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  color: var(--foreground);
+  box-shadow: var(--glass-shadow);
   cursor: pointer;
   user-select: none;
 }
 
-:global(.dark) .toast {
-  background: rgba(250, 250, 250, 0.92);
-  color: #18181b;
-}
-
 .tone-success {
-  background: rgba(34, 197, 94, 0.92);
+  background: rgba(34, 197, 94, 0.85);
+  border-color: rgba(34, 197, 94, 0.5);
   color: #fff;
 }
 
 .tone-error {
-  background: rgba(239, 68, 68, 0.92);
+  background: rgba(239, 68, 68, 0.85);
+  border-color: rgba(239, 68, 68, 0.5);
   color: #fff;
 }
 
