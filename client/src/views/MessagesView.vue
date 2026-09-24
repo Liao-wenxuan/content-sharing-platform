@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -145,7 +146,9 @@ onMounted(() => {
         </div>
         <div class="act-date">{{ a.date }}</div>
       </li>
-      <li v-if="activities.length === 0" class="state empty">暂无活动消息</li>
+      <li v-if="activities.length === 0" class="state-empty-cell">
+        <EmptyState icon="🔔" title="暂无活动消息" hint="有人赞你、评论你时会出现在这里" compact />
+      </li>
     </ul>
 
     <!-- 推荐关注 -->
@@ -372,11 +375,9 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.state.empty {
-  padding: 24px;
-  text-align: center;
-  color: var(--muted-foreground);
-  font-size: 13px;
+.state-empty-cell {
+  /* EmptyState compact 自身已带 padding，这里只确保 li 不带默认样式 */
+  list-style: none;
 }
 
 /* ===== suggestions ===== */
