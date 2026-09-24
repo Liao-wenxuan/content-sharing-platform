@@ -51,6 +51,13 @@ const router = createRouter({
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      // 404 catch-all：未知路径都进 NotFoundView
+      // 用 pathMatch 拿到原始 path，便于未来诊断
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/views/NotFoundView.vue')
     }
   ]
 })
