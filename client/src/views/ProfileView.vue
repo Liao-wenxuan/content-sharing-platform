@@ -27,7 +27,7 @@ const total = ref(0)
 
 // ===== 三栏统计（暂无 follow API，固定 0）=====
 const stats = ref({
-  following: 2,   // 占位：以后接 follow 表
+  following: 2, // 占位：以后接 follow 表
   followers: 0,
   likes: 0
 })
@@ -62,8 +62,8 @@ const targetId = computed<number | null>(() => {
   return isNaN(num) || num <= 0 ? null : num
 })
 
-const isOwner = computed(() =>
-  auth.user !== null && profileUser.value !== null && auth.user.id === profileUser.value.id
+const isOwner = computed(
+  () => auth.user !== null && profileUser.value !== null && auth.user.id === profileUser.value.id
 )
 
 const avatarUrl = computed(() => profileUser.value?.avatar || null)
@@ -127,9 +127,8 @@ async function loadProfile() {
   activeScope.value = 'public'
 
   try {
-    const data = id === auth.user?.id
-      ? await postsApi.getMyPosts()
-      : await postsApi.getUserPosts(id)
+    const data =
+      id === auth.user?.id ? await postsApi.getMyPosts() : await postsApi.getUserPosts(id)
     profileUser.value = data.user
     posts.value = data.list
     total.value = data.total
@@ -210,9 +209,12 @@ onMounted(() => {
   loadProfile()
 })
 
-watch(() => route.params.id, () => {
-  loadProfile()
-})
+watch(
+  () => route.params.id,
+  () => {
+    loadProfile()
+  }
+)
 
 // ===== 空状态提示（按 tab/scope 给出差异化描述）=====
 const emptyHint = computed(() => {
@@ -229,11 +231,7 @@ const emptyHint = computed(() => {
   <div class="profile">
     <!-- ===== 顶部条（per-page header） ===== -->
     <header class="topbar">
-      <button
-        class="icon-btn"
-        aria-label="打开侧边栏"
-        @click="sidebar.open()"
-      >☰</button>
+      <button class="icon-btn" aria-label="打开侧边栏" @click="sidebar.open()">☰</button>
       <button v-if="isOwner" class="edit-pill" @click="openEdit">
         <svg viewBox="0 0 24 24" class="edit-pencil" aria-hidden="true">
           <path
@@ -256,7 +254,7 @@ const emptyHint = computed(() => {
           :src="avatarUrl"
           :alt="profileUser?.nickname"
           class="avatar-img"
-          @error="($event.target as HTMLImageElement).style.display='none'"
+          @error="($event.target as HTMLImageElement).style.display = 'none'"
         />
         <div v-else class="avatar avatar-sm">{{ avatarText(profileUser?.nickname) }}</div>
         <span v-if="isOwner" class="upload-hint">上传头像</span>
@@ -270,7 +268,11 @@ const emptyHint = computed(() => {
         <div class="xhs-id-row">
           <span class="xhs-label">小红书号:</span>
           <span class="xhs-id">{{ profileUser?.id ?? '—' }}</span>
-          <button class="icon-btn small" :title="xhsIdCopyState === 'copied' ? '已复制' : '复制'" @click="copyXhsId">
+          <button
+            class="icon-btn small"
+            :title="xhsIdCopyState === 'copied' ? '已复制' : '复制'"
+            @click="copyXhsId"
+          >
             {{ xhsIdCopyState === 'copied' ? '✓' : '⎘' }}
           </button>
         </div>
@@ -301,15 +303,36 @@ const emptyHint = computed(() => {
       <button class="quick-card" @click="handleBrowseHistory">
         <svg viewBox="0 0 24 24" class="qc-icon" aria-hidden="true">
           <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-          <path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <path
+            d="M12 7v5l3 2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+          />
         </svg>
         <div class="qc-label">浏览记录</div>
         <div class="qc-sub">看过的笔记</div>
       </button>
       <button class="quick-card" @click="handleWallet">
         <svg viewBox="0 0 24 24" class="qc-icon" aria-hidden="true">
-          <rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" />
-          <path d="M16 12h2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          <rect
+            x="3"
+            y="6"
+            width="18"
+            height="13"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <path
+            d="M16 12h2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+          />
         </svg>
         <div class="qc-label">钱包</div>
         <div class="qc-sub">查看详情</div>
@@ -320,7 +343,9 @@ const emptyHint = computed(() => {
     <section v-if="!suggestionDismissed" class="suggestions">
       <header class="suggestions-header">
         <h2>你可能感兴趣的人 <span class="info-dot" aria-label="说明">ⓘ</span></h2>
-        <button class="icon-btn small" aria-label="关闭" @click="suggestionDismissed = true">×</button>
+        <button class="icon-btn small" aria-label="关闭" @click="suggestionDismissed = true">
+          ×
+        </button>
       </header>
       <div class="suggestion-list">
         <div v-for="u in suggested" :key="u.id" class="suggestion-item">
@@ -334,11 +359,7 @@ const emptyHint = computed(() => {
 
     <!-- ===== TAB ===== -->
     <nav class="tabs">
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'posts' }"
-        @click="activeTab = 'posts'"
-      >
+      <button class="tab" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">
         笔记
       </button>
       <button
@@ -346,7 +367,14 @@ const emptyHint = computed(() => {
         :class="{ active: activeTab === 'comments' }"
         @click="activeTab = 'comments'"
       >
-        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
+          <path
+            d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+        </svg>
         评论
       </button>
       <button
@@ -354,15 +382,27 @@ const emptyHint = computed(() => {
         :class="{ active: activeTab === 'favorites' }"
         @click="activeTab = 'favorites'"
       >
-        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
+          <path
+            d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+          />
+        </svg>
         收藏
       </button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'likes' }"
-        @click="activeTab = 'likes'"
-      >
-        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+      <button class="tab" :class="{ active: activeTab === 'likes' }" @click="activeTab = 'likes'">
+        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
+          <path
+            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+          />
+        </svg>
         赞过
       </button>
     </nav>
@@ -373,20 +413,36 @@ const emptyHint = computed(() => {
         class="sub-tab"
         :class="{ active: activeScope === 'public' }"
         @click="activeScope = 'public'"
-      >公开 <span>{{ counts.public }}</span></button>
+      >
+        公开 <span>{{ counts.public }}</span>
+      </button>
       <button
         class="sub-tab"
         :class="{ active: activeScope === 'private' }"
         @click="activeScope = 'private'"
       >
-        <svg viewBox="0 0 24 24" class="lock-icon" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.5" /></svg>
+        <svg viewBox="0 0 24 24" class="lock-icon" aria-hidden="true">
+          <rect
+            x="5"
+            y="11"
+            width="14"
+            height="9"
+            rx="2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
         私密 <span>{{ counts.private }}</span>
       </button>
       <button
         class="sub-tab"
         :class="{ active: activeScope === 'collections' }"
         @click="activeScope = 'collections'"
-      >合集 <span>{{ counts.collections }}</span></button>
+      >
+        合集 <span>{{ counts.collections }}</span>
+      </button>
     </nav>
 
     <!-- ===== 内容区 ===== -->
@@ -398,12 +454,7 @@ const emptyHint = computed(() => {
       v-if="!loading && !errorMsg && activeTab === 'posts' && activeScope === 'public'"
       class="post-grid"
     >
-      <router-link
-        v-for="post in posts"
-        :key="post.id"
-        :to="`/post/${post.id}`"
-        class="post-link"
-      >
+      <router-link v-for="post in posts" :key="post.id" :to="`/post/${post.id}`" class="post-link">
         <article class="post-card">
           <div v-if="post.imageUrls && post.imageUrls.length > 0" class="cover">
             <img :src="post.imageUrls[0]" :alt="`封面`" loading="lazy" />
@@ -432,9 +483,23 @@ const emptyHint = computed(() => {
       class="empty-state"
     >
       <svg viewBox="0 0 64 64" class="empty-icon" aria-hidden="true">
-        <rect x="14" y="20" width="36" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="2" />
+        <rect
+          x="14"
+          y="20"
+          width="36"
+          height="32"
+          rx="3"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        />
         <path d="M14 28h36" stroke="currentColor" stroke-width="2" />
-        <path d="M22 36h20M22 42h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        <path
+          d="M22 36h20M22 42h14"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
       </svg>
       <p class="empty-title">暂无内容</p>
       <p class="empty-desc">{{ emptyHint }}</p>
@@ -494,7 +559,11 @@ const emptyHint = computed(() => {
           <button class="btn btn-secondary" @click="closeEdit" :disabled="editSubmitting">
             取消
           </button>
-          <button class="btn btn-primary" @click="submitEdit" :disabled="editSubmitting || !editNickname.trim()">
+          <button
+            class="btn btn-primary"
+            @click="submitEdit"
+            :disabled="editSubmitting || !editNickname.trim()"
+          >
             {{ editSubmitting ? '保存中...' : '保存' }}
           </button>
         </footer>
@@ -516,7 +585,12 @@ const emptyHint = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: var(--background);
+  /* 玻璃 sticky 顶栏 */
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border-dk);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset;
   position: sticky;
   top: 0;
   z-index: 5;
@@ -559,8 +633,10 @@ const emptyHint = computed(() => {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--background);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: var(--foreground);
   font-size: 13px;
   font-weight: 500;
@@ -570,7 +646,7 @@ const emptyHint = computed(() => {
 }
 
 .edit-pill:hover {
-  background: var(--muted);
+  background: var(--glass-bg-strong);
 }
 
 .edit-pencil {
@@ -953,7 +1029,10 @@ const emptyHint = computed(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  transition: box-shadow 0.25s, transform 0.25s, border-color 0.2s;
+  transition:
+    box-shadow 0.25s,
+    transform 0.25s,
+    border-color 0.2s;
   display: flex;
   flex-direction: column;
 }
@@ -1083,8 +1162,12 @@ const emptyHint = computed(() => {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .modal {
@@ -1100,8 +1183,14 @@ const emptyHint = computed(() => {
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-header {
