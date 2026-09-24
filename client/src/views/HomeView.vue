@@ -219,10 +219,15 @@ watch([activeChannel, activeCategory], () => {
 }
 
 .post-card {
-  background: var(--card);
-  border: 1px solid var(--border);
+  /* 玻璃 feed 卡片 */
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border-dk);
   border-radius: var(--radius);
   overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition:
     box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
@@ -230,11 +235,22 @@ watch([activeChannel, activeCategory], () => {
   display: flex;
   flex-direction: column;
 }
+/* 顶部 1px 折射线（液态玻璃标志细节） */
+.post-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--glass-highlight) 50%, transparent 100%);
+  pointer-events: none;
+}
 
 .post-link:hover .post-card {
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--glass-shadow);
   transform: translateY(-3px) scale(1.015);
-  border-color: var(--muted-foreground);
+  border-color: var(--glass-border);
 }
 
 /* 图片封面 */
@@ -354,8 +370,10 @@ watch([activeChannel, activeCategory], () => {
 }
 
 .load-more-btn {
-  background: var(--background);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border-dk);
   padding: 8px 24px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -366,8 +384,8 @@ watch([activeChannel, activeCategory], () => {
 }
 
 .load-more-btn:hover:not(:disabled) {
-  background: var(--muted);
-  border-color: var(--foreground);
+  background: var(--glass-bg-strong);
+  border-color: var(--glass-border);
 }
 
 .load-more-btn:disabled {
