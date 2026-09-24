@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useSidebarStore } from '@/stores/sidebar'
+import { useAuthStore } from '@/stores/auth'
 
 const sidebar = useSidebarStore()
+const auth = useAuthStore()
+
+// 头像首字母 fallback（用昵称首字）
+const avatarInitial = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || '?')
 
 // ===== 上层：频道 tab =====
 const channels = [
-  { key: 'follow', label: '关注', badge: 4 },     // 红色徽章演示
+  { key: 'follow', label: '关注', badge: 4 }, // 红色徽章演示
   { key: 'discover', label: '发现' },
   { key: 'ya', label: '雅安' }
 ]
@@ -19,7 +24,7 @@ const categories = [
   { key: 'hot', label: '热点' },
   { key: 'live', label: '直播' },
   { key: 'drama', label: '短剧' },
-  { key: 'exp', label: '经验', hasMore: true }    // ▾ 下拉
+  { key: 'exp', label: '经验', hasMore: true } // ▾ 下拉
 ]
 const activeCategory = ref('recommend')
 
@@ -46,7 +51,24 @@ function onSearch() {
     <!-- ===== 上层：头像 / 频道 / 搜索 ===== -->
     <div class="row top-row">
       <!-- 左侧：头像按钮（点击触发侧边栏） -->
+      <!-- 已登录：显示真实头像或昵称首字；未登录：显示默认人物图标 -->
       <button
+        v-if="auth.isLoggedIn"
+        class="avatar-btn"
+        type="button"
+        aria-label="打开侧边栏"
+        @click="sidebar.open()"
+      >
+        <img
+          v-if="auth.user?.avatar"
+          :src="auth.user.avatar"
+          :alt="`${auth.user.nickname} 头像`"
+          class="avatar-img"
+        />
+        <span v-else class="avatar-text">{{ avatarInitial }}</span>
+      </button>
+      <button
+        v-else
         class="circle-btn"
         type="button"
         aria-label="打开侧边栏"
@@ -81,12 +103,7 @@ function onSearch() {
       </div>
 
       <!-- 右侧：搜索 -->
-      <button
-        class="circle-btn"
-        type="button"
-        aria-label="搜索"
-        @click="onSearch"
-      >
+      <button class="circle-btn" type="button" aria-label="搜索" @click="onSearch">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8" />
           <path
@@ -162,6 +179,41 @@ function onSearch() {
   width: 22px;
   height: 22px;
   display: block;
+}
+
+/* 已登录态头像按钮 */
+.avatar-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.avatar-btn:hover {
+  opacity: 0.85;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-text {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* 频道 tab 区域（flex 1 居中） */
