@@ -230,16 +230,19 @@ onUnmounted(() => {
   bottom: 0;
   width: 300px;
   max-width: 80vw;
-  background: #1a1a1a;
-  color: #fafafa;
+  /* Liquid glass 抽屉：深色 / 浅色都用同一套玻璃 token */
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  color: var(--foreground);
   z-index: 101;
   display: flex;
   flex-direction: column;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
-  /* 主题色硬编码 dark 是因为：
-     - 用户截图本身就是 dark（小红书 dark mode）
-     - light mode 下这个侧边栏仍应该是深色（小红书在亮色下也是深色抽屉）
-     - 与 shadcn 主题解耦，独立视觉 */
+  border-right: 1px solid var(--glass-border);
+  /* 右侧 1px 折射线 + 大阴影 */
+  box-shadow:
+    4px 0 32px rgba(0, 0, 0, 0.25),
+    inset 1px 0 0 var(--glass-highlight);
 }
 
 /* ===== 顶部安全区（避开状态栏 / 摄像头） ===== */
@@ -270,7 +273,11 @@ onUnmounted(() => {
 
 /* ===== 分组卡片 ===== */
 .group-card {
-  background: #2a2a2a;
+  /* 玻璃组卡片：dark / light 都用同一 token */
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border-dk);
   border-radius: 14px;
   padding: 4px 0;
   overflow: hidden;
@@ -294,18 +301,18 @@ onUnmounted(() => {
 }
 
 .menu-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--glass-bg-strong);
 }
 
 .menu-item:active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--glass-bg-strong);
 }
 
 .menu-icon {
   width: 22px;
   height: 22px;
   flex-shrink: 0;
-  color: #fafafa;
+  color: var(--foreground);
 }
 
 .menu-label {
@@ -349,7 +356,10 @@ onUnmounted(() => {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: #2a2a2a;
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border-dk);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -359,7 +369,7 @@ onUnmounted(() => {
 }
 
 .action-btn:hover .action-circle {
-  background: #333;
+  background: var(--glass-bg-strong);
 }
 
 .action-btn:active .action-circle {
@@ -369,7 +379,7 @@ onUnmounted(() => {
 .action-icon {
   width: 22px;
   height: 22px;
-  color: #fafafa;
+  color: var(--foreground);
 }
 
 .action-label {
