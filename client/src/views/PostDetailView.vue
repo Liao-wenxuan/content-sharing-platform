@@ -160,9 +160,12 @@ onMounted(() => {
   loadPost()
 })
 
-watch(() => route.params.id, () => {
-  loadPost()
-})
+watch(
+  () => route.params.id,
+  () => {
+    loadPost()
+  }
+)
 </script>
 
 <template>
@@ -201,9 +204,7 @@ watch(() => route.params.id, () => {
           />
         </div>
 
-        <div v-if="post.topicTag" class="topic">
-          #{{ post.topicTag }}
-        </div>
+        <div v-if="post.topicTag" class="topic">#{{ post.topicTag }}</div>
 
         <footer class="post-footer">
           <span>笔记 #{{ post.id }}</span>
@@ -255,7 +256,10 @@ watch(() => route.params.id, () => {
       <!-- ===== 评论输入框 ===== -->
       <section class="composer">
         <div v-if="!auth.isLoggedIn" class="composer-locked">
-          <button class="link-btn" @click="router.push({ path: '/login', query: { redirect: route.fullPath } })">
+          <button
+            class="link-btn"
+            @click="router.push({ path: '/login', query: { redirect: route.fullPath } })"
+          >
             登录后参与评论
           </button>
         </div>
@@ -294,9 +298,7 @@ watch(() => route.params.id, () => {
 
         <div v-if="loadingComments" class="state">加载评论中...</div>
 
-        <div v-else-if="comments.length === 0" class="empty-comment">
-          还没有评论，来抢沙发 ✨
-        </div>
+        <div v-else-if="comments.length === 0" class="empty-comment">还没有评论，来抢沙发 ✨</div>
 
         <ul v-else class="comment-list">
           <li v-for="c in comments" :key="c.id" class="comment-item">
@@ -588,8 +590,11 @@ watch(() => route.params.id, () => {
 
 .composer-input {
   flex: 1;
-  background: var(--background);
-  border: 1px solid var(--border);
+  /* 玻璃评论输入框 */
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border-dk);
   border-radius: var(--radius);
   padding: 8px 12px;
   font-size: 14px;
@@ -638,7 +643,9 @@ watch(() => route.params.id, () => {
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: opacity 0.15s, transform 0.1s;
+  transition:
+    opacity 0.15s,
+    transform 0.1s;
 }
 
 .submit-btn:hover:not(:disabled) {
