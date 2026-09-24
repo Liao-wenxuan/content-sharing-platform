@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import BottomNav from '@/components/BottomNav.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import ToastHost from '@/components/ToastHost.vue'
+import ErrorBoundary from '@/components/ErrorBoundary.vue'
 
 const auth = useAuthStore()
 
@@ -22,7 +23,10 @@ onMounted(() => {
 <template>
   <div id="app">
     <main class="main">
-      <router-view />
+      <!-- 全局错误边界：子组件 render 期同步异常时降级，避免白屏 -->
+      <ErrorBoundary>
+        <router-view />
+      </ErrorBoundary>
     </main>
 
     <BottomNav v-if="auth.isLoggedIn || true" />
