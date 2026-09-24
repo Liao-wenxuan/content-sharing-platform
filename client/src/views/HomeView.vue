@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { postsApi, type Post } from '@/api/posts'
-import HomeTopTabs from '@/components/HomeTopTabs.vue'
 import { useRelativeTime } from '@/composables/useRelativeTime'
+import { useHomeTabsStore } from '@/stores/homeTabs'
 
 const { formatTime } = useRelativeTime()
-
-// 顶部 tab 当前选中态
-const activeChannel = ref('discover')
-const activeCategory = ref('recommend')
+const homeTabs = useHomeTabsStore()
 
 const posts = ref<Post[]>([])
 const loading = ref(false)
@@ -31,8 +28,8 @@ async function loadFeed(reset: boolean) {
     const data = await postsApi.getFeed({
       page: page.value,
       pageSize: 10,
-      channel: activeChannel.value,
-      category: activeCategory.value
+      channel: homeTabs.channel,
+      category: homeTabs.category
     })
     posts.value.push(...data.list)
     hasMore.value = data.pagination.hasMore
@@ -58,16 +55,15 @@ onMounted(() => {
   loadFeed(true)
 })
 
-// 频道 / 分类切换时重置加载
-watch([activeChannel, activeCategory], () => {
+// 频道 / 分类切换时重置加载（从共享 store 订阅）
+watch(() => [homeTabs.channel, homeTabs.category], () => {
   loadFeed(true)
 })
 </script>
 
 <template>
   <div class="home">
-    <!-- 顶部双层 tab 栏（频道 + 分类） -->
-    <HomeTopTabs v-model:channel="activeChannel" v-model:category="activeCategory" />
+    <!-- 顶部双层 tab 栏已移到 App.vue 铺满 viewport -->
 
     <!-- 兼容旧的 page-header 样式 hook（虽然不再渲染，但保持 css 不报错） -->
     <header v-show="false" class="page-header">
