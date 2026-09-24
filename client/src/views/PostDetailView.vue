@@ -737,4 +737,23 @@ watch(
   white-space: pre-wrap;
   word-wrap: break-word;
 }
+
+/* ===== 移动端适配 ===== */
+@supports (padding: max(0px)) {
+  .composer {
+    /* 底部安全区（iPhone home 条）+ 内容 padding */
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (max-width: 480px) {
+  .post-detail {
+    padding: 0;
+  }
+  .post-content {
+    padding: 12px 14px;
+  }
+  .author-row {
+    padding: 10px 14px;
+  }
+}
 </style>
