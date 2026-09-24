@@ -135,6 +135,10 @@ body {
   transition:
     background-color 0.3s ease,
     color 0.3s ease;
+  /* 移动端 Safari 弹性滚动会让整页横向晃动；锁死 X 轴溢出 */
+  overflow-x: hidden;
+  /* 防止整页竖向 overscroll 时背景露出 */
+  background-attachment: fixed;
 }
 
 #app {
