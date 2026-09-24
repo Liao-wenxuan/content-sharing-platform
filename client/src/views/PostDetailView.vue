@@ -5,6 +5,7 @@ import { postsApi, type Post, type Comment } from '@/api/posts'
 import { useAuthStore } from '@/stores/auth'
 import { COMMENT_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -172,12 +173,15 @@ watch(
   <div class="detail">
     <button class="back-btn" @click="goBack">← 返回首页</button>
 
-    <div v-if="loading" class="state">加载中...</div>
+    <EmptyState v-if="loading" variant="loading" title="加载笔记..." hint="马上就好" />
 
-    <div v-else-if="errorMsg" class="state error">
-      <p>{{ errorMsg }}</p>
-      <button class="back-btn" @click="goBack">回到首页</button>
-    </div>
+    <EmptyState
+      v-else-if="errorMsg"
+      variant="error"
+      :title="errorMsg"
+      action="回到首页"
+      @action="goBack"
+    />
 
     <template v-else-if="post">
       <!-- ===== 主笔记卡片 ===== -->
@@ -296,9 +300,17 @@ watch(
       <section class="comment-section">
         <h3 class="section-title">评论 ({{ comments.length }})</h3>
 
-        <div v-if="loadingComments" class="state">加载评论中...</div>
+        <div v-if="loadingComments" class="comment-loading">
+          <EmptyState variant="loading" title="加载评论中..." compact />
+        </div>
 
-        <div v-else-if="comments.length === 0" class="empty-comment">还没有评论，来抢沙发 ✨</div>
+        <EmptyState
+          v-else-if="comments.length === 0"
+          icon="💬"
+          title="还没有评论"
+          hint="来抢沙发 ✨"
+          compact
+        />
 
         <ul v-else class="comment-list">
           <li v-for="c in comments" :key="c.id" class="comment-item">
@@ -442,17 +454,6 @@ watch(
   margin-top: 16px;
   color: var(--muted-foreground);
   font-size: 12px;
-}
-
-.state {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--muted-foreground);
-  font-size: 14px;
-}
-
-.state.error {
-  color: var(--destructive);
 }
 
 /* ===== 互动栏 ===== */
@@ -682,13 +683,6 @@ watch(
   font-size: 14px;
   font-weight: 600;
   color: var(--foreground);
-}
-
-.empty-comment {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--muted-foreground);
-  font-size: 13px;
 }
 
 .comment-list {
