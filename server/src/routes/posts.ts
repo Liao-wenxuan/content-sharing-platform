@@ -23,21 +23,30 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       return res.status(400).json({ message: `内容不能超过 ${POST_CONTENT_MAX_LENGTH} 字` })
     }
 
-    const imageUrlsJson = imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0
-      ? JSON.stringify(imageUrls)
-      : null
+    const imageUrlsJson =
+      imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0
+        ? JSON.stringify(imageUrls)
+        : null
 
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO posts (user_id, content, image_urls, topic_tag)
       VALUES (?, ?, ?, ?)
-    `).run(userId, content.trim(), imageUrlsJson, topicTag || null)
+    `
+      )
+      .run(userId, content.trim(), imageUrlsJson, topicTag || null)
 
     const postId = result.lastInsertRowid as number
 
-    const newPost = db.prepare(`
+    const newPost = db
+      .prepare(
+        `
       SELECT id, user_id, content, image_urls, topic_tag, created_at
       FROM posts WHERE id = ?
-    `).get(postId) as any
+    `
+      )
+      .get(postId) as any
 
     res.status(201).json({
       id: newPost.id,
@@ -53,7 +62,14 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
   }
 })
 
-// ===== GET /feed 笔记列表（分页） =====
+// ===== GET /feed 笔记列表（分页 + 频道/分类过滤）=====
+// query 参数：
+//   page / pageSize  分页
+//   channel          频道 filter（discover / follow / ya / ...）
+//   category         分类 filter（recommend / video / hot / live / drama / exp）
+//
+// 设计：当前后端还没建完整的 follow/分类关系，频道和分类只在 SQL 上做基础过滤
+// （比如 channel=follow 暂返回空），但接口签名先稳定，前端可立即对接
 router.get('/feed', (req: Request, res: Response) => {
   try {
     // 1. 解析分页参数
@@ -61,15 +77,46 @@ router.get('/feed', (req: Request, res: Response) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize as string) || 10))
     const offset = (page - 1) * pageSize
 
-    // 2. 查总数
-    const totalResult = db.prepare('SELECT COUNT(*) as count FROM posts').get() as { count: number }
+    // 2. 解析过滤参数（防 SQL 注入：白名单枚举）
+    const ALLOWED_CHANNELS = ['discover', 'follow', 'ya'] as const
+    const ALLOWED_CATEGORIES = ['recommend', 'video', 'hot', 'live', 'drama', 'exp'] as const
+    const channelParam = String(req.query.channel || 'discover')
+    const categoryParam = String(req.query.category || '')
+    const channel = (ALLOWED_CHANNELS as readonly string[]).includes(channelParam)
+      ? channelParam
+      : 'discover'
+    const category = (ALLOWED_CATEGORIES as readonly string[]).includes(categoryParam)
+      ? categoryParam
+      : ''
+
+    // 3. 拼 WHERE：channel=follow 当前不返回数据；其他都按全量 + category 模糊匹配
+    //    后续接入关注关系时改这里即可，前端 API 不用变
+    const conditionsSql: string[] = []
+    const conditionParams: any[] = []
+    if (channel === 'follow') {
+      // 未登录用户请求"关注"频道：返回空（前端按 auth 状态决定要不要跳 login）
+      conditionsSql.push('1 = 0')
+    }
+    if (category && category !== 'recommend') {
+      // 简化映射：category 作为 topic_tag 过滤（真实项目应建专门的 category 表）
+      conditionsSql.push('p.topic_tag = ?')
+      conditionParams.push(category)
+    }
+    const whereClause = conditionsSql.length ? `WHERE ${conditionsSql.join(' AND ')}` : ''
+
+    // 4. 查总数
+    const totalResult = db
+      .prepare(`SELECT COUNT(*) as count FROM posts p ${whereClause}`)
+      .get(...conditionParams) as { count: number }
     const total = totalResult.count
 
-    // 3. 查当前页（JOIN users 拿作者信息）
-    // 注意：ORDER BY 加 id DESC 作为 tie-break，
-    // 因为 created_at 只到秒，同一秒内发的多篇笔记排序会不稳定（导致翻页漏/重）
-    // like_count 用子查询算（避免大表 JOIN 性能问题）
-    const rows = db.prepare(`
+    // 5. 查当前页（JOIN users 拿作者信息）
+    //    ORDER BY 加 id DESC 作为 tie-break，因为 created_at 只到秒，
+    //    同一秒内发的多篇笔记排序会不稳定（导致翻页漏/重）
+    //    like_count / comment_count 用子查询算（避免大表 JOIN 性能问题）
+    const rows = db
+      .prepare(
+        `
       SELECT
         p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
@@ -77,12 +124,15 @@ router.get('/feed', (req: Request, res: Response) => {
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
       FROM posts p
       JOIN users u ON p.user_id = u.id
+      ${whereClause}
       ORDER BY p.created_at DESC, p.id DESC
       LIMIT ? OFFSET ?
-    `).all(pageSize, offset) as any[]
+    `
+      )
+      .all(...conditionParams, pageSize, offset) as any[]
 
     // 4. 格式化返回
-    const list = rows.map(row => ({
+    const list = rows.map((row) => ({
       id: row.id,
       userId: row.user_id,
       content: row.content,
@@ -125,7 +175,9 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       return res.status(400).json({ message: 'id 不合法' })
     }
 
-    const row = db.prepare(`
+    const row = db
+      .prepare(
+        `
       SELECT
         p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
@@ -134,7 +186,9 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       FROM posts p
       JOIN users u ON p.user_id = u.id
       WHERE p.id = ?
-    `).get(id) as any
+    `
+      )
+      .get(id) as any
 
     if (!row) {
       return res.status(404).json({ message: '笔记不存在' })
@@ -143,9 +197,9 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
     // 登录用户额外查 liked
     let liked = false
     if (req.userId) {
-      const likeRow = db.prepare(
-        'SELECT 1 FROM likes WHERE user_id = ? AND post_id = ? LIMIT 1'
-      ).get(req.userId, id)
+      const likeRow = db
+        .prepare('SELECT 1 FROM likes WHERE user_id = ? AND post_id = ? LIMIT 1')
+        .get(req.userId, id)
       liked = !!likeRow
     }
 
