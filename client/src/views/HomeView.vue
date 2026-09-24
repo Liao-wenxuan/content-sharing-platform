@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { postsApi, type Post } from '@/api/posts'
 import HomeTopTabs from '@/components/HomeTopTabs.vue'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 
 const { formatTime } = useRelativeTime()
+
+// 顶部 tab 当前选中态
+const activeChannel = ref('discover')
+const activeCategory = ref('recommend')
+
 const posts = ref<Post[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -23,7 +28,12 @@ async function loadFeed(reset: boolean) {
   errorMsg.value = ''
 
   try {
-    const data = await postsApi.getFeed({ page: page.value, pageSize: 10 })
+    const data = await postsApi.getFeed({
+      page: page.value,
+      pageSize: 10,
+      channel: activeChannel.value,
+      category: activeCategory.value
+    })
     posts.value.push(...data.list)
     hasMore.value = data.pagination.hasMore
   } catch (err: any) {
@@ -47,12 +57,17 @@ function avatarText(nickname?: string): string {
 onMounted(() => {
   loadFeed(true)
 })
+
+// 频道 / 分类切换时重置加载
+watch([activeChannel, activeCategory], () => {
+  loadFeed(true)
+})
 </script>
 
 <template>
   <div class="home">
     <!-- 顶部双层 tab 栏（频道 + 分类） -->
-    <HomeTopTabs />
+    <HomeTopTabs v-model:channel="activeChannel" v-model:category="activeCategory" />
 
     <!-- 兼容旧的 page-header 样式 hook（虽然不再渲染，但保持 css 不报错） -->
     <header v-show="false" class="page-header">
@@ -60,21 +75,14 @@ onMounted(() => {
       <p class="page-subtitle">分享你的世界，发现有趣的内容</p>
     </header>
 
-    <div v-if="loading && posts.length === 0" class="state loading">
-      加载中...
-    </div>
+    <div v-if="loading && posts.length === 0" class="state loading">加载中...</div>
 
     <div v-if="errorMsg" class="state error">
       {{ errorMsg }}
     </div>
 
     <div v-if="!loading || posts.length > 0" class="feed">
-      <router-link
-        v-for="post in posts"
-        :key="post.id"
-        :to="`/post/${post.id}`"
-        class="post-link"
-      >
+      <router-link v-for="post in posts" :key="post.id" :to="`/post/${post.id}`" class="post-link">
         <article class="post-card">
           <!-- 图片封面：有图时占主位 -->
           <div v-if="post.imageUrls && post.imageUrls.length > 0" class="cover">
@@ -129,12 +137,8 @@ onMounted(() => {
           {{ loadingMore ? '加载中...' : '加载更多' }}
         </button>
       </div>
-      <div v-else-if="posts.length > 0" class="state no-more">
-        — 没有更多了 —
-      </div>
-      <div v-else-if="!loading" class="state empty">
-        还没有人发布笔记，快去发第一篇吧 ✨
-      </div>
+      <div v-else-if="posts.length > 0" class="state no-more">— 没有更多了 —</div>
+      <div v-else-if="!loading" class="state empty">还没有人发布笔记，快去发第一篇吧 ✨</div>
     </div>
   </div>
 </template>
@@ -219,9 +223,10 @@ onMounted(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.2s ease;
+  transition:
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.2s ease;
   display: flex;
   flex-direction: column;
 }
