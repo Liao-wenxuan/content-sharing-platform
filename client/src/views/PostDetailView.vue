@@ -21,6 +21,9 @@ const liked = ref(false)
 const likeCount = ref(0)
 const liking = ref(false)
 
+// 收藏（local-only state，无后端收藏 API）
+const favorited = ref(false)
+
 const comments = ref<Comment[]>([])
 const loadingComments = ref(false)
 const newComment = ref('')
@@ -50,6 +53,8 @@ async function loadPost() {
     likeCount.value = data.likeCount
     // 后端在登录用户请求时返回 liked: true/false；匿名永远是 false
     liked.value = data.liked ?? false
+    // 收藏从 localStorage 读取
+    favorited.value = loadFavorites().has(id)
   } catch (err: any) {
     if (err.response?.status === 404) {
       errorMsg.value = '笔记不存在或已被删除'
@@ -109,6 +114,39 @@ async function toggleLike() {
   }
 }
 
+// ===== 收藏（local-only） =====
+// 后端暂无收藏接口，本地持久化到 localStorage，按 postId 区分
+const FAV_KEY = 'sg:favorites'
+
+function loadFavorites(): Set<number> {
+  try {
+    const raw = localStorage.getItem(FAV_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return new Set(Array.isArray(arr) ? arr : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function saveFavorites(set: Set<number>) {
+  localStorage.setItem(FAV_KEY, JSON.stringify([...set]))
+}
+
+function toggleFavorite() {
+  const id = currentPostId.value
+  if (!id) return
+  const set = loadFavorites()
+  if (set.has(id)) {
+    set.delete(id)
+    favorited.value = false
+  } else {
+    set.add(id)
+    favorited.value = true
+  }
+  saveFavorites(set)
+}
+
 // ===== 发评论 =====
 async function submitComment() {
   const text = newComment.value.trim()
@@ -152,6 +190,14 @@ function avatarText(nickname?: string): string {
 
 function goBack() {
   router.push('/')
+}
+
+// 滚动到评论区（点击评论按钮）
+function scrollToComments() {
+  const el = document.querySelector('.comment-section')
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 }
 
 const commentLength = computed(() => newComment.value.length)
@@ -253,16 +299,17 @@ watch(
         </footer>
       </article>
 
-      <!-- ===== 互动栏（点赞 + 评论数） ===== -->
+      <!-- ===== 互动栏（点赞 / 收藏 / 评论） ===== -->
       <div class="action-bar">
+        <!-- 点赞 -->
         <button
-          class="like-btn"
+          class="action-btn like-btn"
           :class="{ liked }"
           :disabled="liking"
           @click="toggleLike"
           :aria-label="liked ? '取消点赞' : '点赞'"
         >
-          <svg class="heart-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path
               v-if="liked"
               d="M12 21s-7.5-4.6-9.5-9.1C1.1 8.2 3 5 6.3 5c1.9 0 3.4 1 4.2 2.4l1.5 1.9 1.5-1.9C14.3 6 15.8 5 17.7 5 21 5 22.9 8.2 21.5 11.9 19.5 16.4 12 21 12 21z"
@@ -277,12 +324,42 @@ watch(
               stroke-linejoin="round"
             />
           </svg>
-          <span>{{ liked ? '已赞' : '点赞' }}</span>
-          <span class="count">{{ likeCount }}</span>
+          <span class="action-label">{{ liked ? '已赞' : '点赞' }}</span>
+          <span class="action-count">{{ likeCount }}</span>
         </button>
 
-        <div class="comment-stat">
-          <svg viewBox="0 0 24 24" class="comment-icon" aria-hidden="true">
+        <!-- 收藏（local-only） -->
+        <button
+          class="action-btn fav-btn"
+          :class="{ active: favorited }"
+          @click="toggleFavorite"
+          :aria-label="favorited ? '取消收藏' : '收藏'"
+        >
+          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              v-if="favorited"
+              d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"
+              fill="currentColor"
+            />
+            <path
+              v-else
+              d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span class="action-label">{{ favorited ? '已收藏' : '收藏' }}</span>
+        </button>
+
+        <!-- 评论（点击跳到评论列表） -->
+        <button
+          class="action-btn"
+          @click="scrollToComments"
+          aria-label="查看评论"
+        >
+          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path
               d="M21 12c0 4.4-4 8-9 8a9.7 9.7 0 0 1-3.8-.7L3 21l1.4-4.5A7.7 7.7 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"
               fill="none"
@@ -291,8 +368,9 @@ watch(
               stroke-linejoin="round"
             />
           </svg>
-          <span>{{ post.commentCount }} 条评论</span>
-        </div>
+          <span class="action-label">评论</span>
+          <span class="action-count">{{ post.commentCount }}</span>
+        </button>
       </div>
 
       <!-- ===== 评论输入框 ===== -->
@@ -551,100 +629,84 @@ watch(
   font-size: 12px;
 }
 
-/* ===== 互动栏 ===== */
+/* ===== 互动栏（点赞 / 收藏 / 评论） ===== */
 .action-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   margin-top: 12px;
-  padding: 12px 16px;
+  padding: 8px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
-.like-btn {
+.action-btn {
+  flex: 1;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  background: var(--background);
-  border: 1px solid var(--border);
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 8px 14px;
+  padding: 8px 6px;
   border-radius: var(--radius);
   cursor: pointer;
   font-family: inherit;
   transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.like-btn:hover:not(:disabled) {
-  border-color: var(--muted-foreground);
+.action-btn:hover:not(:disabled) {
   background: var(--muted);
 }
 
-.like-btn:disabled {
+.action-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.like-btn.liked {
-  color: #e11d48; /* 玫红：与小红书点赞色相近 */
-  border-color: #fecaca;
-  background: #fff1f2;
-}
-
-.like-btn.liked:hover:not(:disabled) {
-  background: #ffe4e6;
-  border-color: #fda4af;
-}
-
-/* Dark mode 下也用一致的玫红色，但边框/背景换成深色版 */
-:global(.dark) .like-btn.liked {
-  background: rgba(225, 29, 72, 0.12);
-  border-color: rgba(225, 29, 72, 0.4);
-}
-
-:global(.dark) .like-btn.liked:hover:not(:disabled) {
-  background: rgba(225, 29, 72, 0.2);
-  border-color: rgba(225, 29, 72, 0.6);
-}
-
-.heart-icon {
+.action-icon {
   width: 18px;
   height: 18px;
   display: block;
   transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.like-btn:active:not(:disabled) .heart-icon {
+.action-btn:active:not(:disabled) .action-icon {
   transform: scale(1.25);
 }
 
-.like-btn .count {
+.action-label {
+  white-space: nowrap;
+}
+
+.action-count {
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted-foreground);
   margin-left: 2px;
 }
 
-.like-btn.liked .count {
+/* 点赞激活态：玫红 */
+.like-btn.liked {
   color: #e11d48;
 }
 
-.comment-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted-foreground);
-  font-size: 13px;
+.like-btn.liked .action-count {
+  color: #e11d48;
 }
 
-.comment-icon {
-  width: 18px;
-  height: 18px;
+/* 收藏激活态：金黄 */
+.fav-btn.active {
+  color: #f59e0b;
+}
+
+.fav-btn.active .action-count {
+  color: #f59e0b;
 }
 
 /* ===== 评论输入框 ===== */
