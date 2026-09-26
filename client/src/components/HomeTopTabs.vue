@@ -133,10 +133,17 @@ function onSearch() {
 
 <style scoped>
 .topbar {
-  position: sticky;
+  /*
+   * 改成 position: fixed 永远吸顶。
+   * 之前用 sticky，但 html/body 的 overflow-x: hidden 在某些边界会让 sticky
+   * 失效（scroll 后 topbar 直接消失）。fixed 永远锁在 viewport 顶部最稳。
+   * 注意：fixed 会脱离 .main 的文档流，所以 App.vue 的 .main 需要 padding-top 让出空间。
+   */
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 30;
-  /* 全宽 viewport 铺满：100% 跟随 <html>，不依赖父容器宽度 */
   width: 100%;
   max-width: 100vw;
   /* Liquid glass 顶栏：透出底色 + 模糊 */

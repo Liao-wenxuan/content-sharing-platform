@@ -67,8 +67,19 @@ onMounted(() => {
 
 <style scoped>
 .main {
+  /* HomeTopTabs 用 position: fixed 永远吸顶；
+   * 这里用 padding-top 让出 ~92px（desktop 52 + 40 两行），
+   * mobile 上更紧凑，给 88px。
+   */
+  padding-top: 92px;
   /* 底部 nav 高度 + 安全区，避免内容被遮挡 */
   padding-bottom: calc(72px + env(safe-area-inset-bottom));
   min-height: 100vh;
+}
+
+@media (max-width: 480px) {
+  .main {
+    padding-top: 88px;
+  }
 }
 </style>
