@@ -171,7 +171,45 @@ watch(
 
 <template>
   <div class="detail">
-    <button class="back-btn" @click="goBack">← 返回首页</button>
+    <!-- 顶部 sticky topbar：返回 / 作者昵称 / 分享+更多 -->
+    <header class="topbar">
+      <button class="topbar-btn" @click="goBack" aria-label="返回">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M15 18l-6-6 6-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+      <div class="topbar-title">
+        <span class="topbar-nick">{{ post?.author?.nickname || '笔记详情' }}</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="topbar-btn" aria-label="分享">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M18 8a3 3 0 1 0-2.8-4H15a3 3 0 0 0 0 6h.2A3 3 0 0 0 18 8zM6 12a3 3 0 1 0-2.8 4H3a3 3 0 0 0 0-6h.2A3 3 0 0 0 6 12zm12 4a3 3 0 1 0-2.8 4H15a3 3 0 0 0 0-6h.2A3 3 0 0 0 18 16zM7.6 9.3l8.8-2.6M7.6 14.7l8.8 2.6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <button class="topbar-btn" aria-label="更多">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+            <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
+    </header>
 
     <EmptyState v-if="loading" variant="loading" title="加载笔记..." hint="马上就好" />
 
@@ -335,23 +373,80 @@ watch(
 .detail {
   max-width: 600px;
   margin: 0 auto;
-  padding: 24px 20px;
+  /* 顶 bar 自己 sticky，这里不再额外加 padding-top */
+  padding: 0 20px 24px;
 }
 
-.back-btn {
-  background: none;
+/* ===== 顶部 sticky topbar（玻璃） ===== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* 跨越父容器 max-width，铺到 viewport 两端 */
+  margin: 0 -20px 16px;
+  padding: 0 12px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border-dk);
+  /* 顶部 1px 折射线 */
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, 0 6px 24px rgba(0, 0, 0, 0.06);
+}
+
+.topbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
   border: none;
-  color: var(--muted-foreground);
+  background: transparent;
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 13px;
-  padding: 6px 0;
-  margin-bottom: 16px;
-  font-family: inherit;
-  transition: color 0.15s;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  padding: 0;
 }
 
-.back-btn:hover {
+.topbar-btn:hover {
+  background: var(--muted);
+}
+
+.topbar-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.topbar-title {
+  flex: 1;
+  text-align: center;
+  font-weight: 600;
+  font-size: 15px;
   color: var(--foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.topbar-nick {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .post-card {
