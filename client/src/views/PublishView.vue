@@ -234,6 +234,16 @@ function removeImage(id: number) {
   images.value.splice(idx, 1)
 }
 
+// ===== 取消 =====
+function onCancel() {
+  // 有内容时给提示确认；否则直接返回
+  if (content.value.trim() || topicTag.value.trim() || images.value.length > 0) {
+    const ok = window.confirm('放弃当前编辑？已填写的内容将丢失。')
+    if (!ok) return
+  }
+  router.push('/')
+}
+
 // ===== 提交 =====
 async function handleSubmit() {
   const text = content.value.trim()
@@ -275,9 +285,21 @@ async function handleSubmit() {
 
 <template>
   <div class="publish">
-    <h1>发布笔记</h1>
+    <!-- 顶部 sticky topbar：取消 / 发布笔记 / 发布按钮 -->
+    <header class="topbar">
+      <button type="button" class="topbar-btn cancel" @click="onCancel">取消</button>
+      <h1 class="topbar-title">发布笔记</h1>
+      <button
+        type="button"
+        class="topbar-btn submit"
+        :disabled="!canSubmit"
+        @click="handleSubmit"
+      >
+        发布
+      </button>
+    </header>
 
-    <form @submit.prevent="handleSubmit">
+    <form class="publish-form" @submit.prevent="handleSubmit">
       <!-- 内容 -->
       <div class="field">
         <label>内容 <span class="required">*</span></label>
@@ -372,10 +394,6 @@ async function handleSubmit() {
       </div>
 
       <div v-if="errorMsg" class="error">{{ errorMsg }}</div>
-
-      <button type="submit" class="submit-btn" :disabled="!canSubmit">
-        {{ submitting ? '发布中...' : '发布' }}
-      </button>
     </form>
   </div>
 </template>
@@ -384,14 +402,83 @@ async function handleSubmit() {
 .publish {
   max-width: 600px;
   margin: 0 auto;
-  padding: 24px 20px;
+  /* 顶 bar 自己 sticky / 占满父容器宽度，这里 padding-top 不要太大 */
+  padding: 0 20px 24px;
 }
 
-h1 {
-  margin-bottom: 24px;
-  font-size: 24px;
+/* ===== 顶部 sticky topbar ===== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* 跨越父容器 max-width，铺到 viewport 两端 */
+  margin: 0 -20px 16px;
+  padding: 0 12px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border-dk);
+  box-shadow: 0 1px 0 var(--glass-highlight) inset, 0 6px 24px rgba(0, 0, 0, 0.06);
+}
+
+.topbar-title {
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
   color: var(--foreground);
+  flex: 1;
+  text-align: center;
+  /* 防止和两侧按钮重叠 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.topbar-btn {
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.topbar-btn.cancel {
+  color: var(--muted-foreground);
+}
+
+.topbar-btn.cancel:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.topbar-btn.submit {
+  background: var(--accent);
+  color: white;
+  padding: 7px 18px;
+  font-weight: 600;
+}
+
+.topbar-btn.submit:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 85%, black 15%);
+  transform: translateY(-1px);
+}
+
+.topbar-btn.submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .field {
@@ -622,39 +709,21 @@ button.badge.error:hover {
 }
 
 .submit-btn {
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: none;
-  padding: 12px 24px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  width: 100%;
-  font-family: inherit;
-  transition: opacity 0.15s;
-}
-
-.submit-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.submit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  /* 已迁移到 .topbar-btn.submit；保留空类名以避免外链引用报错 */
+  display: none;
 }
 
 /* ===== 移动端适配 ===== */
 @supports (padding: max(0px)) {
   .publish {
     /* iPhone 顶部刘海 / 底部 home 条 */
-    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+    padding-top: 0;
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
 }
 @media (max-width: 480px) {
   .publish {
-    padding: 16px 12px 24px;
+    padding: 0 12px 24px;
   }
   .field {
     margin-bottom: 16px;
@@ -664,6 +733,16 @@ button.badge.error:hover {
   }
   .preview-grid {
     gap: 6px;
+  }
+  .topbar {
+    margin: 0 -12px 16px;
+  }
+  .topbar-btn {
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+  .topbar-btn.submit {
+    padding: 6px 14px;
   }
 }
 </style>
