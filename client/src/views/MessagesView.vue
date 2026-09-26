@@ -42,6 +42,8 @@ interface ActivityItem {
   text: string
   date: string
   unread?: boolean
+  /** 活动类型（用于 tab 过滤） */
+  type?: 'like' | 'follow' | 'comment'
 }
 
 const activities = ref<ActivityItem[]>([
@@ -51,14 +53,41 @@ const activities = ref<ActivityItem[]>([
     nickname: '活动消息',
     text: '汽车任务已送达 快来分享自驾游路上的故事 🚗',
     date: '09-02',
-    unread: true
+    unread: true,
+    type: 'comment'
   },
   {
     id: 2,
     avatar: null,
     nickname: '点点',
     text: '如果你感觉眼睛总是痒、干涩，看这条 👀',
-    date: '08-23'
+    date: '08-23',
+    type: 'follow'
+  },
+  {
+    id: 3,
+    avatar: null,
+    nickname: '小多',
+    text: '赞了你的笔记《夏日穿搭分享》',
+    date: '09-20',
+    unread: true,
+    type: 'like'
+  },
+  {
+    id: 4,
+    avatar: null,
+    nickname: '几月几日天气晴',
+    text: '评论了你：照片真的好好看！',
+    date: '09-19',
+    type: 'comment'
+  },
+  {
+    id: 5,
+    avatar: null,
+    nickname: '小丸子的妈妈',
+    text: '关注了你',
+    date: '09-18',
+    type: 'follow'
   }
 ])
 
@@ -92,10 +121,24 @@ function avatarText(n?: string) {
 }
 
 function openCategory(id: (typeof categories)[number]['id']) {
-  // 暂时先跳到 profile / home —— 真接 notification 时再实现
-  if (id === 'follows') router.push('/')
-  else router.push('/profile/me')
+  // 切换激活 tab，同时过滤下方活动列表
+  activeCategory.value = id
 }
+
+// 当前激活的 tab
+const activeCategory = ref<(typeof categories)[number]['id']>('likes')
+
+// ===== Tab 切换后过滤活动列表 =====
+// 不同 tab 对应不同活动类型；mock 数据全在一个数组里，按 type 字段过滤
+const activityTypeMap: Record<(typeof categories)[number]['id'], string | null> = {
+  likes: 'like',
+  follows: 'follow',
+  mentions: 'comment'
+}
+
+const filteredActivities = computed(() =>
+  activities.value.filter((a) => a.type === activityTypeMap[activeCategory.value])
+)
 
 onMounted(() => {
   if (!auth.isLoggedIn) {
@@ -110,32 +153,44 @@ onMounted(() => {
     <header class="topbar">
       <h1 class="topbar-title">消息</h1>
       <div class="topbar-spacer"></div>
-      <button class="icon-btn" aria-label="搜索">⌕</button>
-      <button class="icon-btn" aria-label="新消息">+</button>
+      <button class="icon-btn" aria-label="搜索">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8" />
+          <path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+      </button>
+      <button class="icon-btn" aria-label="设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8" />
+          <path
+            d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
     </header>
 
-    <!-- 3 个分类卡片 -->
-    <div class="categories">
-      <button v-for="c in categories" :key="c.id" class="cat-card" @click="openCategory(c.id)">
-        <span class="cat-icon" :style="{ background: c.accent }">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              :d="c.icon"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </span>
-        <span class="cat-label">{{ c.label }}</span>
+    <!-- 3 个 tab pill（横向 pill bar） -->
+    <nav class="categories" role="tablist">
+      <button
+        v-for="c in categories"
+        :key="c.id"
+        class="cat-tab"
+        :class="{ active: activeCategory === c.id }"
+        :aria-selected="activeCategory === c.id"
+        role="tab"
+        @click="openCategory(c.id)"
+      >
+        {{ c.label }}
       </button>
-    </div>
+    </nav>
 
-    <!-- 活动消息列表 -->
+    <!-- 活动消息列表（按当前 tab 过滤） -->
     <ul class="activity-list">
-      <li v-for="a in activities" :key="a.id" class="activity-item">
+      <li v-for="a in filteredActivities" :key="a.id" class="activity-item">
         <div class="act-avatar avatar avatar-md">
           {{ avatarText(a.nickname) }}
           <span v-if="a.unread" class="unread-dot"></span>
@@ -146,7 +201,7 @@ onMounted(() => {
         </div>
         <div class="act-date">{{ a.date }}</div>
       </li>
-      <li v-if="activities.length === 0" class="state-empty-cell">
+      <li v-if="filteredActivities.length === 0" class="state-empty-cell">
         <EmptyState icon="🔔" title="暂无活动消息" hint="有人赞你、评论你时会出现在这里" compact />
       </li>
     </ul>
@@ -236,52 +291,50 @@ onMounted(() => {
   background: var(--muted);
 }
 
-/* ===== category cards ===== */
-.categories {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 12px 16px 0;
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
-.cat-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 8px 12px;
+/* ===== category tabs（横向 pill bar） ===== */
+.categories {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* 隐藏滚动条但保持可滚 */
+  scrollbar-width: none;
+}
+.categories::-webkit-scrollbar {
+  display: none;
+}
+
+.cat-tab {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 999px;
   cursor: pointer;
   font-family: inherit;
-  color: var(--foreground);
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
-.cat-card:hover {
+.cat-tab:hover {
+  color: var(--foreground);
   background: var(--muted);
-  border-color: var(--muted-foreground);
 }
 
-.cat-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.cat-icon svg {
-  width: 22px;
-  height: 22px;
-}
-
-.cat-label {
-  font-size: 13px;
-  font-weight: 500;
+.cat-tab.active {
+  color: var(--foreground);
+  background: var(--muted);
+  font-weight: 600;
 }
 
 /* ===== activity list ===== */
