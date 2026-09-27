@@ -330,17 +330,35 @@ async function handleSubmit() {
         <!-- 上传区（拖拽 / 点击） -->
         <div
           class="dropzone"
-          :class="{ active: isDragOver }"
+          :class="{ active: isDragOver, full: images.length >= MAX_IMAGES }"
           @click="triggerFilePicker"
           @drop="onDrop"
           @dragover="onDragOver"
           @dragleave="onDragLeave"
         >
-          <svg viewBox="0 0 24 24" class="upload-icon" aria-hidden="true">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor" />
-          </svg>
-          <p class="dropzone-text">点击或拖拽图片到此处上传</p>
-          <p class="dropzone-hint">支持 JPG / PNG / GIF / WebP</p>
+          <!-- 拖拽时显示上传箭头 + "松手上传"；否则显示加号 -->
+          <div class="dropzone-icon-wrap">
+            <svg viewBox="0 0 24 24" class="upload-icon upload-icon-plus" aria-hidden="true">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor" />
+            </svg>
+            <svg viewBox="0 0 24 24" class="upload-icon upload-icon-arrow" aria-hidden="true">
+              <path
+                d="M12 16V4m0 0L7 9m5-5l5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+
+          <p class="dropzone-text">
+            <template v-if="images.length >= MAX_IMAGES">已达上限（{{ MAX_IMAGES }} 张）</template>
+            <template v-else-if="isDragOver">松手即可上传</template>
+            <template v-else>点击或拖拽图片到此处上传</template>
+          </p>
+          <p class="dropzone-hint">支持 JPG / PNG / GIF / WebP · 单张 ≤ {{ MAX_SIZE_MB }}MB</p>
         </div>
         <input
           ref="fileInput"
@@ -356,18 +374,17 @@ async function handleSubmit() {
           <div v-for="img in images" :key="img.id" class="preview-item">
             <img :src="img.previewUrl" :alt="img.file.name" />
 
+            <!-- 上传中：底部进度条 + 中心百分比 -->
+            <div v-if="img.status === 'uploading'" class="upload-progress">
+              <div class="progress-track">
+                <div class="progress-fill" :style="{ width: img.progress + '%' }" />
+              </div>
+              <span class="progress-label">{{ img.progress }}%</span>
+            </div>
+
             <!-- 状态徽章（点击重试 or 显示错误） -->
             <button v-if="img.status === 'pending'" type="button" class="badge pending" disabled>
               待上传
-            </button>
-            <button
-              v-else-if="img.status === 'uploading'"
-              type="button"
-              class="badge uploading with-progress"
-              :style="{ '--progress': img.progress + '%' }"
-              disabled
-            >
-              {{ img.progress }}%
             </button>
             <div v-else-if="img.status === 'done'" class="badge done">✓</div>
             <button
@@ -558,8 +575,14 @@ async function handleSubmit() {
   text-align: center;
   cursor: pointer;
   background: var(--muted);
-  transition: all 0.15s;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s ease;
   user-select: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .dropzone:hover {
@@ -567,17 +590,63 @@ async function handleSubmit() {
   background: var(--glass-bg-strong);
 }
 
+/* 拖拽悬停：红色 accent 描边 + 玻璃背景 + 光晕 */
 .dropzone.active {
-  border-color: var(--primary);
-  background: var(--glass-bg-strong);
+  border-color: var(--accent);
+  border-style: solid;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 8px 32px color-mix(in srgb, var(--accent) 18%, transparent);
   transform: scale(1.01);
 }
 
-.upload-icon {
+/* 已达上限：不可点 */
+.dropzone.full {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: var(--muted-foreground);
+}
+
+/* 图标容器：两个图标叠放，靠 opacity 切换 */
+.dropzone-icon-wrap {
+  position: relative;
   width: 32px;
   height: 32px;
+  margin: 0 auto 8px;
+}
+
+.upload-icon {
+  position: absolute;
+  inset: 0;
+  width: 32px;
+  height: 32px;
+  transition:
+    opacity 0.2s ease,
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.upload-icon-plus {
   color: var(--muted-foreground);
-  margin-bottom: 8px;
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 上传箭头默认隐藏，拖拽时淡入 + 上浮 */
+.upload-icon-arrow {
+  color: var(--accent);
+  opacity: 0;
+  transform: translateY(6px) scale(0.85);
+}
+
+.dropzone.active .upload-icon-plus {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+.dropzone.active .upload-icon-arrow {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .dropzone-text {
@@ -585,6 +654,12 @@ async function handleSubmit() {
   font-size: 14px;
   font-weight: 500;
   color: var(--foreground);
+  transition: color 0.2s ease;
+}
+
+.dropzone.active .dropzone-text {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .dropzone-hint {
@@ -641,17 +716,46 @@ button.badge.error:hover {
   background: rgba(239, 68, 68, 1);
 }
 
-/* 上传中：渐变进度条（背景进度从 0% 到 var(--progress)） */
-.badge.with-progress {
-  background: linear-gradient(
-    to right,
-    rgba(59, 130, 246, 0.95) 0%,
-    rgba(59, 130, 246, 0.95) var(--progress, 0%),
-    rgba(0, 0, 0, 0.55) var(--progress, 0%),
-    rgba(0, 0, 0, 0.55) 100%
-  );
-  min-width: 48px;
+/* 上传中：底部进度条 + 中心百分比（覆盖在缩略图上） */
+.upload-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.progress-track {
+  width: 70%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #ff6b8a);
+  transition: width 0.2s ease;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.progress-label {
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.badge.error {
   padding: 2px 8px;
 }
 
@@ -661,10 +765,6 @@ button.badge.error:hover {
 
 .badge.error {
   background: rgba(239, 68, 68, 0.9);
-}
-
-.badge.uploading {
-  background: rgba(59, 130, 246, 0.9);
 }
 
 .remove-btn {
