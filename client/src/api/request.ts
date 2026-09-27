@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 // FormData → multipart/form-data; boundary=xxx）。
 const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:3000/api',
-  timeout: 15000,
+  timeout: 15000
 })
 
 // ===== 请求拦截器：自动加 token =====
@@ -27,7 +27,7 @@ request.interceptors.request.use(
 
 // ===== 响应拦截器：统一错误处理 =====
 request.interceptors.response.use(
-  (response) => response.data,  // 直接返回 data，调用方少一层 .data
+  (response) => response.data, // 直接返回 data，调用方少一层 .data
   (error: AxiosError) => {
     // 完整错误信息：状态码 + 后端 message + URL，方便排查
     console.error(
