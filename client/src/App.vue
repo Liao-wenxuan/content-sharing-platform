@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, computed, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import BottomNav from '@/components/BottomNav.vue'
 import Sidebar from '@/components/Sidebar.vue'
@@ -10,7 +10,6 @@ import HomeTopTabs from '@/components/HomeTopTabs.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
-const router = useRouter()
 
 // 只在 HomeView 显示顶部双层 tab 栏（脱离路由级 max-width，铺满 viewport）
 const showTopTabs = computed(() => route.name === 'home')
@@ -21,7 +20,8 @@ watch(
   () => route.path,
   () => {
     nextTick(() => {
-      window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior })
+      // 'auto' = 瞬时跳转（不做 smooth 动画），避免路由切换时页面"滑"一下
+      window.scrollTo({ top: 0, behavior: 'auto' })
     })
   }
 )
