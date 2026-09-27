@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from 'express'
+import { Router } from 'express'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
@@ -51,15 +51,16 @@ const uploadMiddleware = upload.array('files', UPLOAD_MAX_FILES)
 // ===== POST /api/uploads —— 单文件/多文件上传（鉴权）=====
 // 客户端 FormData field name: 'files'
 // 返回：{ files: [{ url, filename, size }, ...] }
-router.post('/', uploadLimiter, requireAuth, (req, res, next) => {
+router.post('/', uploadLimiter, requireAuth, (req, res, _next) => {
   uploadMiddleware(req, res, (err: any) => {
     if (err) {
       // multer 错误（大小/类型/数量）
-      const msg = err.code === 'LIMIT_FILE_SIZE'
-        ? '单个文件不能超过 10MB'
-        : err.code === 'LIMIT_FILE_COUNT'
-          ? '一次最多上传 9 张'
-          : err.message || '上传失败'
+      const msg =
+        err.code === 'LIMIT_FILE_SIZE'
+          ? '单个文件不能超过 10MB'
+          : err.code === 'LIMIT_FILE_COUNT'
+            ? '一次最多上传 9 张'
+            : err.message || '上传失败'
       console.error('[Upload] multer error:', err.code, err.message)
       return res.status(400).json({ message: msg })
     }
@@ -70,7 +71,7 @@ router.post('/', uploadLimiter, requireAuth, (req, res, next) => {
     }
 
     // 返回相对 URL（前端可以直接用 baseURL 拼接）
-    const result = files.map(f => ({
+    const result = files.map((f) => ({
       url: `/uploads/${f.filename}`,
       filename: f.filename,
       size: f.size,
