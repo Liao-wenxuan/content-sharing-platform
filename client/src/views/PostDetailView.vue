@@ -202,6 +202,41 @@ function scrollToComments() {
 
 const commentLength = computed(() => newComment.value.length)
 
+// ===== 图片 carousel =====
+// 当前显示的图片索引；多图时可切换
+const currentImageIndex = ref(0)
+
+// post 切换 / 重新加载时重置索引
+watch(
+  () => currentPostId.value,
+  () => {
+    currentImageIndex.value = 0
+  }
+)
+
+const imageCount = computed(() => post.value?.imageUrls?.length ?? 0)
+const hasMultipleImages = computed(() => imageCount.value > 1)
+
+function selectImage(index: number) {
+  currentImageIndex.value = index
+}
+
+function goPrevImage() {
+  if (currentImageIndex.value > 0) {
+    currentImageIndex.value--
+  } else {
+    currentImageIndex.value = imageCount.value - 1
+  }
+}
+
+function goNextImage() {
+  if (currentImageIndex.value < imageCount.value - 1) {
+    currentImageIndex.value++
+  } else {
+    currentImageIndex.value = 0
+  }
+}
+
 // ===== 生命周期 =====
 onMounted(() => {
   loadPost()
@@ -282,14 +317,83 @@ watch(
 
         <div class="content">{{ post.content }}</div>
 
-        <div v-if="post.imageUrls && post.imageUrls.length > 0" class="images">
-          <img
-            v-for="(url, i) in post.imageUrls"
-            :key="i"
-            :src="url"
-            :alt="`图片${i + 1}`"
-            loading="lazy"
-          />
+        <!-- ===== 图片 carousel ===== -->
+        <div v-if="imageCount > 0" class="image-carousel">
+          <!-- 主图区 -->
+          <div class="main-image">
+            <img
+              :src="post.imageUrls[currentImageIndex]"
+              :alt="`图片 ${currentImageIndex + 1} / ${imageCount}`"
+              loading="lazy"
+            />
+            <!-- 多图时左右切换按钮 -->
+            <button
+              v-if="hasMultipleImages"
+              class="nav-btn nav-prev"
+              @click="goPrevImage"
+              aria-label="上一张"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M15 18l-6-6 6-6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              v-if="hasMultipleImages"
+              class="nav-btn nav-next"
+              @click="goNextImage"
+              aria-label="下一张"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M9 6l6 6-6 6"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <!-- 计数徽章 -->
+            <span v-if="hasMultipleImages" class="image-counter">
+              {{ currentImageIndex + 1 }} / {{ imageCount }}
+            </span>
+          </div>
+
+          <!-- 圆点指示器（多图时） -->
+          <div v-if="hasMultipleImages" class="dots" role="tablist">
+            <button
+              v-for="(_, i) in post.imageUrls"
+              :key="i"
+              class="dot"
+              :class="{ active: i === currentImageIndex }"
+              :aria-label="`切换到第 ${i + 1} 张`"
+              :aria-selected="i === currentImageIndex"
+              role="tab"
+              @click="selectImage(i)"
+            />
+          </div>
+
+          <!-- 缩略图条（多图时，可选展示） -->
+          <div v-if="hasMultipleImages" class="thumbs">
+            <button
+              v-for="(url, i) in post.imageUrls"
+              :key="i"
+              class="thumb"
+              :class="{ active: i === currentImageIndex }"
+              @click="selectImage(i)"
+              :aria-label="`查看第 ${i + 1} 张`"
+            >
+              <img :src="url" :alt="`缩略图 ${i + 1}`" loading="lazy" />
+            </button>
+          </div>
         </div>
 
         <div v-if="post.topicTag" class="topic">#{{ post.topicTag }}</div>
@@ -594,19 +698,167 @@ watch(
   margin-bottom: 16px;
 }
 
-.images {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
+/* ===== 图片 carousel ===== */
+.image-carousel {
   margin-bottom: 16px;
 }
 
-.images img {
+.main-image {
+  position: relative;
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: calc(var(--radius) - 2px);
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--radius);
   background: var(--muted);
+}
+
+.main-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.2s ease;
+}
+
+/* 左右切换按钮 */
+.nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  padding: 0;
+}
+
+.nav-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.nav-btn:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.nav-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.nav-prev {
+  left: 8px;
+}
+
+.nav-next {
+  right: 8px;
+}
+
+/* 计数徽章 */
+.image-counter {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: white;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+/* 圆点指示器 */
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: none;
+  background: var(--muted-foreground);
+  opacity: 0.35;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.dot.active {
+  opacity: 1;
+  background: var(--accent);
+  width: 18px;
+  border-radius: 4px;
+}
+
+/* 缩略图条 */
+.thumbs {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.thumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, opacity 0.15s;
+  opacity: 0.55;
+}
+
+.thumb:hover {
+  opacity: 0.85;
+}
+
+.thumb.active {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (max-width: 480px) {
+  .main-image {
+    aspect-ratio: 1 / 1;
+  }
+  .thumb {
+    width: 48px;
+    height: 48px;
+  }
+}
   cursor: pointer;
 }
 
