@@ -69,9 +69,9 @@ router.put('/me', requireAuth, (req: Request, res: Response) => {
     db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params)
 
     // ===== 返回更新后的 user（前端 auth store 用来刷新状态）=====
-    const user = db.prepare(
-      'SELECT id, nickname, avatar, cover FROM users WHERE id = ?'
-    ).get(userId) as any
+    const user = db
+      .prepare('SELECT id, nickname, avatar, cover FROM users WHERE id = ?')
+      .get(userId) as any
 
     res.json({
       id: user.id,
@@ -94,20 +94,24 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
       return res.status(401).json({ message: '未登录' })
     }
 
-    const user = db.prepare(
-      'SELECT id, nickname, avatar, cover FROM users WHERE id = ?'
-    ).get(userId) as any
+    const user = db
+      .prepare('SELECT id, nickname, avatar, cover FROM users WHERE id = ?')
+      .get(userId) as any
 
     if (!user) {
       return res.status(404).json({ message: '用户不存在' })
     }
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT id, user_id, content, image_urls, topic_tag, created_at
       FROM posts
       WHERE user_id = ?
       ORDER BY created_at DESC, id DESC
-    `).all(userId) as any[]
+    `
+      )
+      .all(userId) as any[]
 
     res.json({
       user: {
@@ -116,7 +120,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
         avatar: user.avatar,
         cover: user.cover
       },
-      list: rows.map(row => ({
+      list: rows.map((row) => ({
         id: row.id,
         userId: row.user_id,
         content: row.content,
@@ -140,20 +144,24 @@ router.get('/:id/posts', (req: Request, res: Response) => {
       return res.status(400).json({ message: '用户 id 不合法' })
     }
 
-    const user = db.prepare(
-      'SELECT id, nickname, avatar, cover FROM users WHERE id = ?'
-    ).get(id) as any
+    const user = db
+      .prepare('SELECT id, nickname, avatar, cover FROM users WHERE id = ?')
+      .get(id) as any
 
     if (!user) {
       return res.status(404).json({ message: '用户不存在' })
     }
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT id, user_id, content, image_urls, topic_tag, created_at
       FROM posts
       WHERE user_id = ?
       ORDER BY created_at DESC, id DESC
-    `).all(id) as any[]
+    `
+      )
+      .all(id) as any[]
 
     res.json({
       user: {
@@ -162,7 +170,7 @@ router.get('/:id/posts', (req: Request, res: Response) => {
         avatar: user.avatar,
         cover: user.cover
       },
-      list: rows.map(row => ({
+      list: rows.map((row) => ({
         id: row.id,
         userId: row.user_id,
         content: row.content,

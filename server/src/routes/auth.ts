@@ -31,20 +31,22 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10)
 
     // 4. 插入数据库（password_hash 列存 bcrypt hash，不是明文）
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO users (email, password_hash, nickname) VALUES (?, ?, ?)
-    `).run(email, passwordHash, nickname)
+    `
+      )
+      .run(email, passwordHash, nickname)
 
     const userId = result.lastInsertRowid as number
 
     // 5. 生成 token（7 天有效）
     // 注：显式标 as jwt.SignOptions —— TS 7 + 老版 @types/jsonwebtoken 9 的 overload
     // 推导在对象属性读取时会把 options 推到 SignCallback 重载，强制 cast 解决
-    const token = jwt.sign(
-      { userId, email },
-      env.JWT_SECRET,
-      { expiresIn: env.TOKEN_EXPIRES_IN } as jwt.SignOptions
-    )
+    const token = jwt.sign({ userId, email }, env.JWT_SECRET, {
+      expiresIn: env.TOKEN_EXPIRES_IN
+    } as jwt.SignOptions)
 
     // 6. 返回
     res.status(201).json({
@@ -75,11 +77,9 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     }
 
     // 3. 生成 token（as SignOptions 详见 register 接口的注释）
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      env.JWT_SECRET,
-      { expiresIn: env.TOKEN_EXPIRES_IN } as jwt.SignOptions
-    )
+    const token = jwt.sign({ userId: user.id, email: user.email }, env.JWT_SECRET, {
+      expiresIn: env.TOKEN_EXPIRES_IN
+    } as jwt.SignOptions)
 
     // 4. 返回
     res.json({
@@ -107,9 +107,9 @@ router.get('/me', requireAuth, (req: Request, res: Response) => {
       return res.status(401).json({ message: '未登录' })
     }
 
-    const user = db.prepare(
-      'SELECT id, email, nickname, avatar, cover FROM users WHERE id = ?'
-    ).get(userId) as any
+    const user = db
+      .prepare('SELECT id, email, nickname, avatar, cover FROM users WHERE id = ?')
+      .get(userId) as any
 
     if (!user) {
       return res.status(404).json({ message: '用户不存在' })

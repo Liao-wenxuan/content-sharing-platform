@@ -40,17 +40,15 @@ describe('POST /api/auth/register', () => {
         id: expect.any(Number),
         email: 'alice@test.com',
         nickname: 'Alice',
-        avatar: null,
-      },
+        avatar: null
+      }
     })
     // JWT 三段式：header.payload.signature
     expect(res.body.accessToken.split('.')).toHaveLength(3)
   })
 
   it('缺字段返回 400', async () => {
-    const res = await request(app)
-      .post('/api/auth/register')
-      .send({ email: 'bob@test.com' })
+    const res = await request(app).post('/api/auth/register').send({ email: 'bob@test.com' })
     expect(res.status).toBe(400)
     expect(res.body.message).toMatch(/邮箱|密码|昵称/)
   })
@@ -125,9 +123,7 @@ describe('GET /api/auth/me', () => {
   })
 
   it('带有效 token 返回用户信息', async () => {
-    const res = await request(app)
-      .get('/api/auth/me')
-      .set('Authorization', `Bearer ${token}`)
+    const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)
 
     expect(res.status).toBe(200)
     expect(res.body.email).toBe('me@test.com')
@@ -140,9 +136,7 @@ describe('GET /api/auth/me', () => {
   })
 
   it('错 token 返回 401', async () => {
-    const res = await request(app)
-      .get('/api/auth/me')
-      .set('Authorization', 'Bearer not-a-real-jwt')
+    const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer not-a-real-jwt')
     expect(res.status).toBe(401)
   })
 })

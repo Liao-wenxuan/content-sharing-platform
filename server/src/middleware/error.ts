@@ -27,22 +27,17 @@ export class AppError extends Error {
 // ===== 404 兜底（必须在所有 route 之后注册）=====
 export function notFoundHandler(req: Request, res: Response, _next: NextFunction) {
   res.status(404).json({
-    message: `路由不存在：${req.method} ${req.originalUrl}`,
+    message: `路由不存在：${req.method} ${req.originalUrl}`
   })
 }
 
 // ===== 全局错误兜底（4 个参数是 express 识别 error middleware 的标志）=====
-export function errorHandler(
-  err: any,
-  _req: Request,
-  res: Response,
-  _next: NextFunction
-) {
+export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
   // 1) 应用主动抛的 AppError
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       message: err.message,
-      ...(err.code && { code: err.code }),
+      ...(err.code && { code: err.code })
     })
   }
 
@@ -73,6 +68,6 @@ export function errorHandler(
   // 5) 未知错误：log 完整 stack，返通用 500
   console.error('[Unhandled Error]', err)
   res.status(500).json({
-    message: process.env.NODE_ENV === 'production' ? '服务器内部错误' : err.message,
+    message: process.env.NODE_ENV === 'production' ? '服务器内部错误' : err.message
   })
 }

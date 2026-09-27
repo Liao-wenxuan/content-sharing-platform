@@ -23,7 +23,7 @@ function createDefaultDb(): Database.Database {
 
   // 老库迁移：password → password_hash
   const cols = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]
-  const names = new Set(cols.map(c => c.name))
+  const names = new Set(cols.map((c) => c.name))
   if (names.has('password') && !names.has('password_hash')) {
     db.exec(`ALTER TABLE users RENAME COLUMN password TO password_hash`)
     console.log('[DB] Migrated: users.password → users.password_hash')
@@ -68,7 +68,7 @@ const handler: ProxyHandler<Database.Database> = {
       return value.bind(target)
     }
     return value
-  },
+  }
 }
 
 const dbProxy = new Proxy({} as Database.Database, handler)

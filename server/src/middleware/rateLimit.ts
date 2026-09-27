@@ -17,18 +17,14 @@ import { env } from '../lib/env'
  */
 
 // 工厂函数：每次调用产一个新的 limiter 实例（测试可以传 skip=true）
-function makeLimiter(opts: {
-  windowMs: number
-  limit: number
-  message: string
-}) {
+function makeLimiter(opts: { windowMs: number; limit: number; message: string }) {
   return rateLimit({
     windowMs: opts.windowMs,
     limit: opts.limit,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { message: opts.message },
-    skip: () => env.NODE_ENV === 'test',  // 测试环境跳过
+    skip: () => env.NODE_ENV === 'test' // 测试环境跳过
   })
 }
 
@@ -36,19 +32,19 @@ function makeLimiter(opts: {
 export const authLimiter = makeLimiter({
   windowMs: 60 * 1000,
   limit: 5,
-  message: '操作过于频繁，请 1 分钟后再试',
+  message: '操作过于频繁，请 1 分钟后再试'
 })
 
 // 中等：发笔记/评论/点赞（防灌水）1 分钟 20 次
 export const writeLimiter = makeLimiter({
   windowMs: 60 * 1000,
   limit: 20,
-  message: '操作过于频繁，请稍后再试',
+  message: '操作过于频繁，请稍后再试'
 })
 
 // 宽松：上传图片（防止恶意占满磁盘）1 分钟 30 次
 export const uploadLimiter = makeLimiter({
   windowMs: 60 * 1000,
   limit: 30,
-  message: '上传过于频繁，请稍后再试',
+  message: '上传过于频繁，请稍后再试'
 })

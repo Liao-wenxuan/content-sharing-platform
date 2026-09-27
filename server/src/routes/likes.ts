@@ -21,13 +21,11 @@ router.post('/:postId/like', writeLimiter, requireAuth, (req: Request, res: Resp
     if (!post) return res.status(404).json({ message: '笔记不存在' })
 
     // INSERT OR IGNORE 实现幂等
-    db.prepare(
-      `INSERT OR IGNORE INTO likes (user_id, post_id) VALUES (?, ?)`
-    ).run(userId, postId)
+    db.prepare(`INSERT OR IGNORE INTO likes (user_id, post_id) VALUES (?, ?)`).run(userId, postId)
 
-    const count = (db.prepare(
-      'SELECT COUNT(*) as c FROM likes WHERE post_id = ?'
-    ).get(postId) as any).c
+    const count = (
+      db.prepare('SELECT COUNT(*) as c FROM likes WHERE post_id = ?').get(postId) as any
+    ).c
 
     res.json({ liked: true, likeCount: count })
   } catch (err: any) {
@@ -45,13 +43,11 @@ router.delete('/:postId/like', writeLimiter, requireAuth, (req: Request, res: Re
       return res.status(400).json({ message: '参数错误' })
     }
 
-    db.prepare(
-      'DELETE FROM likes WHERE user_id = ? AND post_id = ?'
-    ).run(userId, postId)
+    db.prepare('DELETE FROM likes WHERE user_id = ? AND post_id = ?').run(userId, postId)
 
-    const count = (db.prepare(
-      'SELECT COUNT(*) as c FROM likes WHERE post_id = ?'
-    ).get(postId) as any).c
+    const count = (
+      db.prepare('SELECT COUNT(*) as c FROM likes WHERE post_id = ?').get(postId) as any
+    ).c
 
     res.json({ liked: false, likeCount: count })
   } catch (err: any) {
@@ -66,16 +62,16 @@ router.get('/:postId/likes', optionalAuth, (req: Request, res: Response) => {
     const postId = parseInt(String(req.params.postId))
     if (!postId) return res.status(400).json({ message: '参数错误' })
 
-    const count = (db.prepare(
-      'SELECT COUNT(*) as c FROM likes WHERE post_id = ?'
-    ).get(postId) as any).c
+    const count = (
+      db.prepare('SELECT COUNT(*) as c FROM likes WHERE post_id = ?').get(postId) as any
+    ).c
 
     // 登录用户额外查一行：自己是否赞过
     let liked = false
     if (req.userId) {
-      const row = db.prepare(
-        'SELECT 1 FROM likes WHERE user_id = ? AND post_id = ? LIMIT 1'
-      ).get(req.userId, postId)
+      const row = db
+        .prepare('SELECT 1 FROM likes WHERE user_id = ? AND post_id = ? LIMIT 1')
+        .get(req.userId, postId)
       liked = !!row
     }
 

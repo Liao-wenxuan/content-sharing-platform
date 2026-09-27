@@ -12,9 +12,7 @@ import 'dotenv/config'
 function required(key: string, devFallback?: string): string {
   const value = process.env[key] || devFallback
   if (!value) {
-    throw new Error(
-      `[env] 缺少必填环境变量 ${key}。请参考 .env.example 配置`
-    )
+    throw new Error(`[env] 缺少必填环境变量 ${key}。请参考 .env.example 配置`)
   }
   return value
 }
@@ -51,8 +49,10 @@ export const env = {
   TOKEN_EXPIRES_IN: optional('TOKEN_EXPIRES_IN', '7d') as string,
 
   // CORS 白名单（多个 origin 用逗号分隔）
-  CORS_ORIGINS: optional('CORS_ORIGINS', '*') as string,
+  CORS_ORIGINS: optional('CORS_ORIGINS', '*') as string
 }
 
 // 启动时打印一份非敏感摘要，方便确认配置生效
-console.log(`[env] NODE_ENV=${env.NODE_ENV}, PORT=${env.PORT}, JWT_SECRET=${env.JWT_SECRET.slice(0, 4)}***`)
+console.log(
+  `[env] NODE_ENV=${env.NODE_ENV}, PORT=${env.PORT}, JWT_SECRET=${env.JWT_SECRET.slice(0, 4)}***`
+)

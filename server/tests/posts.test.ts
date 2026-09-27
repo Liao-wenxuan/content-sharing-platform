@@ -34,9 +34,7 @@ afterAll(() => {
 
 describe('POST /api/posts', () => {
   it('未登录返回 401', async () => {
-    const res = await request(app)
-      .post('/api/posts')
-      .send({ content: '匿名' })
+    const res = await request(app).post('/api/posts').send({ content: '匿名' })
     expect(res.status).toBe(401)
   })
 
@@ -52,7 +50,7 @@ describe('POST /api/posts', () => {
       userId,
       content: '我的第一篇笔记',
       topicTag: 'test',
-      imageUrls: [],
+      imageUrls: []
     })
   })
 
@@ -93,7 +91,7 @@ describe('GET /api/posts/feed', () => {
       page: 1,
       pageSize: expect.any(Number),
       total: expect.any(Number),
-      hasMore: expect.any(Boolean),
+      hasMore: expect.any(Boolean)
     })
   })
 
@@ -108,7 +106,7 @@ describe('GET /api/posts/feed', () => {
     for (const post of res.body.list) {
       expect(post.author).toMatchObject({
         id: expect.any(Number),
-        nickname: expect.any(String),
+        nickname: expect.any(String)
       })
     }
   })

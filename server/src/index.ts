@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
-import { env } from './lib/env'  // 必须在最前，加载 .env + 校验
+import { env } from './lib/env' // 必须在最前，加载 .env + 校验
 import authRouter from './routes/auth'
 import postsRouter from './routes/posts'
 import usersRouter from './routes/users'
@@ -14,17 +14,16 @@ const app = express()
 
 // ===== 中间件 =====
 // CORS：dev 默认全开（前端 localhost:5173 调后端 3000），prod 走白名单
-const corsOrigins = env.CORS_ORIGINS === '*'
-  ? true
-  : env.CORS_ORIGINS.split(',').map(s => s.trim())
+const corsOrigins =
+  env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((s) => s.trim())
 app.use(cors({ origin: corsOrigins, credentials: true }))
-app.use(express.json())     // 自动解析 application/json 请求体
+app.use(express.json()) // 自动解析 application/json 请求体
 // 静态资源：/uploads/* 由 uploadsRouter 上传后的图片可被浏览器直接访问
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 app.use('/api/auth', authRouter)
 app.use('/api/posts', postsRouter)
-app.use('/api/posts', likesRouter)      // 共享 /api/posts 前缀
-app.use('/api/posts', commentsRouter)   // 同上
+app.use('/api/posts', likesRouter) // 共享 /api/posts 前缀
+app.use('/api/posts', commentsRouter) // 同上
 app.use('/api/users', usersRouter)
 app.use('/api/uploads', uploadsRouter)
 
