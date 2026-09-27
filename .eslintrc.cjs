@@ -27,7 +27,10 @@ module.exports = {
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
-    'plugin:vue/vue3-recommended'
+    'plugin:vue/vue3-recommended',
+    // 必须放最后：关闭所有与 prettier 冲突的纯格式规则
+    // （prettier semi:false 会删分号，但 eslint:recommended 的 no-extra-semi 会报错）
+    'prettier'
   ],
   rules: {
     // TS 推荐太严，开发体验差
