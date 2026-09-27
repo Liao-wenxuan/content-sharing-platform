@@ -120,11 +120,12 @@ content-sharing-platform/
 
 ### 工程化
 
-| 亮点                          | 实现                                                                                                      |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **ESLint + Prettier + Husky** | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符） |
-| **GitHub Actions CI**         | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`，ubuntu-latest + Node 20      |
-| **零 console 残留**           | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                  |
+| 亮点                             | 实现                                                                                                                                                                                                             |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                        |
+| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威 |
+| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 20；本地能过的命令 CI 也必须能过                                                  |
+| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                         |
 
 ## 📚 文档
 
