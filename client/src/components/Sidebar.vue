@@ -1,12 +1,26 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 
 const sidebar = useSidebarStore()
 const router = useRouter()
 const toast = useToastStore()
+const auth = useAuthStore()
+
+// 用户头像首字母（fallback）
+const avatarInitial = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || '?')
+
+function onUserClick() {
+  sidebar.close()
+  if (auth.isLoggedIn) {
+    router.push('/profile/me')
+  } else {
+    router.push({ path: '/login', query: { redirect: '/' } })
+  }
+}
 
 // ===== 菜单项类型 =====
 // group: 同 group 之间共享一张卡片
@@ -157,6 +171,32 @@ onUnmounted(() => {
 
         <!-- 主内容滚动区 -->
         <div class="scroll-area">
+          <!-- 用户卡片（登录态显示资料，未登录显示登录引导） -->
+          <button type="button" class="user-card" @click="onUserClick">
+            <div class="user-avatar">
+              <img v-if="auth.user?.avatar" :src="auth.user.avatar" alt="头像" class="user-avatar-img" />
+              <span v-else class="user-avatar-text">{{ avatarInitial }}</span>
+            </div>
+            <div class="user-meta">
+              <div class="user-nickname">
+                {{ auth.user?.nickname || '未登录' }}
+              </div>
+              <div class="user-hint">
+                {{ auth.isLoggedIn ? '查看我的主页' : '点击登录 / 注册' }}
+              </div>
+            </div>
+            <svg viewBox="0 0 24 24" class="user-arrow" aria-hidden="true">
+              <path
+                d="M9 18l6-6-6-6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+
           <div v-for="(group, gi) in groups" :key="gi" class="group-card">
             <button
               v-for="item in group.items"
@@ -269,6 +309,98 @@ onUnmounted(() => {
 }
 .scroll-area::-webkit-scrollbar {
   display: none;
+}
+
+/* ===== 用户卡片（登录态资料 / 未登录引导） ===== */
+.user-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 4px;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: var(--foreground);
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.18s;
+}
+
+.user-card:hover {
+  background: var(--glass-bg-strong);
+  border-color: var(--glass-border);
+  transform: translateX(2px);
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-border);
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.user-avatar-text {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.user-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-nickname {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.user-hint {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+  transition: transform 0.18s;
+}
+
+.user-card:hover .user-arrow {
+  transform: translateX(2px);
+  color: var(--foreground);
 }
 
 /* ===== 分组卡片 ===== */
