@@ -3,10 +3,8 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { postsApi } from '@/api/posts'
-import request from '@/api/request'
 import {
   POST_CONTENT_MAX_LENGTH,
-  NICKNAME_MAX_LENGTH,
   UPLOAD_MAX_IMAGES,
   UPLOAD_MAX_SIZE_MB,
   UPLOAD_MAX_SIZE_BYTES,
@@ -289,12 +287,7 @@ async function handleSubmit() {
     <header class="topbar">
       <button type="button" class="topbar-btn cancel" @click="onCancel">取消</button>
       <h1 class="topbar-title">发布笔记</h1>
-      <button
-        type="button"
-        class="topbar-btn submit"
-        :disabled="!canSubmit"
-        @click="handleSubmit"
-      >
+      <button type="button" class="topbar-btn submit" :disabled="!canSubmit" @click="handleSubmit">
         发布
       </button>
     </header>
@@ -440,7 +433,9 @@ async function handleSubmit() {
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   border-bottom: 1px solid var(--glass-border-dk);
-  box-shadow: 0 1px 0 var(--glass-highlight) inset, 0 6px 24px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 0 var(--glass-highlight) inset,
+    0 6px 24px rgba(0, 0, 0, 0.06);
 }
 
 .topbar-title {
