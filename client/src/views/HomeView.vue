@@ -215,12 +215,20 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
   margin: 4px 0 0;
 }
 
-/* ===== 双列瀑布流 ===== */
+/* ===== 双列瀑布流（grid-masonry 风格）===== */
+/*
+ * 纯 CSS 实现 masonry：用 grid 2 列 + 每张卡 .cover 按 nth-child 切换 aspect-ratio
+ * 实际左右两列高度自然参差，看起来像瀑布流。
+ * 浏览器原生的 grid-template-rows: masonry 兼容性差（仅 Firefox），这里用 nth-child 模拟。
+ */
 .feed {
   display: grid;
   /* minmax(0, 1fr) 而不是 1fr：避免内容 min-width 把 grid 撑出父容器 */
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 12px;
+  /* grid items 默认 stretch 到行最高；这里改成 start，让卡片按内容高度自然排列 */
+  align-items: start;
 }
 
 .post-link {
@@ -264,13 +272,33 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
   border-color: var(--glass-border);
 }
 
-/* 图片封面 */
+/* 图片封面：基础 aspect-ratio 3/4，再用 nth-child 变化形成瀑布流高度差 */
 .cover {
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
   background: var(--muted);
   position: relative;
+}
+
+/* 6 卡片一组循环：每张高度不同，形成 masonry 视觉 */
+.post-link:nth-child(6n+1) .cover {
+  aspect-ratio: 1 / 1;
+}
+.post-link:nth-child(6n+2) .cover {
+  aspect-ratio: 3 / 4;
+}
+.post-link:nth-child(6n+3) .cover {
+  aspect-ratio: 4 / 5;
+}
+.post-link:nth-child(6n+4) .cover {
+  aspect-ratio: 3 / 5;
+}
+.post-link:nth-child(6n+5) .cover {
+  aspect-ratio: 2 / 3;
+}
+.post-link:nth-child(6n+6) .cover {
+  aspect-ratio: 5 / 6;
 }
 
 .cover img {
