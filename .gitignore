@@ -24,9 +24,12 @@ Thumbs.db
 desktop.ini
 NUL
 /data.db
-# 截图（开发时的视觉记录，不入版本库）
+# 截图（开发时的临时视觉记录，不入版本库）
 screenshots/
 **/screenshots/
+# 但 README 用的正式截图要入库
+!docs/screenshots/
+!docs/screenshots/**
 # 用户上传文件（运行时生成，不入版本库）
 uploads/
 **/uploads/
