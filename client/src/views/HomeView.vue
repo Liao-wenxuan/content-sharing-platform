@@ -96,6 +96,14 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
           <!-- 图片封面：有图时占主位 -->
           <div v-if="post.imageUrls && post.imageUrls.length > 0" class="cover">
             <img :src="post.imageUrls[0]" :alt="`封面`" loading="lazy" />
+            <!-- hover 浮出层：作者头像 + 名字 + 关注按钮 -->
+            <div class="cover-overlay">
+              <div class="overlay-author">
+                <div class="overlay-avatar">{{ avatarText(post.author?.nickname) }}</div>
+                <span class="overlay-nickname">{{ post.author?.nickname || '未知用户' }}</span>
+              </div>
+              <button class="overlay-follow" @click.prevent>关注</button>
+            </div>
             <span v-if="post.imageUrls.length > 1" class="cover-badge">
               +{{ post.imageUrls.length }}
             </span>
@@ -305,6 +313,94 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* hover 时图片轻微放大 */
+.post-link:hover .cover img {
+  transform: scale(1.06);
+}
+
+/* hover 浮出层：作者头像 + 名字 + 关注按钮（玻璃渐变底） */
+.cover-overlay {
+  position: absolute;
+  inset: 0 0 auto 0;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  /* 从顶部向下的玻璃渐变，让作者浮在图片之上 */
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.2) 60%,
+    transparent 100%
+  );
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: none;
+}
+
+.post-link:hover .cover-overlay {
+  opacity: 1;
+  transform: translateY(0);
+  /* hover 时允许点击关注按钮 */
+  pointer-events: auto;
+}
+
+.overlay-author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.overlay-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.overlay-nickname {
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.overlay-follow {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ff2d55; /* 红色：与小红书关注按钮色一致 */
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.overlay-follow:hover {
+  background: white;
+  transform: scale(1.05);
 }
 
 .cover-badge {
