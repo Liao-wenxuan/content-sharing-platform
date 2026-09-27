@@ -110,6 +110,7 @@ git push --force-with-lease origin main
 ## 推荐
 
 **方案 A**。理由：
+
 - 保留 upload pipeline 的 2 步 server/client 切分（更易 review）
 - 不动其他已经清晰的 commit
 - 总 commits 减少但叙事完整

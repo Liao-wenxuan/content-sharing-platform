@@ -4,17 +4,17 @@
 
 ## ✨ 已实现功能
 
-| 模块     | 功能                                                                                                       |
-| -------- | ---------------------------------------------------------------------------------------------------------- |
-| 账号     | 注册 / 登录 / JWT 鉴权 / 自动登录态持久化 (Pinia + localStorage)                                           |
-| 内容     | 发布笔记 (文本 + 1~9 张图，带上传进度条) / masonry 瀑布流 feed + hover 预览 / 笔记详情 / 图片 carousel      |
-| 互动     | 点赞 (可选登录态) / 评论 (登录态) / 评论列表                                                               |
-| 个人主页 | banner / 头像 / 三栏统计 / 浏览记录 + 钱包入口 / 推荐关注 / 4 个 tab + 公开/私密/合集筛选 / 编辑资料 modal |
+| 模块     | 功能                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------ |
+| 账号     | 注册 / 登录 / JWT 鉴权 / 自动登录态持久化 (Pinia + localStorage)                                             |
+| 内容     | 发布笔记 (文本 + 1~9 张图，带上传进度条) / masonry 瀑布流 feed + hover 预览 / 笔记详情 / 图片 carousel       |
+| 互动     | 点赞 (可选登录态) / 评论 (登录态) / 评论列表                                                                 |
+| 个人主页 | banner / 头像 / 三栏统计 / 浏览记录 + 钱包入口 / 推荐关注 / 4 个 tab + 公开/私密/合集筛选 / 编辑资料 modal   |
 | 消息     | 3 个 tab pill（赞 / 新增关注 / 评论和@）+ 活动流过滤 + 推荐关注 + 通知开关（UI 框架已搭好）                  |
-| 侧边栏   | 小红书风格抽屉（用户卡片 + 9 个分组菜单 + 3 个底部圆形按钮 + 玻璃拟态）                                        |
+| 侧边栏   | 小红书风格抽屉（用户卡片 + 9 个分组菜单 + 3 个底部圆形按钮 + 玻璃拟态）                                      |
 | 首页 tab | 双层 tab 栏：上层频道（关注 / 发现 / 雅安）/ 下层分类（推荐 / 视频 / 热点 / 直播 / 短剧 / 经验），fixed 吸顶 |
-| 设置     | 设置页（5 组设置项 + 深色模式切换 + 退出登录 + 协议链接）                                                  |
-| 主题     | 暗色 / 亮色切换 (URL 参数可强制 + localStorage 持久化)                                                     |
+| 设置     | 设置页（5 组设置项 + 深色模式切换 + 退出登录 + 协议链接）                                                    |
+| 主题     | 暗色 / 亮色切换 (URL 参数可强制 + localStorage 持久化)                                                       |
 
 > 路线图见 [docs/architecture.md](docs/architecture.md#路线图)
 
@@ -95,37 +95,36 @@ content-sharing-platform/
 
 ### 前端
 
-| 亮点 | 实现 | 踩过的坑 |
-| --- | --- | --- |
-| **Liquid Glass 设计系统** | 8 个玻璃 token（`--glass-bg/strong/weak/border/highlight/blur/shadow`）+ 4 个 utility class（`.glass` / `.glass-pill` / `.glass-input` / `.glass-toggle`），dark / light 双主题共用一套变量 | 用 `color-mix()` 而不是硬编码 dark/light 两套色值，避免双主题样式分叉 |
-| **fixed vs sticky 的取舍** | 顶部 tab 栏本来用 `position: sticky`，实测在 `html, body { overflow-x: hidden }` 下会静默失效（scroll 越过元素后整个消失），改成 `fixed` + 容器 `padding-top` 让位 | sticky 的有效性取决于**所有祖先**的 `overflow` / `transform` / `filter`，比想象中苛刻得多；fixed 更可控 |
-| **共享状态用 store 不用 props** | `homeTabs` Pinia store 让 `App.vue` 的 HomeTopTabs 和 `HomeView` 的 watch 订阅同一份 channel / category state | 组件层级跨越 `router-view` 时 props  drilling 不可行 |
-| **路由级错误边界** | `ErrorBoundary.vue` 用 `onErrorCaptured` 捕获 render 期同步异常，渲染降级 UI + 重试按钮，避免白屏 | 只兜同步异常；异步错误靠每个 view 自己的 `errorMsg` ref |
-| **抽 EmptyState 消除重复** | 3 个 variant（loading / empty / error）+ `compact` prop，替代 4 个 view 里各自写的 `class="state empty"` | — |
-| **404 catch-all** | `/:pathMatch(.*)*` 路由 + 玻璃风格 NotFoundView | — |
-| **上传进度条绕开 axios** | 用原生 `XMLHttpRequest.upload.onprogress` 而不是 axios | axios 1.x 在 instance 默认 `Content-Type: application/json` 时会把 FormData 转成 JSON 字符串发出去，multer 收不到文件 |
-| **图片 carousel** | 主图（4:5）+ 计数徽章 + 左右切换 + 圆点指示器（激活态拉长）+ 缩略图条 | — |
-| **masonry 瀑布流** | 纯 CSS：2 列 grid + 6 张一组循环 `aspect-ratio`（1/1 → 3/4 → 4/5 → 3/5 → 2/3 → 5/6）+ `align-items: start` | 浏览器原生 `grid-template-rows: masonry` 只有 Firefox 支持，只能模拟 |
+| 亮点                            | 实现                                                                                                                                                                                        | 踩过的坑                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Liquid Glass 设计系统**       | 8 个玻璃 token（`--glass-bg/strong/weak/border/highlight/blur/shadow`）+ 4 个 utility class（`.glass` / `.glass-pill` / `.glass-input` / `.glass-toggle`），dark / light 双主题共用一套变量 | 用 `color-mix()` 而不是硬编码 dark/light 两套色值，避免双主题样式分叉                                                 |
+| **fixed vs sticky 的取舍**      | 顶部 tab 栏本来用 `position: sticky`，实测在 `html, body { overflow-x: hidden }` 下会静默失效（scroll 越过元素后整个消失），改成 `fixed` + 容器 `padding-top` 让位                          | sticky 的有效性取决于**所有祖先**的 `overflow` / `transform` / `filter`，比想象中苛刻得多；fixed 更可控               |
+| **共享状态用 store 不用 props** | `homeTabs` Pinia store 让 `App.vue` 的 HomeTopTabs 和 `HomeView` 的 watch 订阅同一份 channel / category state                                                                               | 组件层级跨越 `router-view` 时 props drilling 不可行                                                                   |
+| **路由级错误边界**              | `ErrorBoundary.vue` 用 `onErrorCaptured` 捕获 render 期同步异常，渲染降级 UI + 重试按钮，避免白屏                                                                                           | 只兜同步异常；异步错误靠每个 view 自己的 `errorMsg` ref                                                               |
+| **抽 EmptyState 消除重复**      | 3 个 variant（loading / empty / error）+ `compact` prop，替代 4 个 view 里各自写的 `class="state empty"`                                                                                    | —                                                                                                                     |
+| **404 catch-all**               | `/:pathMatch(.*)*` 路由 + 玻璃风格 NotFoundView                                                                                                                                             | —                                                                                                                     |
+| **上传进度条绕开 axios**        | 用原生 `XMLHttpRequest.upload.onprogress` 而不是 axios                                                                                                                                      | axios 1.x 在 instance 默认 `Content-Type: application/json` 时会把 FormData 转成 JSON 字符串发出去，multer 收不到文件 |
+| **图片 carousel**               | 主图（4:5）+ 计数徽章 + 左右切换 + 圆点指示器（激活态拉长）+ 缩略图条                                                                                                                       | —                                                                                                                     |
+| **masonry 瀑布流**              | 纯 CSS：2 列 grid + 6 张一组循环 `aspect-ratio`（1/1 → 3/4 → 4/5 → 3/5 → 2/3 → 5/6）+ `align-items: start`                                                                                  | 浏览器原生 `grid-template-rows: masonry` 只有 Firefox 支持，只能模拟                                                  |
 
 ### 后端
 
-| 亮点 | 实现 |
-| --- | --- |
+| 亮点                         | 实现                                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **可测试架构（Proxy 注入）** | `db.ts` 用 `new Proxy()` 包装，测试用 `setTestDb(new Database(':memory:'))` 注入内存实例，生产文件 DB 和测试实例互不污染 |
-| **schema 抽取复用** | `CREATE TABLE` 抽到 `lib/schema.ts` 的 `initSchema(db)`，生产启动和每个测试文件共用同一份 DDL |
-| **53 个集成测试** | vitest 6 个测试文件覆盖 auth / posts / likes / comments / users / uploads；`fileParallelism: false` 避免共享 DB 竞态 |
-| **分层限流** | `express-rate-limit` 三档：auth 5/min、writes 20/min、uploads 30/min，`NODE_ENV=test` 自动跳过 |
-| **全局错误中间件** | `AppError` 类 + 4 个 catch 层（multer / JSON parse / 404 / 未知错误），统一响应格式，日志分级 |
-| **env 启动校验** | `lib/env.ts` 用 dotenv 加载后校验 `JWT_SECRET` 必填，缺失直接 fail fast 而不是运行时才炸 |
+| **schema 抽取复用**          | `CREATE TABLE` 抽到 `lib/schema.ts` 的 `initSchema(db)`，生产启动和每个测试文件共用同一份 DDL                            |
+| **53 个集成测试**            | vitest 6 个测试文件覆盖 auth / posts / likes / comments / users / uploads；`fileParallelism: false` 避免共享 DB 竞态     |
+| **分层限流**                 | `express-rate-limit` 三档：auth 5/min、writes 20/min、uploads 30/min，`NODE_ENV=test` 自动跳过                           |
+| **全局错误中间件**           | `AppError` 类 + 4 个 catch 层（multer / JSON parse / 404 / 未知错误），统一响应格式，日志分级                            |
+| **env 启动校验**             | `lib/env.ts` 用 dotenv 加载后校验 `JWT_SECRET` 必填，缺失直接 fail fast 而不是运行时才炸                                 |
 
 ### 工程化
 
-| 亮点 | 实现 |
-| --- | --- |
+| 亮点                          | 实现                                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
 | **ESLint + Prettier + Husky** | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符） |
-| **GitHub Actions CI** | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`，ubuntu-latest + Node 20 |
-| **零 console 残留** | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别 |
-
+| **GitHub Actions CI**         | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`，ubuntu-latest + Node 20      |
+| **零 console 残留**           | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                  |
 
 ## 📚 文档
 

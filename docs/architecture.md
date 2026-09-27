@@ -111,14 +111,14 @@ sequenceDiagram
 // ❌ 直接 push plain object → XHR onload 里改 img.status 不触发 UI
 const img = { status: 'pending' }
 images.value.push(img)
-img.status = 'done'  // UI 永远卡在 uploading
+img.status = 'done' // UI 永远卡在 uploading
 ```
 
 ```ts
 // ✅ 用 reactive() 包一层，闭包持有 Proxy
 const img = reactive({ status: 'pending' })
 images.value.push(img)
-img.status = 'done'  // 触发 set trap → 重渲染
+img.status = 'done' // 触发 set trap → 重渲染
 ```
 
 Vue 3 数组的 push hook 是 `rawArr.push(...args)`，items 不会自动 proxy。读时数组 get trap 会自动 wrap，但写必须显式走 Proxy。
@@ -133,7 +133,7 @@ request.post('/upload', formData, ...)  // multer 收不到文件
 
 ```ts
 // ✅ 不要在 instance 上设默认 Content-Type
-const request = axios.create({})  // 让 axios 根据 data 决定
+const request = axios.create({}) // 让 axios 根据 data 决定
 ```
 
 但实际项目里更稳的是绕开它直接用 XHR，所以 publish 用原生 XHR 上传。
@@ -187,11 +187,11 @@ xhr.send(formData)
 
 ## 关键文件索引
 
-| 关注点 | 文件 |
-|--------|------|
-| 上传核心 | `client/src/views/PublishView.vue` / `server/src/routes/uploads.ts` |
-| 鉴权 | `client/src/api/request.ts` / `client/src/stores/auth.ts` / `server/src/middleware/auth.ts` |
-| 数据模型 | `server/src/lib/db.ts` |
-| 路由 | `client/src/router/index.ts` |
-| 全局常量 | `client/src/constants.ts` / `server/src/constants.ts` |
-| 底部导航 | `client/src/components/BottomNav.vue` |
+| 关注点   | 文件                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------- |
+| 上传核心 | `client/src/views/PublishView.vue` / `server/src/routes/uploads.ts`                         |
+| 鉴权     | `client/src/api/request.ts` / `client/src/stores/auth.ts` / `server/src/middleware/auth.ts` |
+| 数据模型 | `server/src/lib/db.ts`                                                                      |
+| 路由     | `client/src/router/index.ts`                                                                |
+| 全局常量 | `client/src/constants.ts` / `server/src/constants.ts`                                       |
+| 底部导航 | `client/src/components/BottomNav.vue`                                                       |
