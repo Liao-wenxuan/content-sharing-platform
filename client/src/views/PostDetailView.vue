@@ -859,8 +859,6 @@ watch(
     height: 48px;
   }
 }
-  cursor: pointer;
-}
 
 .topic {
   display: inline-block;
