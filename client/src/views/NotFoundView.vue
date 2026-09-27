@@ -66,7 +66,11 @@ function goBack() {
 }
 
 .glyph .digit {
-  background: linear-gradient(180deg, var(--foreground) 0%, color-mix(in srgb, var(--foreground) 40%, transparent) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--foreground) 0%,
+    color-mix(in srgb, var(--foreground) 40%, transparent) 100%
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -124,7 +128,9 @@ function goBack() {
   padding: 10px 22px;
   cursor: pointer;
   color: var(--foreground);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .btn:hover {

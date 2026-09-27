@@ -61,9 +61,12 @@ onMounted(() => {
 })
 
 // 频道 / 分类切换时重置加载（从共享 store 订阅）
-watch(() => [homeTabs.channel, homeTabs.category], () => {
-  loadFeed(true)
-})
+watch(
+  () => [homeTabs.channel, homeTabs.category],
+  () => {
+    loadFeed(true)
+  }
+)
 </script>
 
 <template>
@@ -76,11 +79,7 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
       <p class="page-subtitle">分享你的世界，发现有趣的内容</p>
     </header>
 
-    <EmptyState
-      v-if="loading && posts.length === 0"
-      variant="loading"
-      title="正在加载笔记..."
-    />
+    <EmptyState v-if="loading && posts.length === 0" variant="loading" title="正在加载笔记..." />
 
     <EmptyState
       v-else-if="errorMsg"
@@ -290,22 +289,22 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
 }
 
 /* 6 卡片一组循环：每张高度不同，形成 masonry 视觉 */
-.post-link:nth-child(6n+1) .cover {
+.post-link:nth-child(6n + 1) .cover {
   aspect-ratio: 1 / 1;
 }
-.post-link:nth-child(6n+2) .cover {
+.post-link:nth-child(6n + 2) .cover {
   aspect-ratio: 3 / 4;
 }
-.post-link:nth-child(6n+3) .cover {
+.post-link:nth-child(6n + 3) .cover {
   aspect-ratio: 4 / 5;
 }
-.post-link:nth-child(6n+4) .cover {
+.post-link:nth-child(6n + 4) .cover {
   aspect-ratio: 3 / 5;
 }
-.post-link:nth-child(6n+5) .cover {
+.post-link:nth-child(6n + 5) .cover {
   aspect-ratio: 2 / 3;
 }
-.post-link:nth-child(6n+6) .cover {
+.post-link:nth-child(6n + 6) .cover {
   aspect-ratio: 5 / 6;
 }
 
@@ -339,7 +338,9 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
   );
   opacity: 0;
   transform: translateY(-6px);
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
   pointer-events: none;
 }
 
@@ -395,7 +396,9 @@ watch(() => [homeTabs.channel, homeTabs.category], () => {
   cursor: pointer;
   font-family: inherit;
   flex-shrink: 0;
-  transition: background 0.15s, transform 0.15s;
+  transition:
+    background 0.15s,
+    transform 0.15s;
 }
 
 .overlay-follow:hover {

@@ -28,10 +28,7 @@ defineEmits<{
 </script>
 
 <template>
-  <div
-    class="empty-state"
-    :class="[`variant-${variant ?? 'empty'}`, { compact: compact }]"
-  >
+  <div class="empty-state" :class="[`variant-${variant ?? 'empty'}`, { compact: compact }]">
     <div class="glyph" aria-hidden="true">
       <!-- 加载中：纯 CSS 旋转环 -->
       <span v-if="(variant ?? 'empty') === 'loading'" class="spinner" />

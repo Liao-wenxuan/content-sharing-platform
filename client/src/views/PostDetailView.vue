@@ -458,11 +458,7 @@ watch(
         </button>
 
         <!-- 评论（点击跳到评论列表） -->
-        <button
-          class="action-btn"
-          @click="scrollToComments"
-          aria-label="查看评论"
-        >
+        <button class="action-btn" @click="scrollToComments" aria-label="查看评论">
           <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path
               d="M21 12c0 4.4-4 8-9 8a9.7 9.7 0 0 1-3.8-.7L3 21l1.4-4.5A7.7 7.7 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"
@@ -576,7 +572,9 @@ watch(
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   border-bottom: 1px solid var(--glass-border-dk);
   /* 顶部 1px 折射线 */
-  box-shadow: 0 1px 0 var(--glass-highlight) inset, 0 6px 24px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 0 var(--glass-highlight) inset,
+    0 6px 24px rgba(0, 0, 0, 0.06);
 }
 
 .topbar-btn {
@@ -737,7 +735,9 @@ watch(
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s, transform 0.15s;
+  transition:
+    background 0.15s,
+    transform 0.15s;
   padding: 0;
 }
 
@@ -830,7 +830,9 @@ watch(
   background: var(--muted);
   cursor: pointer;
   padding: 0;
-  transition: border-color 0.15s, opacity 0.15s;
+  transition:
+    border-color 0.15s,
+    opacity 0.15s;
   opacity: 0.55;
 }
 

@@ -174,7 +174,12 @@ onUnmounted(() => {
           <!-- 用户卡片（登录态显示资料，未登录显示登录引导） -->
           <button type="button" class="user-card" @click="onUserClick">
             <div class="user-avatar">
-              <img v-if="auth.user?.avatar" :src="auth.user.avatar" alt="头像" class="user-avatar-img" />
+              <img
+                v-if="auth.user?.avatar"
+                :src="auth.user.avatar"
+                alt="头像"
+                class="user-avatar-img"
+              />
               <span v-else class="user-avatar-text">{{ avatarInitial }}</span>
             </div>
             <div class="user-meta">
