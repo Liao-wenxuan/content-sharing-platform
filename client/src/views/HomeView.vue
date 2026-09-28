@@ -244,39 +244,20 @@ watch(
   display: block;
 }
 
+/* Feed 卡片：小红书风格 = 纯色底 + 无边框 + 无阴影（靠间距分组） */
 .post-card {
-  /* 玻璃 feed 卡片 */
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--glass-border-dk);
-  border-radius: var(--radius);
+  background: transparent;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
   position: relative;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition:
-    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
 }
-/* 顶部 1px 折射线（液态玻璃标志细节） */
-.post-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, var(--glass-highlight) 50%, transparent 100%);
-  pointer-events: none;
-}
 
 .post-link:hover .post-card {
-  box-shadow: var(--glass-shadow);
-  transform: translateY(-3px) scale(1.015);
-  border-color: var(--glass-border);
+  transform: translateY(-2px);
 }
 
 /* 图片封面：基础 aspect-ratio 3/4，再用 nth-child 变化形成瀑布流高度差 */
@@ -286,6 +267,7 @@ watch(
   overflow: hidden;
   background: var(--muted);
   position: relative;
+  border-radius: 8px;
 }
 
 /* 6 卡片一组循环：每张高度不同，形成 masonry 视觉 */
@@ -513,12 +495,10 @@ watch(
 }
 
 .load-more-btn {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border-dk);
+  background: transparent;
+  border: 1px solid var(--border);
   padding: 8px 24px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   cursor: pointer;
   font-size: 14px;
   color: var(--foreground);
@@ -527,8 +507,8 @@ watch(
 }
 
 .load-more-btn:hover:not(:disabled) {
-  background: var(--glass-bg-strong);
-  border-color: var(--glass-border);
+  background: var(--muted);
+  border-color: var(--muted-foreground);
 }
 
 .load-more-btn:disabled {
