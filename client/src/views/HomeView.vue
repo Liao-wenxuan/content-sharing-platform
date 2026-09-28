@@ -1,5 +1,15 @@
 <script setup lang="ts">
+/**
+ * 发现页（桌面端）
+ *
+ * 布局改造：
+ * - 移动端的双层吸顶 tab 栏（HomeTopTabs）已删除，
+ *   频道改用 ElTabs、分类改用 ElRadioGroup，都随内容区正常流排布。
+ * - 卡片从手写 .post-card 换成 ElCard，栅格从 2 列改成自适应 3~4 列。
+ */
 import { ref, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Star, ChatDotRound } from '@element-plus/icons-vue'
 import { postsApi, type Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import { useHomeTabsStore } from '@/stores/homeTabs'
@@ -14,6 +24,23 @@ const loadingMore = ref(false)
 const errorMsg = ref('')
 const page = ref(1)
 const hasMore = ref(false)
+
+/** 频道（上层） */
+const channels = [
+  { key: 'discover', label: '发现' },
+  { key: 'follow', label: '关注' },
+  { key: 'ya', label: '雅安' }
+]
+
+/** 分类（下层） */
+const categories = [
+  { key: 'recommend', label: '推荐' },
+  { key: 'video', label: '视频' },
+  { key: 'hot', label: '热点' },
+  { key: 'live', label: '直播' },
+  { key: 'drama', label: '短剧' },
+  { key: 'exp', label: '经验' }
+]
 
 async function loadFeed(reset: boolean) {
   if (reset) {
@@ -35,7 +62,7 @@ async function loadFeed(reset: boolean) {
     posts.value.push(...data.list)
     hasMore.value = data.pagination.hasMore
   } catch (err: any) {
-    errorMsg.value = err.response?.data?.message || '加载失败'
+    errorMsg.value = err?.response?.data?.message || '加载失败'
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -52,33 +79,43 @@ async function loadMore() {
   await loadFeed(false)
 }
 
+/** 瀑布流卡片高度：每 6 张循环一组 aspect-ratio（在模板里用 ratio-N） */
 function avatarText(nickname?: string): string {
   return nickname?.[0]?.toUpperCase() || '?'
 }
 
-onMounted(() => {
-  loadFeed(true)
-})
+function onFollowClick() {
+  ElMessage.info('关注功能开发中，敬请期待')
+}
 
-// 频道 / 分类切换时重置加载（从共享 store 订阅）
+onMounted(() => loadFeed(true))
+
 watch(
   () => [homeTabs.channel, homeTabs.category],
-  () => {
-    loadFeed(true)
-  }
+  () => loadFeed(true)
 )
 </script>
 
 <template>
   <div class="home">
-    <!-- 顶部双层 tab 栏已移到 App.vue 铺满 viewport -->
-
-    <!-- 兼容旧的 page-header 样式 hook（虽然不再渲染，但保持 css 不报错） -->
-    <header v-show="false" class="page-header">
+    <header class="page-header">
       <h1 class="page-title">发现</h1>
       <p class="page-subtitle">分享你的世界，发现有趣的内容</p>
     </header>
 
+    <!-- 频道 -->
+    <el-tabs v-model="homeTabs.channel" class="channel-tabs">
+      <el-tab-pane v-for="ch in channels" :key="ch.key" :label="ch.label" :name="ch.key" />
+    </el-tabs>
+
+    <!-- 分类 -->
+    <el-radio-group v-model="homeTabs.category" class="category-group" size="large">
+      <el-radio-button v-for="cat in categories" :key="cat.key" :value="cat.key">
+        {{ cat.label }}
+      </el-radio-button>
+    </el-radio-group>
+
+    <!-- 内容 -->
     <EmptyState v-if="loading && posts.length === 0" variant="loading" title="正在加载笔记..." />
 
     <EmptyState
@@ -89,204 +126,179 @@ watch(
       @action="reload"
     />
 
-    <div v-else class="feed">
-      <router-link v-for="post in posts" :key="post.id" :to="`/post/${post.id}`" class="post-link">
-        <article class="post-card">
-          <!-- 图片封面：有图时占主位 -->
-          <div v-if="post.imageUrls && post.imageUrls.length > 0" class="cover">
-            <img :src="post.imageUrls[0]" :alt="`封面`" loading="lazy" />
-            <!-- hover 浮出层：作者头像 + 名字 + 关注按钮 -->
-            <div class="cover-overlay">
-              <div class="overlay-author">
-                <div class="overlay-avatar">{{ avatarText(post.author?.nickname) }}</div>
-                <span class="overlay-nickname">{{ post.author?.nickname || '未知用户' }}</span>
-              </div>
-              <button class="overlay-follow" @click.prevent>关注</button>
+    <template v-else>
+      <el-empty v-if="posts.length === 0" description="还没有人发布笔记">
+        <el-button type="primary" @click="$router.push('/publish')">去发第一篇</el-button>
+      </el-empty>
+
+      <div v-else class="feed-grid">
+        <router-link
+          v-for="(post, index) in posts"
+          :key="post.id"
+          :to="`/post/${post.id}`"
+          class="post-link"
+        >
+          <el-card shadow="never" class="post-card" body-class="card-body">
+            <div v-if="post.imageUrls?.length" class="cover" :class="`ratio-${index % 6}`">
+              <img
+                :src="post.imageUrls[0]"
+                :alt="`${post.author?.nickname} 的笔记封面`"
+                loading="lazy"
+              />
+              <span v-if="post.imageUrls.length > 1" class="cover-badge">
+                +{{ post.imageUrls.length }}
+              </span>
             </div>
-            <span v-if="post.imageUrls.length > 1" class="cover-badge">
-              +{{ post.imageUrls.length }}
-            </span>
-          </div>
 
-          <!-- 内容（限 2 行） -->
-          <div class="content">{{ post.content }}</div>
+            <p class="content">{{ post.content }}</p>
 
-          <!-- 底部作者信息 -->
-          <footer class="author">
-            <div class="avatar">{{ avatarText(post.author?.nickname) }}</div>
-            <span class="nickname">{{ post.author?.nickname || '未知用户' }}</span>
-            <span class="time">{{ formatTime(post.createdAt) }}</span>
-          </footer>
+            <div class="meta">
+              <el-avatar :size="22" class="avatar">
+                {{ avatarText(post.author?.nickname) }}
+              </el-avatar>
+              <span class="nickname">{{ post.author?.nickname || '未知用户' }}</span>
+              <span class="dot">·</span>
+              <span class="time">{{ formatTime(post.createdAt) }}</span>
+            </div>
 
-          <!-- 互动数据：点赞 + 评论 -->
-          <div class="meta">
-            <span class="meta-item">
-              <svg viewBox="0 0 24 24" class="meta-icon" aria-hidden="true">
-                <path
-                  d="M12 21s-7.5-4.6-9.5-9.1C1.1 8.2 3 5 6.3 5c1.9 0 3.4 1 4.2 2.4l1.5 1.9 1.5-1.9C14.3 6 15.8 5 17.7 5 21 5 22.9 8.2 21.5 11.9 19.5 16.4 12 21 12 21z"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              {{ post.likeCount }}
-            </span>
-            <span class="meta-item">
-              <svg viewBox="0 0 24 24" class="meta-icon" aria-hidden="true">
-                <path
-                  d="M21 12c0 4.4-4 8-9 8a9.7 9.7 0 0 1-3.8-.7L3 21l1.4-4.5A7.7 7.7 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              {{ post.commentCount }}
-            </span>
-          </div>
-        </article>
-      </router-link>
-
-      <div v-if="hasMore" class="state">
-        <button class="load-more-btn" :disabled="loadingMore" @click="loadMore">
-          {{ loadingMore ? '加载中...' : '加载更多' }}
-        </button>
+            <div class="stats">
+              <span class="stat">
+                <el-icon><component :is="Star" /></el-icon>
+                {{ post.likeCount }}
+              </span>
+              <span class="stat">
+                <el-icon><component :is="ChatDotRound" /></el-icon>
+                {{ post.commentCount }}
+              </span>
+              <el-button
+                class="follow-btn"
+                size="small"
+                type="primary"
+                plain
+                round
+                @click.prevent="onFollowClick"
+              >
+                关注
+              </el-button>
+            </div>
+          </el-card>
+        </router-link>
       </div>
-      <div v-else-if="posts.length > 0" class="state no-more">— 没有更多了 —</div>
-      <div v-else class="state-empty-wrap">
-        <EmptyState icon="✨" title="还没有人发布笔记" hint="快去发第一篇吧" />
+
+      <!-- 分页 -->
+      <div v-if="posts.length > 0" class="pager">
+        <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
+        <span v-else class="no-more">— 没有更多了 —</span>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .home {
-  max-width: 720px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  padding: 24px 16px 12px;
 }
 
-/* ===== 顶部栏（汉堡按钮 + 大标题）===== */
-.top-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-
-.menu-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius);
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s;
-  flex-shrink: 0;
-  padding: 0;
-}
-
-.menu-btn:hover {
-  background: var(--muted);
-}
-
-.menu-btn svg {
-  width: 22px;
-  height: 22px;
-  display: block;
-}
-
-/* ===== 页头大标题（shadcn 风格） ===== */
+/* ===== 页头 ===== */
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .page-title {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 700;
-  color: var(--foreground);
-  margin: 0;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  margin: 0;
+  color: var(--foreground);
 }
 
 .page-subtitle {
+  margin: 6px 0 0;
   font-size: 14px;
   color: var(--muted-foreground);
-  margin: 4px 0 0;
 }
 
-/* ===== 双列瀑布流（grid-masonry 风格）===== */
-/*
- * 纯 CSS 实现 masonry：用 grid 2 列 + 每张卡 .cover 按 nth-child 切换 aspect-ratio
- * 实际左右两列高度自然参差，看起来像瀑布流。
- * 浏览器原生的 grid-template-rows: masonry 兼容性差（仅 Firefox），这里用 nth-child 模拟。
- */
-.feed {
+/* ===== 频道 / 分类 ===== */
+.channel-tabs {
+  margin-bottom: 4px;
+}
+
+.channel-tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+
+.channel-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+}
+
+.channel-tabs :deep(.el-tabs__item) {
+  font-size: 16px;
+  padding: 0 20px;
+}
+
+.category-group {
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.category-group :deep(.el-radio-button__inner) {
+  border-radius: 999px;
+}
+
+/* ===== 卡片栅格 ===== */
+.feed-grid {
   display: grid;
-  /* minmax(0, 1fr) 而不是 1fr：避免内容 min-width 把 grid 撑出父容器 */
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 12px;
-  row-gap: 12px;
-  /* grid items 默认 stretch 到行最高；这里改成 start，让卡片按内容高度自然排列 */
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
   align-items: start;
 }
 
 .post-link {
-  text-decoration: none;
-  color: inherit;
   display: block;
+  color: inherit;
 }
 
-/* Feed 卡片：小红书风格 = 纯色底 + 无边框 + 无阴影（靠间距分组） */
 .post-card {
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  overflow: hidden;
-  position: relative;
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .post-link:hover .post-card {
   transform: translateY(-2px);
+  border-color: var(--border);
 }
 
-/* 图片封面：基础 aspect-ratio 3/4，再用 nth-child 变化形成瀑布流高度差 */
+.card-body {
+  padding: 0 0 12px;
+}
+
+/* 封面：6 张一循环制造瀑布流高度差 */
 .cover {
+  position: relative;
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
   background: var(--muted);
-  position: relative;
-  border-radius: 8px;
 }
 
-/* 6 卡片一组循环：每张高度不同，形成 masonry 视觉 */
-.post-link:nth-child(6n + 1) .cover {
+.ratio-0 {
   aspect-ratio: 1 / 1;
 }
-.post-link:nth-child(6n + 2) .cover {
+.ratio-1 {
   aspect-ratio: 3 / 4;
 }
-.post-link:nth-child(6n + 3) .cover {
+.ratio-2 {
   aspect-ratio: 4 / 5;
 }
-.post-link:nth-child(6n + 4) .cover {
+.ratio-3 {
   aspect-ratio: 3 / 5;
 }
-.post-link:nth-child(6n + 5) .cover {
+.ratio-4 {
   aspect-ratio: 2 / 3;
 }
-.post-link:nth-child(6n + 6) .cover {
+.ratio-5 {
   aspect-ratio: 5 / 6;
 }
 
@@ -294,230 +306,106 @@ watch(
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+  transition: transform 0.3s ease;
 }
 
-/* hover 时图片轻微放大 */
 .post-link:hover .cover img {
-  transform: scale(1.06);
-}
-
-/* hover 浮出层：作者头像 + 名字 + 关注按钮（玻璃渐变底） */
-.cover-overlay {
-  position: absolute;
-  inset: 0 0 auto 0;
-  padding: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  /* 从顶部向下的玻璃渐变，让作者浮在图片之上 */
-  background: linear-gradient(
-    180deg,
-    rgba(0, 0, 0, 0.6) 0%,
-    rgba(0, 0, 0, 0.2) 60%,
-    transparent 100%
-  );
-  opacity: 0;
-  transform: translateY(-6px);
-  transition:
-    opacity 0.25s ease,
-    transform 0.25s ease;
-  pointer-events: none;
-}
-
-.post-link:hover .cover-overlay {
-  opacity: 1;
-  transform: translateY(0);
-  /* hover 时允许点击关注按钮 */
-  pointer-events: auto;
-}
-
-.overlay-author {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-}
-
-.overlay-avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
-  color: #333;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.overlay-nickname {
-  font-size: 12px;
-  font-weight: 600;
-  color: white;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-
-.overlay-follow {
-  background: #ffffff;
-  color: #ff2d55; /* 红色：与小红书关注按钮色一致 */
-  border: none;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-family: inherit;
-  flex-shrink: 0;
-  transition:
-    background 0.15s,
-    transform 0.15s;
-}
-
-.overlay-follow:hover {
-  background: white;
   transform: scale(1.05);
 }
 
 .cover-badge {
   position: absolute;
-  right: 6px;
-  bottom: 6px;
-  background: rgba(0, 0, 0, 0.75);
-  color: white;
+  right: 8px;
+  top: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
   font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
   font-weight: 500;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
 }
 
-/* 内容（限 2 行） */
+/* 内容摘要 */
 .content {
+  margin: 10px 14px 8px;
   font-size: 14px;
-  line-height: 1.5;
-  color: var(--foreground);
-  padding: 10px 12px 8px;
+  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
-  flex: 1;
 }
 
-/* 作者信息（底部一行） */
-.author {
+/* 作者行 */
+.meta {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px 10px;
+  padding: 0 14px;
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 
 .avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 10px;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 11px;
   flex-shrink: 0;
 }
 
 .nickname {
-  font-size: 12px;
   color: var(--foreground);
   font-weight: 500;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-}
-
-.time {
-  font-size: 11px;
-  color: var(--muted-foreground);
   white-space: nowrap;
 }
 
-/* ===== 互动数据（点赞 / 评论） ===== */
-.meta {
+.dot {
+  opacity: 0.6;
+}
+
+/* 互动数据 */
+.stats {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 12px 10px;
-  margin-top: -4px; /* 紧贴 author 行 */
+  gap: 14px;
+  padding: 8px 14px 0;
+  font-size: 12px;
   color: var(--muted-foreground);
-  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
-.meta-item {
+.stat {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 
-.meta-icon {
-  width: 13px;
-  height: 13px;
-  display: block;
+.follow-btn {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.18s ease;
 }
 
-/* 状态条：跨两列 */
-.state {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 20px;
+/* 关注按钮只在 hover 卡片时出现，避免列表视觉噪音 */
+.post-link:hover .follow-btn,
+.follow-btn:focus-visible {
+  opacity: 1;
+}
+
+/* ===== 分页 ===== */
+.pager {
+  display: flex;
+  justify-content: center;
+  padding: 28px 0 8px;
+}
+
+.no-more {
   color: var(--muted-foreground);
-  font-size: 14px;
-}
-
-/* EmptyState 包装：让组件在 grid 里跨两列 */
-.state-empty-wrap {
-  grid-column: 1 / -1;
-}
-
-.state.error {
-  color: var(--destructive);
-}
-
-.load-more-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  padding: 8px 24px;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--foreground);
-  transition: all 0.15s;
-  font-family: inherit;
-}
-
-.load-more-btn:hover:not(:disabled) {
-  background: var(--muted);
-  border-color: var(--muted-foreground);
-}
-
-.load-more-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* ===== 响应式 ===== */
-@media (max-width: 480px) {
-  .home {
-    padding: 16px 12px 8px;
-  }
+  font-size: 13px;
 }
 </style>
