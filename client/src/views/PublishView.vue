@@ -429,13 +429,8 @@ async function handleSubmit() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border-dk);
-  box-shadow:
-    0 1px 0 var(--glass-highlight) inset,
-    0 6px 24px rgba(0, 0, 0, 0.06);
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
 }
 
 .topbar-title {
@@ -697,7 +692,6 @@ async function handleSubmit() {
   font-weight: 500;
   background: rgba(0, 0, 0, 0.7);
   color: white;
-  backdrop-filter: blur(4px);
   border: none;
   font-family: inherit;
   cursor: default;
@@ -721,8 +715,6 @@ button.badge.error:hover {
   justify-content: center;
   gap: 8px;
   background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   pointer-events: none;
 }
 
@@ -795,9 +787,8 @@ button.badge.error:hover {
   color: var(--destructive);
   margin-bottom: 12px;
   font-size: 13px;
-  /* 玻璃错误条 */
+  /* 错误条：淡红底 + 描边 */
   background: rgba(239, 68, 68, 0.1);
-  backdrop-filter: blur(12px);
   padding: 8px 12px;
   border-radius: var(--radius);
   border: 1px solid rgba(239, 68, 68, 0.3);
