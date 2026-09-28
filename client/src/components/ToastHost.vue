@@ -32,13 +32,10 @@ const toast = useToastStore()
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  /* Liquid glass toast：跟随主题（dark 黑玻璃 / light 白玻璃） */
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border: 1px solid var(--glass-border);
+  /* Toast：纯色底 + 描边（小红书风） */
+  background: var(--popover);
+  border: 1px solid var(--border);
   color: var(--foreground);
-  box-shadow: var(--glass-shadow);
   cursor: pointer;
   user-select: none;
 }
