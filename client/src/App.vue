@@ -40,15 +40,13 @@ onMounted(() => {
 
 <template>
   <div id="app">
-    <!-- 顶部 tab 栏：在 .main 外、#app 内，sticky 铺满 viewport -->
     <!--
-      HomeTopTabs 用的是 position: sticky（不是 fixed），自身已经在文档流里占位，
-      所以下面的 router-view 不会被遮挡，不需要额外 spacer。
-      之前那个 .top-tabs-spacer 是历史遗留，造成 92px / 88px 多余空白。
+      顶部 tab 栏：在 .main 外、#app 内，position: fixed 铺满 viewport。
+      因为脱离文档流，.main 需要 .has-top-tabs 的 padding-top 让位。
     -->
     <HomeTopTabs v-if="showTopTabs" />
 
-    <main class="main">
+    <main class="main" :class="{ 'has-top-tabs': showTopTabs }">
       <!-- 全局错误边界：子组件 render 期同步异常时降级，避免白屏 -->
       <ErrorBoundary>
         <router-view />
@@ -67,18 +65,22 @@ onMounted(() => {
 
 <style scoped>
 .main {
-  /* HomeTopTabs 用 position: fixed 永远吸顶；
-   * 这里用 padding-top 让出 ~92px（desktop 52 + 40 两行），
-   * mobile 上更紧凑，给 88px。
-   */
-  padding-top: 92px;
   /* 底部 nav 高度 + 安全区，避免内容被遮挡 */
   padding-bottom: calc(72px + env(safe-area-inset-bottom));
   min-height: 100vh;
 }
 
+/*
+ * 只有首页才需要给 fixed 的 HomeTopTabs 让位。
+ * 其他页面（详情 / 发布 / 消息 / 我的 / 登录）没有这根顶栏，
+ * 如果无条件加 padding-top 就会凭空多出 88~92px 空白。
+ */
+.main.has-top-tabs {
+  padding-top: 92px;
+}
+
 @media (max-width: 480px) {
-  .main {
+  .main.has-top-tabs {
     padding-top: 88px;
   }
 }
