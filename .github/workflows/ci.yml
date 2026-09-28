@@ -52,7 +52,10 @@ jobs:
         run: npm ci
 
       - name: TypeScript + Vue typecheck
-        run: npx vue-tsc --noEmit
+        # 必须显式 -p tsconfig.app.json：
+        # tsconfig.json 是 solution-style（files: [] + references），
+        # 直接 `vue-tsc --noEmit` 什么都不检查，错误会被静默放过。
+        run: npx vue-tsc --noEmit -p tsconfig.app.json
 
       - name: Build (catches SSR/build-time errors)
         run: npm run build
