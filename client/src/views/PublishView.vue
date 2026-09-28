@@ -1,7 +1,24 @@
 <script setup lang="ts">
+/**
+ * 发布笔记页（桌面端）
+ *
+ * 组件替换：
+ * - 手写 label + textarea / input  → ElForm + ElFormItem + ElInput
+ * - 手写拖拽区 + 隐藏 file input  → ElUpload（自带的 drag 样式与拖高亮）
+ * - 手写上传进度条               → ElProgress
+ * - window.confirm               → ElMessageBox
+ *
+ * 上传本身仍然走手写 XHR（没有换成 ElUpload 的 http-request）：
+ * 现有逻辑绕开了 axios 1.x 把 FormData 转成 JSON 的坑，
+ * 并且要按张单独上报进度，没必要为此重写。
+ */
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import type { UploadFile } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { PictureFilled, UploadFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import { postsApi } from '@/api/posts'
 import {
   POST_CONTENT_MAX_LENGTH,
@@ -14,6 +31,7 @@ import {
 
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 
 // ===== 表单状态 =====
 const content = ref('')
@@ -37,10 +55,6 @@ let nextImgId = 1
 // 上传限制（client + server 防御性校验；值在 src/constants.ts）
 const MAX_IMAGES = UPLOAD_MAX_IMAGES
 const MAX_SIZE_MB = UPLOAD_MAX_SIZE_MB
-
-// ===== 拖拽状态 =====
-const isDragOver = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
 
 const allUploaded = computed(
   () => images.value.length === 0 || images.value.every((i) => i.status === 'done')
@@ -66,56 +80,37 @@ onUnmounted(() => {
   images.value.forEach((img) => URL.revokeObjectURL(img.previewUrl))
 })
 
-// ===== 文件选择 / 拖拽 =====
-function triggerFilePicker() {
-  fileInput.value?.click()
-}
-
-function onFilePicked(e: Event) {
-  const input = e.target as HTMLInputElement
-  if (input.files) addFiles(Array.from(input.files))
-  // 清空 value 允许同一文件再次选择
-  input.value = ''
-}
-
-function onDrop(e: DragEvent) {
-  e.preventDefault()
-  isDragOver.value = false
-  const files = e.dataTransfer?.files
-  if (files && files.length > 0) addFiles(Array.from(files))
-}
-
-function onDragOver(e: DragEvent) {
-  e.preventDefault()
-  isDragOver.value = true
-}
-
-function onDragLeave() {
-  isDragOver.value = false
+// ===== 文件选择 =====
+// ElUpload 关闭了自动上传（auto-upload=false），
+// 所以这里在 on-change 阶段自己走校验 + 触发上传。
+function handleUploadChange(uploadFile: UploadFile) {
+  const file = uploadFile.raw
+  if (!file) return
+  addFiles([file])
 }
 
 function addFiles(files: File[]) {
   errorMsg.value = ''
   const remaining = MAX_IMAGES - images.value.length
   if (remaining <= 0) {
-    errorMsg.value = `最多上传 ${MAX_IMAGES} 张图片`
+    ElMessage.warning(`最多上传 ${MAX_IMAGES} 张图片`)
     return
   }
 
   const accepted = files.slice(0, remaining)
   if (files.length > remaining) {
-    errorMsg.value = `已选 ${files.length} 张，超出 ${remaining} 张额度，已截取前 ${remaining} 张`
+    ElMessage.warning(`超出额度，已截取前 ${remaining} 张`)
   }
 
   for (const file of accepted) {
     // 类型校验
     if (!file.type.startsWith('image/')) {
-      errorMsg.value = `已跳过非图片文件：${file.name}`
+      ElMessage.error(`已跳过非图片文件：${file.name}`)
       continue
     }
     // 大小校验
     if (file.size > UPLOAD_MAX_SIZE_BYTES) {
-      errorMsg.value = `已跳过超大文件（>${MAX_SIZE_MB}MB）：${file.name}`
+      ElMessage.error(`已跳过超大文件（>${MAX_SIZE_MB}MB）：${file.name}`)
       continue
     }
 
@@ -127,7 +122,8 @@ function addFiles(files: File[]) {
       file,
       previewUrl: URL.createObjectURL(file),
       uploadedUrl: null,
-      status: 'pending'
+      status: 'pending',
+      progress: 0
     })
     images.value.push(img)
     // 选完立即上传（不等点发布按钮）
@@ -233,11 +229,18 @@ function removeImage(id: number) {
 }
 
 // ===== 取消 =====
-function onCancel() {
+async function onCancel() {
   // 有内容时给提示确认；否则直接返回
   if (content.value.trim() || topicTag.value.trim() || images.value.length > 0) {
-    const ok = window.confirm('放弃当前编辑？已填写的内容将丢失。')
-    if (!ok) return
+    try {
+      await ElMessageBox.confirm('放弃当前编辑？已填写的内容将丢失。', '确认放弃', {
+        confirmButtonText: '放弃',
+        cancelButtonText: '继续编辑',
+        type: 'warning'
+      })
+    } catch {
+      return // 用户点了「继续编辑」
+    }
   }
   router.push('/')
 }
@@ -272,9 +275,10 @@ async function handleSubmit() {
       topicTag: topicTag.value.trim() || undefined
     })
 
+    toast.show('发布成功', 'success')
     router.push('/')
   } catch (err: any) {
-    errorMsg.value = err.response?.data?.message || '发布失败，请稍后再试'
+    errorMsg.value = err?.response?.data?.message || '发布失败，请稍后再试'
   } finally {
     submitting.value = false
   }
@@ -283,552 +287,322 @@ async function handleSubmit() {
 
 <template>
   <div class="publish">
-    <!-- 顶部 sticky topbar：取消 / 发布笔记 / 发布按钮 -->
-    <header class="topbar">
-      <button type="button" class="topbar-btn cancel" @click="onCancel">取消</button>
-      <h1 class="topbar-title">发布笔记</h1>
-      <button type="button" class="topbar-btn submit" :disabled="!canSubmit" @click="handleSubmit">
-        发布
-      </button>
+    <header class="page-header">
+      <h1 class="page-title">发布笔记</h1>
+      <p class="page-subtitle">记录当下，分享你的生活与想法</p>
     </header>
 
-    <form class="publish-form" @submit.prevent="handleSubmit">
-      <!-- 内容 -->
-      <div class="field">
-        <label>内容 <span class="required">*</span></label>
-        <textarea
-          v-model="content"
-          rows="5"
-          :maxlength="POST_CONTENT_MAX_LENGTH"
-          placeholder="说点什么吧..."
-        />
-        <div class="counter">{{ content.length }} / {{ POST_CONTENT_MAX_LENGTH }}</div>
-      </div>
+    <div class="publish-grid">
+      <!-- ================= 表单 ================= -->
+      <el-card shadow="never" class="form-card">
+        <el-form label-position="top" @submit.prevent="handleSubmit">
+          <el-form-item label="内容" required :error="errorMsg">
+            <el-input
+              v-model="content"
+              type="textarea"
+              :rows="6"
+              :maxlength="POST_CONTENT_MAX_LENGTH"
+              show-word-limit
+              resize="none"
+              placeholder="说点什么吧..."
+            />
+          </el-form-item>
 
-      <!-- 话题 -->
-      <div class="field">
-        <label>话题标签</label>
-        <input v-model="topicTag" placeholder="例如：前端开发" maxlength="20" />
-      </div>
+          <el-form-item label="话题标签">
+            <el-input v-model="topicTag" placeholder="例如：前端开发" :maxlength="20" clearable />
+          </el-form-item>
 
-      <!-- 图片上传 -->
-      <div class="field">
-        <label>
-          图片
-          <span class="hint"
-            >（{{ images.length }} / {{ MAX_IMAGES }}，单张 ≤ {{ MAX_SIZE_MB }}MB）</span
-          >
-        </label>
-
-        <!-- 上传区（拖拽 / 点击） -->
-        <div
-          class="dropzone"
-          :class="{ active: isDragOver, full: images.length >= MAX_IMAGES }"
-          @click="triggerFilePicker"
-          @drop="onDrop"
-          @dragover="onDragOver"
-          @dragleave="onDragLeave"
-        >
-          <!-- 拖拽时显示上传箭头 + "松手上传"；否则显示加号 -->
-          <div class="dropzone-icon-wrap">
-            <svg viewBox="0 0 24 24" class="upload-icon upload-icon-plus" aria-hidden="true">
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor" />
-            </svg>
-            <svg viewBox="0 0 24 24" class="upload-icon upload-icon-arrow" aria-hidden="true">
-              <path
-                d="M12 16V4m0 0L7 9m5-5l5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </div>
-
-          <p class="dropzone-text">
-            <template v-if="images.length >= MAX_IMAGES">已达上限（{{ MAX_IMAGES }} 张）</template>
-            <template v-else-if="isDragOver">松手即可上传</template>
-            <template v-else>点击或拖拽图片到此处上传</template>
-          </p>
-          <p class="dropzone-hint">支持 JPG / PNG / GIF / WebP · 单张 ≤ {{ MAX_SIZE_MB }}MB</p>
-        </div>
-        <input
-          ref="fileInput"
-          type="file"
-          multiple
-          accept="image/*"
-          hidden
-          @change="onFilePicked"
-        />
-
-        <!-- 预览网格 -->
-        <div v-if="images.length > 0" class="preview-grid">
-          <div v-for="img in images" :key="img.id" class="preview-item">
-            <img :src="img.previewUrl" :alt="img.file.name" />
-
-            <!-- 上传中：底部进度条 + 中心百分比 -->
-            <div v-if="img.status === 'uploading'" class="upload-progress">
-              <div class="progress-track">
-                <div class="progress-fill" :style="{ width: img.progress + '%' }" />
-              </div>
-              <span class="progress-label">{{ img.progress }}%</span>
+          <el-form-item>
+            <div class="upload-label">
+              <span>图片</span>
+              <span class="upload-count">
+                {{ images.length }} / {{ MAX_IMAGES }}，单张 ≤ {{ MAX_SIZE_MB }}MB
+              </span>
             </div>
 
-            <!-- 状态徽章（点击重试 or 显示错误） -->
-            <button v-if="img.status === 'pending'" type="button" class="badge pending" disabled>
-              待上传
-            </button>
-            <div v-else-if="img.status === 'done'" class="badge done">✓</div>
-            <button
-              v-else-if="img.status === 'error'"
-              type="button"
-              class="badge error"
-              :title="img.errorMsg"
-              @click="retryImage(img.id)"
+            <el-upload
+              class="upload-dragger"
+              drag
+              multiple
+              accept="image/*"
+              :auto-upload="false"
+              :limit="MAX_IMAGES"
+              :show-file-list="false"
+              :disabled="images.length >= MAX_IMAGES"
+              :on-change="handleUploadChange"
             >
-              重试
-            </button>
+              <div class="upload-inner">
+                <el-icon class="upload-icon"><component :is="UploadFilled" /></el-icon>
+                <p class="upload-text">把图片拖到这儿，或<em>点击选择</em></p>
+                <p class="upload-hint">支持 JPG / PNG / GIF / WebP</p>
+              </div>
+            </el-upload>
 
-            <!-- 删除按钮 -->
-            <button
-              type="button"
-              class="remove-btn"
-              aria-label="删除图片"
-              @click="removeImage(img.id)"
+            <!-- 已选图片 -->
+            <ul v-if="images.length > 0" class="image-list">
+              <li v-for="img in images" :key="img.id" class="image-item">
+                <img :src="img.previewUrl" class="image-preview" :alt="img.file.name" />
+
+                <div class="image-info">
+                  <span class="image-name" :title="img.file.name">{{ img.file.name }}</span>
+
+                  <el-progress
+                    v-if="img.status === 'uploading'"
+                    :percentage="img.progress"
+                    :stroke-width="4"
+                    :show-text="false"
+                    class="image-progress"
+                  />
+
+                  <div class="image-status">
+                    <el-tag v-if="img.status === 'done'" type="success" size="small" effect="plain">
+                      已上传
+                    </el-tag>
+                    <el-tag
+                      v-else-if="img.status === 'error'"
+                      type="danger"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ img.errorMsg || '上传失败' }}
+                    </el-tag>
+                    <el-tag v-else type="info" size="small" effect="plain">
+                      {{ img.progress }}%
+                    </el-tag>
+                  </div>
+                </div>
+
+                <div class="image-actions">
+                  <el-button
+                    v-if="img.status === 'error'"
+                    size="small"
+                    type="primary"
+                    plain
+                    @click="retryImage(img.id)"
+                  >
+                    重试
+                  </el-button>
+                  <el-button size="small" text @click="removeImage(img.id)">移除</el-button>
+                </div>
+              </li>
+            </ul>
+          </el-form-item>
+
+          <div class="form-actions">
+            <el-button @click="onCancel">取消</el-button>
+            <el-button
+              type="primary"
+              :loading="submitting"
+              :disabled="!canSubmit"
+              @click="handleSubmit"
             >
-              ×
-            </button>
+              发布
+            </el-button>
           </div>
-        </div>
-      </div>
+        </el-form>
+      </el-card>
 
-      <div v-if="errorMsg" class="error">{{ errorMsg }}</div>
-    </form>
+      <!-- ================= 右侧说明 ================= -->
+      <aside class="tips-col">
+        <el-card shadow="never" class="tips-card">
+          <template #header>
+            <span class="tips-title"
+              ><el-icon><component :is="PictureFilled" /></el-icon> 发布须知</span
+            >
+          </template>
+          <ul class="tips-list">
+            <li>正文最多 {{ POST_CONTENT_MAX_LENGTH }} 字，说清楚一件事就够了。</li>
+            <li>最多上传 {{ MAX_IMAGES }} 张图片，单张不超过 {{ MAX_SIZE_MB }}MB。</li>
+            <li>图片会在选择后立即上传，全部上传完成才能发布。</li>
+            <li>话题标签建议只填一个，太多反而没人点。</li>
+          </ul>
+        </el-card>
+      </aside>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .publish {
-  max-width: 600px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  /* 顶 bar 自己 sticky / 占满父容器宽度，这里 padding-top 不要太大 */
-  padding: 0 20px 24px;
 }
 
-/* ===== 顶部 sticky topbar ===== */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  /* 跨越父容器 max-width，铺到 viewport 两端 */
-  margin: 0 -20px 16px;
-  padding: 0 12px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
-}
-
-.topbar-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--foreground);
-  flex: 1;
-  text-align: center;
-  /* 防止和两侧按钮重叠 */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.topbar-btn {
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 14px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.topbar-btn.cancel {
-  color: var(--muted-foreground);
-}
-
-.topbar-btn.cancel:hover {
-  color: var(--foreground);
-  background: var(--muted);
-}
-
-.topbar-btn.submit {
-  background: var(--accent);
-  color: white;
-  padding: 7px 18px;
-  font-weight: 600;
-}
-
-.topbar-btn.submit:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 85%, black 15%);
-  transform: translateY(-1px);
-}
-
-.topbar-btn.submit:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.field {
+.page-header {
   margin-bottom: 20px;
 }
 
-.field label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
   color: var(--foreground);
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
   font-size: 14px;
-}
-
-.required {
-  color: var(--destructive);
-}
-
-.hint {
-  font-weight: 400;
-  font-size: 12px;
   color: var(--muted-foreground);
-  margin-left: 4px;
 }
 
-.field input,
-.field textarea {
+/* ===== 双栏 ===== */
+.publish-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* 视口不够宽时右侧须知栏降级到下方，避免表单被压扁 */
+@media (max-width: 1100px) {
+  .publish-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tips-col {
+    position: static;
+  }
+}
+
+.form-card :deep(.el-form-item) {
+  margin-bottom: 22px;
+}
+
+.form-card :deep(.el-form-item__label) {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+/* ===== 上传区 ===== */
+.upload-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-family: inherit;
-  background: var(--background);
-  color: var(--foreground);
-  outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-  box-sizing: border-box;
 }
 
-.field input:focus,
-.field textarea:focus {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px rgb(0 0 0 / 0.05);
-}
-
-:global(.dark) .field input:focus,
-:global(.dark) .field textarea:focus {
-  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.06);
-}
-
-.field input::placeholder,
-.field textarea::placeholder {
-  color: var(--muted-foreground);
-}
-
-.field textarea {
-  resize: vertical;
-  min-height: 100px;
-}
-
-.counter {
-  text-align: right;
+.upload-count {
   font-size: 12px;
+  font-weight: 400;
   color: var(--muted-foreground);
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
 }
 
-/* ===== 上传区（dropzone） ===== */
-.dropzone {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius);
-  padding: 32px 16px;
-  text-align: center;
-  cursor: pointer;
-  background: var(--muted);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.2s ease;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
+.upload-dragger {
+  width: 100%;
 }
 
-.dropzone:hover {
-  border-color: var(--muted-foreground);
-  background: var(--glass-bg-strong);
-}
-
-/* 拖拽悬停：红色 accent 描边 + 玻璃背景 + 光晕 */
-.dropzone.active {
-  border-color: var(--accent);
-  border-style: solid;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
-    0 8px 32px color-mix(in srgb, var(--accent) 18%, transparent);
-  transform: scale(1.01);
-}
-
-/* 已达上限：不可点 */
-.dropzone.full {
-  opacity: 0.55;
-  cursor: not-allowed;
-  border-color: var(--muted-foreground);
-}
-
-/* 图标容器：两个图标叠放，靠 opacity 切换 */
-.dropzone-icon-wrap {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  margin: 0 auto 8px;
+.upload-inner {
+  padding: 28px 0;
 }
 
 .upload-icon {
-  position: absolute;
-  inset: 0;
-  width: 32px;
-  height: 32px;
-  transition:
-    opacity 0.2s ease,
-    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.upload-icon-plus {
+  font-size: 46px;
   color: var(--muted-foreground);
-  opacity: 1;
-  transform: scale(1);
+  margin-bottom: 10px;
 }
 
-/* 上传箭头默认隐藏，拖拽时淡入 + 上浮 */
-.upload-icon-arrow {
-  color: var(--accent);
-  opacity: 0;
-  transform: translateY(6px) scale(0.85);
-}
-
-.dropzone.active .upload-icon-plus {
-  opacity: 0;
-  transform: scale(0.85);
-}
-
-.dropzone.active .upload-icon-arrow {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-.dropzone-text {
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--foreground);
-  transition: color 0.2s ease;
-}
-
-.dropzone.active .dropzone-text {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.dropzone-hint {
+.upload-text {
   margin: 0;
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+.upload-text em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.upload-hint {
+  margin: 6px 0 0;
   font-size: 12px;
   color: var(--muted-foreground);
 }
 
-/* ===== 预览网格 ===== */
-.preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.preview-item {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--muted);
-  border: 1px solid var(--border);
-}
-
-.preview-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.badge {
-  position: absolute;
-  left: 6px;
-  bottom: 6px;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 500;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  border: none;
-  font-family: inherit;
-  cursor: default;
-}
-
-button.badge.error {
-  cursor: pointer;
-}
-
-button.badge.error:hover {
-  background: rgba(239, 68, 68, 1);
-}
-
-/* 上传中：底部进度条 + 中心百分比（覆盖在缩略图上） */
-.upload-progress {
-  position: absolute;
-  inset: 0;
+/* ===== 图片列表 ===== */
+.image-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.45);
-  pointer-events: none;
+  gap: 10px;
 }
 
-.progress-track {
-  width: 70%;
-  height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.25);
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), #ff6b8a);
-  transition: width 0.2s ease;
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
-}
-
-.progress-label {
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
-
-.badge.error {
-  padding: 2px 8px;
-}
-
-.badge.done {
-  background: rgba(16, 185, 129, 0.9);
-}
-
-.badge.error {
-  background: rgba(239, 68, 68, 0.9);
-}
-
-.remove-btn {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
+.image-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-family: inherit;
-  transition:
-    background 0.15s,
-    transform 0.1s;
-  padding: 0;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
-.remove-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
-  transform: scale(1.1);
+.image-preview {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: var(--muted);
 }
 
-/* ===== 错误提示 + 提交 ===== */
-.error {
-  color: var(--destructive);
-  margin-bottom: 12px;
+.image-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.image-name {
+  display: block;
   font-size: 13px;
-  /* 错误条：淡红底 + 描边 */
-  background: rgba(239, 68, 68, 0.1);
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.submit-btn {
-  /* 已迁移到 .topbar-btn.submit；保留空类名以避免外链引用报错 */
-  display: none;
+.image-progress {
+  margin: 6px 0 4px;
 }
 
-/* ===== 移动端适配 ===== */
-@supports (padding: max(0px)) {
-  .publish {
-    /* iPhone 顶部刘海 / 底部 home 条 */
-    padding-top: 0;
-    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  }
+.image-status {
+  margin-top: 4px;
 }
-@media (max-width: 480px) {
-  .publish {
-    padding: 0 12px 24px;
-  }
-  .field {
-    margin-bottom: 16px;
-  }
-  .counter {
-    font-size: 11px;
-  }
-  .preview-grid {
-    gap: 6px;
-  }
-  .topbar {
-    margin: 0 -12px 16px;
-  }
-  .topbar-btn {
-    padding: 7px 12px;
-    font-size: 13px;
-  }
-  .topbar-btn.submit {
-    padding: 6px 14px;
-  }
+
+.image-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ===== 提交 ===== */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+/* ===== 右侧须知 ===== */
+.tips-col {
+  position: sticky;
+  top: calc(var(--top-bar-height) + 24px);
+}
+
+.tips-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--muted-foreground);
 }
 </style>
