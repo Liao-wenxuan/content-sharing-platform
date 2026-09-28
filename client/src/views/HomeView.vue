@@ -366,9 +366,7 @@ watch(
 }
 
 .overlay-follow {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: #ffffff;
   color: #ff2d55; /* 红色：与小红书关注按钮色一致 */
   border: none;
   font-size: 11px;
