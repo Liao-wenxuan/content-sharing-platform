@@ -24,6 +24,13 @@ const liking = ref(false)
 // 收藏（local-only state，无后端收藏 API）
 const favorited = ref(false)
 
+// 关注状态（local-only，无后端 follow API）
+const following = ref(false)
+
+function toggleFollow() {
+  following.value = !following.value
+}
+
 const comments = ref<Comment[]>([])
 const loadingComments = ref(false)
 const newComment = ref('')
@@ -221,22 +228,6 @@ function selectImage(index: number) {
   currentImageIndex.value = index
 }
 
-function goPrevImage() {
-  if (currentImageIndex.value > 0) {
-    currentImageIndex.value--
-  } else {
-    currentImageIndex.value = imageCount.value - 1
-  }
-}
-
-function goNextImage() {
-  if (currentImageIndex.value < imageCount.value - 1) {
-    currentImageIndex.value++
-  } else {
-    currentImageIndex.value = 0
-  }
-}
-
 // ===== 生命周期 =====
 onMounted(() => {
   loadPost()
@@ -252,12 +243,25 @@ watch(
 
 <template>
   <div class="detail">
-    <!-- 顶部 sticky topbar：返回 / 作者昵称 / 分享+更多 -->
+    <!-- 顶部 sticky bar：返回 / 分享（纯色底，无毛玻璃） -->
     <header class="topbar">
       <button class="topbar-btn" @click="goBack" aria-label="返回">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path
             d="M15 18l-6-6 6-6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+      <div class="topbar-spacer"></div>
+      <button class="topbar-btn" aria-label="分享">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M12 15V3m0 0L8 7m4-4 4 4"
             fill="none"
             stroke="currentColor"
             stroke-width="2"
@@ -266,30 +270,6 @@ watch(
           />
         </svg>
       </button>
-      <div class="topbar-title">
-        <span class="topbar-nick">{{ post?.author?.nickname || '笔记详情' }}</span>
-      </div>
-      <div class="topbar-actions">
-        <button class="topbar-btn" aria-label="分享">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M18 8a3 3 0 1 0-2.8-4H15a3 3 0 0 0 0 6h.2A3 3 0 0 0 18 8zM6 12a3 3 0 1 0-2.8 4H3a3 3 0 0 0 0-6h.2A3 3 0 0 0 6 12zm12 4a3 3 0 1 0-2.8 4H15a3 3 0 0 0 0-6h.2A3 3 0 0 0 18 16zM7.6 9.3l8.8-2.6M7.6 14.7l8.8 2.6"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </button>
-        <button class="topbar-btn" aria-label="更多">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="5" cy="12" r="1.6" fill="currentColor" />
-            <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-            <circle cx="19" cy="12" r="1.6" fill="currentColor" />
-          </svg>
-        </button>
-      </div>
     </header>
 
     <EmptyState v-if="loading" variant="loading" title="加载笔记..." hint="马上就好" />
@@ -303,105 +283,104 @@ watch(
     />
 
     <template v-else-if="post">
-      <!-- ===== 主笔记卡片 ===== -->
-      <article class="post-card">
-        <header class="post-header">
-          <div class="avatar avatar-lg">{{ avatarText(post.author?.nickname) }}</div>
-          <div class="meta">
-            <div class="nickname">{{ post.author?.nickname || '未知用户' }}</div>
-            <div class="time" :title="formatExactTime(post.createdAt)">
-              {{ formatTime(post.createdAt) }}
-            </div>
-          </div>
-        </header>
-
-        <div class="content">{{ post.content }}</div>
-
-        <!-- ===== 图片 carousel ===== -->
-        <div v-if="imageCount > 0" class="image-carousel">
-          <!-- 主图区 -->
-          <div class="main-image">
-            <img
-              :src="post.imageUrls[currentImageIndex]"
-              :alt="`图片 ${currentImageIndex + 1} / ${imageCount}`"
-              loading="lazy"
-            />
-            <!-- 多图时左右切换按钮 -->
-            <button
-              v-if="hasMultipleImages"
-              class="nav-btn nav-prev"
-              @click="goPrevImage"
-              aria-label="上一张"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M15 18l-6-6 6-6"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-            <button
-              v-if="hasMultipleImages"
-              class="nav-btn nav-next"
-              @click="goNextImage"
-              aria-label="下一张"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M9 6l6 6-6 6"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </button>
-            <!-- 计数徽章 -->
-            <span v-if="hasMultipleImages" class="image-counter">
-              {{ currentImageIndex + 1 }} / {{ imageCount }}
-            </span>
-          </div>
-
-          <!-- 圆点指示器（多图时） -->
-          <div v-if="hasMultipleImages" class="dots" role="tablist">
-            <button
-              v-for="(_, i) in post.imageUrls"
-              :key="i"
-              class="dot"
-              :class="{ active: i === currentImageIndex }"
-              :aria-label="`切换到第 ${i + 1} 张`"
-              :aria-selected="i === currentImageIndex"
-              role="tab"
-              @click="selectImage(i)"
-            />
-          </div>
-
-          <!-- 缩略图条（多图时，可选展示） -->
-          <div v-if="hasMultipleImages" class="thumbs">
-            <button
-              v-for="(url, i) in post.imageUrls"
-              :key="i"
-              class="thumb"
-              :class="{ active: i === currentImageIndex }"
-              @click="selectImage(i)"
-              :aria-label="`查看第 ${i + 1} 张`"
-            >
-              <img :src="url" :alt="`缩略图 ${i + 1}`" loading="lazy" />
-            </button>
-          </div>
+      <!-- ===== 作者栏：头像 + 昵称 + 红色关注按钮 ===== -->
+      <header class="author-bar">
+        <div class="avatar-lg">{{ avatarText(post.author?.nickname) }}</div>
+        <div class="author-meta">
+          <div class="author-nick">{{ post.author?.nickname || '未知用户' }}</div>
         </div>
+        <button class="follow-btn" @click="toggleFollow">
+          {{ following ? '已关注' : '关注' }}
+        </button>
+      </header>
+
+      <!-- ===== 图片区：满幅出血，无圆角（小红书移动端）===== -->
+      <section v-if="imageCount > 0" class="image-carousel">
+        <div class="main-image">
+          <img
+            :src="post.imageUrls[currentImageIndex]"
+            :alt="`图片 ${currentImageIndex + 1} / ${imageCount}`"
+            loading="lazy"
+          />
+        </div>
+        <!-- 圆点指示器：激活态红色 + 拉长 -->
+        <div v-if="hasMultipleImages" class="dots" role="tablist">
+          <button
+            v-for="(_, i) in post.imageUrls"
+            :key="i"
+            class="dot"
+            :class="{ active: i === currentImageIndex }"
+            :aria-label="`切换到第 ${i + 1} 张`"
+            :aria-selected="i === currentImageIndex"
+            role="tab"
+            @click="selectImage(i)"
+          />
+        </div>
+      </section>
+
+      <!-- ===== 正文区：平铺，无卡片 ===== -->
+      <section class="post-body">
+        <div class="content">{{ post.content }}</div>
 
         <div v-if="post.topicTag" class="topic">#{{ post.topicTag }}</div>
 
+        <!-- 信息元数据：描边胶囊（地点 / 活动 / 搜索） -->
+        <div class="meta-chips">
+          <span class="chip">
+            <svg viewBox="0 0 24 24" class="chip-icon" aria-hidden="true">
+              <path
+                d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linejoin="round"
+              />
+              <circle
+                cx="12"
+                cy="10"
+                r="2.4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+              />
+            </svg>
+            地点
+          </span>
+          <span v-if="post.topicTag" class="chip">
+            <svg viewBox="0 0 24 24" class="chip-icon" aria-hidden="true">
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="16"
+                rx="2"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+              />
+              <path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.7" />
+            </svg>
+            活动
+          </span>
+          <span class="chip">
+            <svg viewBox="0 0 24 24" class="chip-icon" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.7" />
+              <path
+                d="m20 20-3.5-3.5"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+              />
+            </svg>
+            请你想搜
+          </span>
+        </div>
+
         <footer class="post-footer">
-          <span>笔记 #{{ post.id }}</span>
+          <span class="post-time">{{ formatTime(post.createdAt) }}</span>
+          <span class="post-id">笔记 #{{ post.id }}</span>
         </footer>
-      </article>
+      </section>
 
       <!-- ===== 互动栏（点赞 / 收藏 / 评论） ===== -->
       <div class="action-bar">
@@ -548,39 +527,37 @@ watch(
 </template>
 
 <style scoped>
+/* ============================================================
+ * 笔记详情 —— 对齐小红书移动端
+ *   纯色底 · 满幅出血图 · 描边胶囊 · 红色仅用于强调 · 无卡片无毛玻璃
+ * ============================================================ */
+
 .detail {
-  max-width: 600px;
+  max-width: 560px;
   margin: 0 auto;
-  /* 顶 bar 自己 sticky，这里不再额外加 padding-top */
-  padding: 0 20px 24px;
+  padding: 0 0 24px;
 }
 
-/* ===== 顶部 sticky topbar（玻璃） ===== */
+/* ===== 顶部 sticky bar：纯色底，无模糊 ===== */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 50;
-  /* 跨越父容器 max-width，铺到 viewport 两端 */
-  margin: 0 -20px 16px;
-  padding: 0 12px;
-  height: 52px;
+  height: 48px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border-dk);
-  /* 顶部 1px 折射线 */
-  box-shadow:
-    0 1px 0 var(--glass-highlight) inset,
-    0 6px 24px rgba(0, 0, 0, 0.06);
+  padding: 0 8px;
+  background: var(--background);
+}
+
+.topbar-spacer {
+  flex: 1;
 }
 
 .topbar-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   border: none;
   background: transparent;
   color: var(--foreground);
@@ -588,9 +565,8 @@ watch(
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s;
-  flex-shrink: 0;
   padding: 0;
+  transition: background 0.15s;
 }
 
 .topbar-btn:hover {
@@ -598,115 +574,74 @@ watch(
 }
 
 .topbar-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   display: block;
 }
 
-.topbar-title {
-  flex: 1;
-  text-align: center;
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.topbar-nick {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topbar-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.post-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
-}
-
-.post-header {
+/* ===== 作者栏：头像 + 昵称 + 红色关注按钮 ===== */
+.author-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  padding: 12px 16px;
 }
 
-.avatar {
-  width: 40px;
-  height: 40px;
+.avatar-lg {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--muted);
+  color: var(--muted-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 
-.avatar-lg {
-  width: 48px;
-  height: 48px;
-  font-size: 16px;
-}
-
-.avatar-sm {
-  width: 32px;
-  height: 32px;
-  font-size: 13px;
-}
-
-.meta {
+.author-meta {
   flex: 1;
   min-width: 0;
 }
 
-.nickname {
-  font-weight: 600;
+.author-nick {
   font-size: 15px;
+  font-weight: 600;
   color: var(--foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.time {
-  font-size: 12px;
-  color: var(--muted-foreground);
-  margin-top: 2px;
-  cursor: help;
+.follow-btn {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 18px;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: filter 0.15s;
 }
 
-.content {
-  font-size: 16px;
-  line-height: 1.7;
-  color: var(--foreground);
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin-bottom: 16px;
+.follow-btn:hover {
+  filter: brightness(1.1);
 }
 
-/* ===== 图片 carousel ===== */
+/* ===== 图片区：满幅出血，无圆角 ===== */
 .image-carousel {
-  margin-bottom: 16px;
+  margin-bottom: 4px;
 }
 
 .main-image {
-  position: relative;
   width: 100%;
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: var(--radius);
   background: var(--muted);
 }
 
@@ -715,85 +650,23 @@ watch(
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: opacity 0.2s ease;
 }
 
-/* 左右切换按钮 */
-.nav-btn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    transform 0.15s;
-  padding: 0;
-}
-
-.nav-btn:hover {
-  background: rgba(0, 0, 0, 0.7);
-}
-
-.nav-btn:active {
-  transform: translateY(-50%) scale(0.92);
-}
-
-.nav-btn svg {
-  width: 20px;
-  height: 20px;
-  display: block;
-}
-
-.nav-prev {
-  left: 8px;
-}
-
-.nav-next {
-  right: 8px;
-}
-
-/* 计数徽章 */
-.image-counter {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: white;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-weight: 500;
-}
-
-/* 圆点指示器 */
+/* 圆点指示器：小红书风格，激活态红色 + 拉长 */
 .dots {
   display: flex;
   justify-content: center;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 5px;
+  padding: 10px 0 4px;
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   border: none;
   background: var(--muted-foreground);
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: pointer;
   padding: 0;
   transition: all 0.2s ease;
@@ -802,96 +675,78 @@ watch(
 .dot.active {
   opacity: 1;
   background: var(--accent);
-  width: 18px;
-  border-radius: 4px;
+  width: 14px;
+  border-radius: 3px;
 }
 
-/* 缩略图条 */
-.thumbs {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-  padding-bottom: 4px;
-}
-.thumbs::-webkit-scrollbar {
-  display: none;
+/* ===== 正文区：平铺，无卡片 ===== */
+.post-body {
+  padding: 12px 16px 0;
 }
 
-.thumb {
-  flex-shrink: 0;
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 2px solid transparent;
-  background: var(--muted);
-  cursor: pointer;
-  padding: 0;
-  transition:
-    border-color 0.15s,
-    opacity 0.15s;
-  opacity: 0.55;
-}
-
-.thumb:hover {
-  opacity: 0.85;
-}
-
-.thumb.active {
-  border-color: var(--accent);
-  opacity: 1;
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-@media (max-width: 480px) {
-  .main-image {
-    aspect-ratio: 1 / 1;
-  }
-  .thumb {
-    width: 48px;
-    height: 48px;
-  }
+.content {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 10px;
 }
 
 .topic {
   display: inline-block;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  background: var(--muted);
-  padding: 4px 10px;
-  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 15px;
   margin-bottom: 12px;
-  font-weight: 500;
+}
+
+/* ===== 信息元数据：描边胶囊 ===== */
+.meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  color: var(--chip-text);
+  font-size: 13px;
+  padding: 5px 12px;
+}
+
+.chip-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  flex-shrink: 0;
 }
 
 .post-footer {
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  margin-top: 16px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-
-/* ===== 互动栏（点赞 / 收藏 / 评论） ===== */
-.action-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  padding-bottom: 4px;
+}
+
+.post-id {
+  font-size: 12px;
+}
+
+/* ===== 互动栏：底部一排描边按钮 ===== */
+.action-bar {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  margin-top: 12px;
-  padding: 8px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-top: 4px;
 }
 
 .action-btn {
@@ -899,17 +754,16 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   background: transparent;
-  border: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
   color: var(--foreground);
   font-size: 13px;
-  font-weight: 500;
-  padding: 8px 6px;
-  border-radius: var(--radius);
+  padding: 7px 8px;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.15s;
 }
 
 .action-btn:hover:not(:disabled) {
@@ -917,62 +771,47 @@ watch(
 }
 
 .action-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .action-icon {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   display: block;
-  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.action-btn:active:not(:disabled) .action-icon {
-  transform: scale(1.25);
-}
-
-.action-label {
-  white-space: nowrap;
 }
 
 .action-count {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--muted-foreground);
-  margin-left: 2px;
 }
 
-/* 点赞激活态：玫红 */
 .like-btn.liked {
-  color: #e11d48;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .like-btn.liked .action-count {
-  color: #e11d48;
+  color: var(--accent);
 }
 
-/* 收藏激活态：金黄 */
 .fav-btn.active {
   color: #f59e0b;
+  border-color: #f59e0b;
 }
 
-.fav-btn.active .action-count {
-  color: #f59e0b;
-}
-
-/* ===== 评论输入框 ===== */
+/* ===== 评论输入区 ===== */
 .composer {
-  margin-top: 12px;
-  padding: 14px 16px;
-  background: var(--card);
+  margin: 8px 16px 0;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 12px;
 }
 
 .composer-locked {
   text-align: center;
-  padding: 12px 0;
+  padding: 10px 0;
   color: var(--muted-foreground);
   font-size: 14px;
 }
@@ -980,57 +819,41 @@ watch(
 .link-btn {
   background: none;
   border: none;
-  color: var(--primary);
+  color: var(--accent);
   cursor: pointer;
   font-size: 14px;
   font-family: inherit;
   padding: 0;
-  font-weight: 500;
-}
-
-.link-btn:hover {
-  text-decoration: underline;
 }
 
 .composer-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
 }
 
 .composer-input {
   flex: 1;
-  /* 玻璃评论输入框 */
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border-dk);
-  border-radius: var(--radius);
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: inherit;
+  background: transparent;
+  border: none;
   color: var(--foreground);
-  resize: vertical;
-  min-height: 60px;
-  outline: none;
-  transition: border-color 0.15s;
+  font-size: 15px;
+  font-family: inherit;
+  resize: none;
+  line-height: 1.5;
+  padding: 0;
+  min-height: 40px;
 }
 
 .composer-input:focus {
-  border-color: var(--foreground);
-}
-
-.composer-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  outline: none;
 }
 
 .composer-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 10px;
-  padding-left: 42px; /* 对齐 input 左缘（32 头像 + 10 gap） */
+  justify-content: space-between;
+  margin-top: 8px;
 }
 
 .counter {
@@ -1040,30 +863,19 @@ watch(
 }
 
 .counter.over {
-  color: var(--destructive);
+  color: var(--accent);
 }
 
 .submit-btn {
-  background: var(--primary);
-  color: var(--primary-foreground);
+  background: var(--accent);
+  color: var(--accent-foreground);
   border: none;
-  padding: 7px 18px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  padding: 6px 20px;
   cursor: pointer;
   font-family: inherit;
-  transition:
-    opacity 0.15s,
-    transform 0.1s;
-}
-
-.submit-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.submit-btn:active:not(:disabled) {
-  transform: scale(0.97);
 }
 
 .submit-btn:disabled {
@@ -1073,40 +885,48 @@ watch(
 
 .composer-error {
   margin-top: 8px;
-  padding-left: 42px;
-  font-size: 12px;
   color: var(--destructive);
+  font-size: 12px;
 }
 
-/* ===== 评论列表 ===== */
+/* ===== 评论列表：纯列表，无卡片 ===== */
 .comment-section {
-  margin-top: 16px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
+  padding: 20px 16px 0;
 }
 
 .section-title {
-  margin: 0 0 12px;
-  font-size: 14px;
+  margin: 0 0 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--foreground);
 }
 
 .comment-list {
   list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .comment-item {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .comment-body {
@@ -1116,47 +936,33 @@ watch(
 
 .comment-meta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .comment-author {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--foreground);
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 .comment-time {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted-foreground);
-  cursor: help;
+  opacity: 0.7;
 }
 
 .comment-content {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--foreground);
-  white-space: pre-wrap;
   word-wrap: break-word;
 }
 
-/* ===== 移动端适配 ===== */
-@supports (padding: max(0px)) {
-  .composer {
-    /* 底部安全区（iPhone home 条）+ 内容 padding */
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  }
-}
 @media (max-width: 480px) {
-  .post-detail {
-    padding: 0;
-  }
-  .post-content {
-    padding: 12px 14px;
-  }
-  .author-row {
-    padding: 10px 14px;
+  .detail {
+    max-width: 100%;
   }
 }
 </style>
