@@ -257,10 +257,8 @@ onMounted(() => {
   padding: 10px 16px;
   position: sticky;
   top: 0;
-  background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border-dk);
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
   z-index: 5;
 }
 
