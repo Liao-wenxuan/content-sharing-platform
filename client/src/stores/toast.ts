@@ -1,45 +1,35 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
 
 /**
- * 全局 toast 通知 store
+ * 全局轻提示
  *
  * 用法：
  *   const toast = useToastStore()
- *   toast.show('该功能即将上线')
+ *   toast.show('该功能即将上线')          // info
+ *   toast.show('已退出登录', 'success')
+ *   toast.show('发布失败', 'error')
  *
- * 设计：
- * - 简洁字符串消息，无 type 区分（color 由调用方决定）
- * - 3 秒自动消失
- * - 同 store 后追加：覆盖前一条（避免堆栈）
+ * 设计：直接把调用转给 Element Plus 的 ElMessage，
+ * 不再自己维护 toast DOM（旧的 ToastHost.vue 已删除）。
+ * 保留这个 store 的原因是——业务组件里已经有十几处 `toast.show(...)`，
+ * 统一入口方便以后换成 ElNotification 之类的更重提示。
  */
 
-export interface ToastItem {
-  id: number
-  message: string
-  tone?: 'info' | 'success' | 'error' // 视觉风格
-}
+export type ToastTone = 'info' | 'success' | 'error'
 
 export const useToastStore = defineStore('toast', () => {
-  const current = ref<ToastItem | null>(null)
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let counter = 0
+  function show(message: string, tone: ToastTone = 'info', durationMs = 2500) {
+    const options = {
+      message,
+      duration: durationMs,
+      grouping: true // 连续触发同一条时不堆栈
+    }
 
-  function show(message: string, tone: ToastItem['tone'] = 'info', durationMs = 2500) {
-    if (timer) clearTimeout(timer)
-    counter++
-    current.value = { id: counter, message, tone }
-    timer = setTimeout(() => {
-      current.value = null
-      timer = null
-    }, durationMs)
+    if (tone === 'success') ElMessage.success(options)
+    else if (tone === 'error') ElMessage.error(options)
+    else ElMessage.info(options)
   }
 
-  function dismiss() {
-    if (timer) clearTimeout(timer)
-    current.value = null
-    timer = null
-  }
-
-  return { current, show, dismiss }
+  return { show }
 })
