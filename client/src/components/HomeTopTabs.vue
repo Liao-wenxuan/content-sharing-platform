@@ -146,15 +146,9 @@ function onSearch() {
   z-index: 30;
   width: 100%;
   max-width: 100vw;
-  /* Liquid glass 顶栏：透出底色 + 模糊 */
-  background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  /* 底部 1px 折射线：液态玻璃的标志性细节 */
-  border-bottom: 1px solid var(--glass-border-dk);
-  box-shadow:
-    0 1px 0 var(--glass-highlight) inset,
-    var(--glass-shadow);
+  /* 顶部 tab 栏：纯色底 + 底部分隔线 */
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
 }
 
 .row {
