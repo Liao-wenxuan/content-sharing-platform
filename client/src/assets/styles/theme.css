@@ -1,116 +1,104 @@
 /* ============================================================
- * Design System — Liquid Glass (monochrome)
+ * Design System — 小红书移动端对齐（Flat + Outline）
  * ------------------------------------------------------------
- * 单色 (黑白灰) + 液态玻璃：iOS / visionOS 风格
+ * 设计语言参考小红书 App 移动端：
+ *   纯色底（无渐变光斑）· 满幅出血图 · 描边胶囊 · 红色仅用于强调
  *
  * 关键 token：
- *   --bg-stage   页面底色（深色时 #000，浅色时 #fafafa）+ 浮动灰阶光斑背景
- *   --bg-glaze   sticky 元素的半透明底色（如顶栏、tab栏）= bg + 毛玻璃
- *   --card       卡片玻璃背景
- *   --glass-border / --glass-shadow  玻璃边框 + 阴影
- *   --highlight  顶部 1px 折射线颜色
+ *   --background  页面纯色底（dark: #000 / light: #fff）
+ *   --card        卡片底 = 与页面同色（小红书不用卡片底，靠间距分组）
+ *   --border      1px 描边（胶囊/输入框/分隔线）
+ *   --accent      小红书红 #ff2d55（关注按钮 / 话题标签 / 选中态）
+ *   --chip-*      信息元数据胶囊
  * =========================================================== */
 
 :root {
-  /* —— 基础 token（dark 暗底 + 白玻璃）—— */
-  --background: #050507; /* 深黑底 */
-  --foreground: #fafafa; /* 白字 */
-  --card: rgba(255, 255, 255, 0.08); /* 卡片玻璃 */
-  --card-foreground: #fafafa;
-  --popover: rgba(20, 20, 25, 0.78);
-  --popover-foreground: #fafafa;
-  --muted: rgba(255, 255, 255, 0.06);
-  --muted-foreground: rgba(255, 255, 255, 0.55);
-  --primary: #fafafa;
-  --primary-foreground: #18181b;
-  --secondary: rgba(255, 255, 255, 0.1);
-  --secondary-foreground: #fafafa;
-  --accent: #ff2d55; /* 小红书红 — 保留品牌色 */
+  /* —— 基础 token（dark 纯黑底）—— */
+  --background: #000000; /* 纯黑底 — 对齐小红书 */
+  --foreground: #ffffff; /* 白字 */
+  --card: #000000; /* 卡片=页面同色，靠间距分组而非卡片底 */
+  --card-foreground: #ffffff;
+  --popover: #1a1a1a;
+  --popover-foreground: #ffffff;
+  --muted: #171717; /* 次级面（胶囊底 / hover） */
+  --muted-foreground: #8a8a8a; /* 辅助文字灰 */
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #ffffff;
+  --accent: #ff2d55; /* 小红书红 */
   --accent-foreground: #ffffff;
   --destructive: #ff453a;
   --destructive-foreground: #ffffff;
 
-  --border: rgba(255, 255, 255, 0.12);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: rgba(255, 255, 255, 0.55);
+  --border: #262626; /* 描边灰 — 胶囊 / 输入框 / 分隔线 */
+  --input: #1a1a1a;
+  --ring: rgba(255, 45, 85, 0.5);
 
-  /* —— Liquid Glass 专属 token —— */
-  --glass-bg: rgba(255, 255, 255, 0.1);
-  --glass-bg-strong: rgba(255, 255, 255, 0.18);
-  --glass-bg-weak: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.22);
-  --glass-border-dk: rgba(255, 255, 255, 0.08);
-  --glass-highlight: rgba(255, 255, 255, 0.55);
-  --glass-blur: 24px;
-  --glass-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 var(--glass-highlight);
-  --glass-shadow-light:
-    0 10px 30px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  /* —— 保留旧玻璃 token 名以兼容现有组件（已降级为平面描边）—— */
+  --glass-bg: transparent;
+  --glass-bg-strong: #000000;
+  --glass-bg-weak: transparent;
+  --glass-border: #262626;
+  --glass-border-dk: #1f1f1f;
+  --glass-highlight: transparent;
+  --glass-blur: 20px;
+  --glass-shadow: none;
+  --glass-shadow-light: none;
 
-  /* 背景stage: 黑底 + 浮动灰阶光斑 */
-  --bg-stage-color: #050507;
-  --bg-blob-1: rgba(255, 255, 255, 0.06);
-  --bg-blob-2: rgba(255, 255, 255, 0.04);
-  --bg-blob-3: rgba(255, 255, 255, 0.05);
-  --bg-blob-4: rgba(255, 255, 255, 0.03);
+  /* —— 信息元数据胶囊（地点 / 活动 / 搜索）—— */
+  --chip-bg: transparent;
+  --chip-border: #2f2f2f;
+  --chip-text: #b0b0b0;
 
-  /* —— 基础（不变）—— */
-  --radius: 0.75rem;
+  --radius: 0.5rem;
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', sans-serif;
 
-  /* 阴影保留备用 */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: none;
 }
 
 /* ============================================================
- * Light Theme — 白底 + 黑/灰玻璃
+ * Light Theme — 纯白底 + 描边
  * ============================================================ */
 :root:not(.dark) {
-  --background: #fafafa;
-  --foreground: #0a0a0a;
-  --card: rgba(255, 255, 255, 0.55); /* light 模式卡片更不透 */
-  --card-foreground: #0a0a0a;
-  --popover: rgba(255, 255, 255, 0.85);
-  --popover-foreground: #0a0a0a;
-  --muted: rgba(0, 0, 0, 0.05);
-  --muted-foreground: rgba(0, 0, 0, 0.55);
-  --primary: #0a0a0a;
-  --primary-foreground: #fafafa;
-  --secondary: rgba(0, 0, 0, 0.06);
-  --secondary-foreground: #0a0a0a;
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --muted: #f5f5f5;
+  --muted-foreground: #666666;
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #111111;
   --destructive: #dc2626;
-  --border: rgba(0, 0, 0, 0.1);
-  --input: rgba(0, 0, 0, 0.08);
-  --ring: rgba(0, 0, 0, 0.45);
+  --border: #ebebeb;
+  --input: #f5f5f5;
+  --ring: rgba(255, 45, 85, 0.4);
 
-  /* 玻璃 token（light 版） */
-  --glass-bg: rgba(255, 255, 255, 0.5);
-  --glass-bg-strong: rgba(255, 255, 255, 0.65);
-  --glass-bg-weak: rgba(255, 255, 255, 0.35);
-  --glass-border: rgba(255, 255, 255, 0.85);
-  --glass-border-dk: rgba(0, 0, 0, 0.06);
-  --glass-highlight: rgba(255, 255, 255, 0.95);
-  --glass-blur: 28px;
-  --glass-shadow: var(--glass-shadow-light);
-  --glass-highlight-edge: rgba(255, 255, 255, 0.95);
+  --glass-bg: transparent;
+  --glass-bg-strong: #ffffff;
+  --glass-bg-weak: transparent;
+  --glass-border: #e0e0e0;
+  --glass-border-dk: #f0f0f0;
+  --glass-highlight: transparent;
+  --glass-shadow: none;
 
-  --bg-stage-color: #fafafa;
-  --bg-blob-1: rgba(0, 0, 0, 0.04);
-  --bg-blob-2: rgba(0, 0, 0, 0.03);
-  --bg-blob-3: rgba(0, 0, 0, 0.04);
-  --bg-blob-4: rgba(0, 0, 0, 0.025);
+  --chip-bg: transparent;
+  --chip-border: #e5e5e5;
+  --chip-text: #8a8a8a;
 
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: none;
 }
 
 /* ============================================================
@@ -148,37 +136,10 @@ body {
   z-index: 1;
 }
 
-/* ============================================================
- * 全局 Liquid Glass 背景 stage
- * ------------------------------------------------------------
- * 黑色/白色 base + 灰阶光斑（monochrome）
- * 玻璃元素透过来才有"质感"
- * ============================================================ */
-#app::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(circle at 20% 15%, var(--bg-blob-1) 0%, transparent 45%),
-    radial-gradient(circle at 80% 35%, var(--bg-blob-2) 0%, transparent 50%),
-    radial-gradient(circle at 35% 85%, var(--bg-blob-3) 0%, transparent 50%),
-    radial-gradient(circle at 90% 75%, var(--bg-blob-4) 0%, transparent 45%), var(--bg-stage-color);
-  pointer-events: none;
-  transition: background 0.3s ease;
-}
-
-/* 细网格纹理：让 glass 透出来的背景不是纯色 */
-#app::after {
-  content: '';
-  position: fixed;
-  inset: -10%;
-  z-index: -1;
-  background-image: radial-gradient(circle, rgba(128, 128, 128, 0.06) 1px, transparent 1px);
-  background-size: 24px 24px;
-  pointer-events: none;
-  opacity: 0.5;
-}
+/*
+ * 原本这里有「液态玻璃背景 stage」（#app::before 光斑渐变 + #app::after 网格纹理）。
+ * 小红书移动端是纯色底，没有光斑/网格 —— 已移除，页面回归纯黑/纯白。
+ */
 
 /* ============================================================
  * 全局链接
@@ -214,52 +175,68 @@ a {
 }
 
 /* ============================================================
- * Glass Utility Classes（全局可用）
+ * 描边 Utility Classes（小红书风格：1px 描边 + 纯色底，无模糊无阴影）
  * ============================================================ */
 
-/* 基础玻璃卡 */
+/* 描边卡（用于需要明确边界的区域） */
 .glass {
   background: var(--card);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--glass-shadow);
-  position: relative;
-  overflow: hidden;
-}
-.glass::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, var(--glass-highlight) 50%, transparent 100%);
-  pointer-events: none;
 }
 
-/* Pill 玻璃（圆角胶囊） */
+/* 描边胶囊（信息元数据 / 标签 / 按钮） */
 .glass-pill {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--glass-border);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
   border-radius: 999px;
-  box-shadow: var(--glass-shadow);
+  color: var(--chip-text);
 }
 
-/* 玻璃输入框 */
+/* 描边输入框 */
 .glass-input {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border-dk);
-  border-radius: 12px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   color: var(--foreground);
 }
 .glass-input:focus {
   outline: none;
-  border-color: var(--ring);
-  background: var(--glass-bg-strong);
+  border-color: var(--accent);
+  background: var(--card);
+}
+
+/* 主行动按钮：小红书红实心 */
+.btn-accent {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-accent:hover {
+  filter: brightness(1.08);
+}
+.btn-accent:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 次行动按钮：描边 */
+.btn-outline {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.btn-outline:hover {
+  background: var(--muted);
+}
+
+/* 话题标签：小红书红 */
+.tag-topic {
+  color: var(--accent);
+  font-size: inherit;
 }
