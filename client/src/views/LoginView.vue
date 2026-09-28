@@ -103,14 +103,11 @@ async function handleSubmit() {
 .card {
   width: 100%;
   max-width: 380px;
-  /* 玻璃登录卡 */
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
-  border: 1px solid var(--glass-border);
+  /* 登录卡：纯色底 + 描边 */
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 32px;
-  box-shadow: var(--glass-shadow);
 }
 
 /* ===== 品牌头部 ===== */
@@ -189,9 +186,8 @@ form {
   color: var(--destructive);
   font-size: 13px;
   margin: 0;
-  /* 错误条用玻璃红，dark / light 都自然 */
+  /* 错误条：淡红底 + 描边 */
   background: rgba(239, 68, 68, 0.12);
-  backdrop-filter: blur(12px);
   padding: 8px 12px;
   border-radius: var(--radius);
   border: 1px solid rgba(239, 68, 68, 0.35);
