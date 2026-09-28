@@ -335,15 +335,16 @@ function goBack() {
   border-radius: 12px;
   overflow: hidden;
   position: relative;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 .group-card::before {
-  content: "";
+  content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 1px;
-  background: linear-gradient(90deg,
-    transparent 0%, var(--glass-highlight) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, var(--glass-highlight) 50%, transparent 100%);
   pointer-events: none;
 }
 
@@ -364,12 +365,11 @@ function goBack() {
 }
 
 .menu-item:not(:last-child) {
-  border-bottom: 1px solid var(--glass-border-dk);
-}
+  border-bottom: 1px solid var(--border);
 }
 
 .menu-item:hover {
-  background: var(--glass-bg-strong);
+  background: var(--muted);
 }
 
 .menu-icon {
