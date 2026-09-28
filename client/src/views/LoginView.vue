@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+/**
+ * 登录 / 注册页
+ *
+ * 桌面端改造：手写 input / button → ElForm + ElInput + ElButton，
+ * 登录与注册用 ElSegmented 切换（比两个互相 toggle 的按钮更清楚当前态）。
+ * 页面本身是「独立全屏布局」（App.vue 不套三栏壳）。
+ */
+import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { User, Message, Lock, EditPen } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 
@@ -18,12 +27,19 @@ function resolveRedirect(): string {
   return '/'
 }
 
+const mode = ref<'login' | 'register'>('login')
 const email = ref('')
 const password = ref('')
 const nickname = ref('')
-const isRegister = ref(false)
 const loading = ref(false)
 const errorMsg = ref('')
+
+const isRegister = computed(() => mode.value === 'register')
+
+const submitText = computed(() => {
+  if (loading.value) return '处理中...'
+  return isRegister.value ? '注册并登录' : '登录'
+})
 
 async function handleSubmit() {
   if (!email.value || !password.value) {
@@ -51,10 +67,13 @@ async function handleSubmit() {
         })
 
     auth.login(res.userInfo, res.accessToken)
+    ElMessage.success(
+      isRegister.value ? '注册成功，欢迎加入' : `欢迎回来，${res.userInfo.nickname}`
+    )
     router.push(resolveRedirect())
   } catch (err: any) {
     console.error('登录失败', err)
-    errorMsg.value = err.response?.data?.message || '请求失败，请检查后端是否启动'
+    errorMsg.value = err?.response?.data?.message || '请求失败，请检查后端是否启动'
   } finally {
     loading.value = false
   }
@@ -63,69 +82,111 @@ async function handleSubmit() {
 
 <template>
   <div class="login-page">
-    <div class="card">
+    <el-card shadow="never" class="login-card">
+      <!-- 品牌 -->
       <div class="brand">
-        <div class="brand-logo">📝</div>
+        <span class="brand-mark">拾</span>
         <h1 class="brand-name">内容社区</h1>
         <p class="brand-slogan">发现、分享、记录</p>
       </div>
 
-      <div class="divider"></div>
+      <el-segmented
+        v-model="mode"
+        class="mode-switch"
+        :options="[
+          { label: '登录', value: 'login' },
+          { label: '注册', value: 'register' }
+        ]"
+      />
 
-      <h2 class="form-title">{{ isRegister ? '注册' : '登录' }}</h2>
+      <el-form label-position="top" class="login-form" @submit.prevent="handleSubmit">
+        <el-form-item v-if="isRegister" label="昵称">
+          <el-input
+            v-model="nickname"
+            size="large"
+            placeholder="给自己起个名字"
+            :prefix-icon="User"
+          />
+        </el-form-item>
 
-      <form @submit.prevent="handleSubmit">
-        <input v-model="email" type="email" placeholder="邮箱" class="input" />
-        <input v-model="password" type="password" placeholder="密码" class="input" />
-        <input v-if="isRegister" v-model="nickname" placeholder="昵称" class="input" />
+        <el-form-item label="邮箱">
+          <el-input
+            v-model="email"
+            type="email"
+            size="large"
+            placeholder="you@example.com"
+            :prefix-icon="Message"
+          />
+        </el-form-item>
 
-        <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+        <el-form-item label="密码">
+          <el-input
+            v-model="password"
+            type="password"
+            size="large"
+            show-password
+            placeholder="请输入密码"
+            :prefix-icon="Lock"
+            @keyup.enter="handleSubmit"
+          />
+        </el-form-item>
 
-        <button type="submit" :disabled="loading" class="btn">
-          {{ loading ? '处理中...' : isRegister ? '注册' : '登录' }}
-        </button>
+        <el-alert v-if="errorMsg" :title="errorMsg" type="error" show-icon :closable="false" />
 
-        <button type="button" @click="isRegister = !isRegister" class="toggle-btn">
-          切换到{{ isRegister ? '登录' : '注册' }}
-        </button>
-      </form>
-    </div>
+        <el-button
+          class="submit-btn"
+          type="primary"
+          size="large"
+          :loading="loading"
+          :icon="EditPen"
+          @click="handleSubmit"
+        >
+          {{ submitText }}
+        </el-button>
+      </el-form>
+    </el-card>
   </div>
 </template>
 
 <style scoped>
 .login-page {
-  display: flex;
-  justify-content: center;
-  padding: 60px 20px;
-}
-
-.card {
   width: 100%;
-  max-width: 380px;
-  /* 登录卡：纯色底 + 描边 */
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px;
+  padding: 24px;
 }
 
-/* ===== 品牌头部 ===== */
+.login-card {
+  width: 100%;
+  max-width: 400px;
+}
+
+.login-card :deep(.el-card__body) {
+  padding: 32px 32px 28px;
+}
+
+/* ===== 品牌 ===== */
 .brand {
   text-align: center;
   margin-bottom: 24px;
 }
 
-.brand-logo {
-  font-size: 32px;
-  margin-bottom: 8px;
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 22px;
+  margin-bottom: 12px;
 }
 
 .brand-name {
   margin: 0 0 4px;
   font-size: 22px;
   font-weight: 700;
-  color: var(--foreground);
   letter-spacing: -0.02em;
 }
 
@@ -135,104 +196,30 @@ async function handleSubmit() {
   color: var(--muted-foreground);
 }
 
-/* ===== 分割线 ===== */
-.divider {
-  height: 1px;
-  background: var(--border);
-  margin: 24px 0;
+/* ===== 登录 / 注册切换 ===== */
+.mode-switch {
+  width: 100%;
+  margin-bottom: 24px;
 }
 
-/* ===== 表单标题 ===== */
-.form-title {
-  margin: 0 0 16px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--foreground);
+.mode-switch :deep(.el-segmented__item) {
+  flex: 1;
   text-align: center;
 }
 
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* ===== 表单 ===== */
+.login-form :deep(.el-form-item) {
+  margin-bottom: 18px;
 }
 
-.input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-family: inherit;
-  background: var(--background);
-  color: var(--foreground);
-  outline: none;
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
-  box-sizing: border-box;
-}
-
-.input:focus {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px rgb(0 0 0 / 0.05);
-}
-
-.input::placeholder {
-  color: var(--muted-foreground);
-}
-
-.error {
-  color: var(--destructive);
+.login-form :deep(.el-form-item__label) {
   font-size: 13px;
-  margin: 0;
-  /* 错误条：淡红底 + 描边 */
-  background: rgba(239, 68, 68, 0.12);
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  border: 1px solid rgba(239, 68, 68, 0.35);
-}
-
-.btn {
-  width: 100%;
-  padding: 10px 16px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 14px;
   font-weight: 500;
-  font-family: inherit;
-  margin-top: 8px;
-  transition: opacity 0.15s;
 }
 
-.btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.toggle-btn {
+.submit-btn {
   width: 100%;
-  padding: 8px 16px;
-  background: transparent;
-  color: var(--muted-foreground);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.toggle-btn:hover {
-  background: var(--muted);
-  color: var(--foreground);
-  border-color: var(--foreground);
+  margin-top: 8px;
+  font-weight: 600;
 }
 </style>
