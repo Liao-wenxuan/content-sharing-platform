@@ -585,12 +585,9 @@ const emptyHint = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  /* 玻璃 sticky 顶栏 */
-  background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-bottom: 1px solid var(--glass-border-dk);
-  box-shadow: 0 1px 0 var(--glass-highlight) inset;
+  /* sticky 顶栏：纯色底 */
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -633,10 +630,8 @@ const emptyHint = computed(() => {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--glass-border);
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  background: transparent;
   color: var(--foreground);
   font-size: 13px;
   font-weight: 500;
