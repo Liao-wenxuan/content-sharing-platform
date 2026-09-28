@@ -1,17 +1,27 @@
 <script setup lang="ts">
+/**
+ * 个人主页（桌面端）
+ *
+ * 布局改造：
+ * - 移动端顶部条里的「☰ 打开侧边栏」按钮已删除（桌面端侧栏常驻）
+ * - 顶栏 / 关注按钮 → ElButton；编辑弹窗 → ElDialog + ElForm
+ * - 笔记 / 评论 / 收藏 / 赞过 → ElTabs；公开 / 私密 / 合集 → ElRadioGroup
+ * - 右侧新增「你可能感兴趣的人」栏，利用桌面端的横向空间
+ */
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Star, ChatDotRound, Edit, Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { useSidebarStore } from '@/stores/sidebar'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post } from '@/api/posts'
 import { NICKNAME_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
+import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const sidebar = useSidebarStore()
 const { formatTime } = useRelativeTime()
 
 const profileUser = ref<{
@@ -36,16 +46,24 @@ const stats = ref({
 type TabKey = 'posts' | 'comments' | 'favorites' | 'likes'
 const activeTab = ref<TabKey>('posts')
 
+const tabs: { key: TabKey; label: string }[] = [
+  { key: 'posts', label: '笔记' },
+  { key: 'comments', label: '评论' },
+  { key: 'favorites', label: '收藏' },
+  { key: 'likes', label: '赞过' }
+]
+
 // ===== 子筛选：公开 / 私密 / 合集 =====
 type Scope = 'public' | 'private' | 'collections'
 const activeScope = ref<Scope>('public')
-const counts = computed(() => ({
-  public: posts.value.length,
-  private: 0,
-  collections: 0
-}))
 
-// ===== 编辑 modal =====
+const scopes: { key: Scope; label: string }[] = [
+  { key: 'public', label: '公开' },
+  { key: 'private', label: '私密' },
+  { key: 'collections', label: '合集' }
+]
+
+// ===== 编辑 dialog =====
 const showEditModal = ref(false)
 const editNickname = ref('')
 const editAvatar = ref('')
@@ -66,7 +84,11 @@ const isOwner = computed(
   () => auth.user !== null && profileUser.value !== null && auth.user.id === profileUser.value.id
 )
 
-const avatarUrl = computed(() => profileUser.value?.avatar || null)
+/** 本人主页展示「编辑」，他人主页展示「关注」 */
+const following = ref(false)
+function toggleFollow() {
+  following.value = !following.value
+}
 
 // ===== 你可能感兴趣的人（暂无推荐 API，先 mock）=====
 interface SuggestedUser {
@@ -97,14 +119,9 @@ async function copyXhsId() {
   }
 }
 
-// ===== 浏览记录 / 钱包 占位路由 =====
-const handleBrowseHistory = () => {
-  // TODO: 跳 /profile/me/history
-  router.push('/profile/me')
-}
-const handleWallet = () => {
-  // TODO: 跳 /profile/me/wallet
-  router.push('/profile/me')
+// ===== 浏览记录 / 钱包 占位 =====
+function onPlaceholderClick(feature: string) {
+  ElMessage.info(`${feature}功能即将上线，敬请期待`)
 }
 
 // ===== 未登录占位态 =====
@@ -148,17 +165,17 @@ async function loadProfile() {
     posts.value = data.list
     total.value = data.total
   } catch (err: any) {
-    if (err.response?.status === 404) {
+    if (err?.response?.status === 404) {
       errorMsg.value = '用户不存在'
     } else {
-      errorMsg.value = err.response?.data?.message || '加载失败'
+      errorMsg.value = err?.response?.data?.message || '加载失败'
     }
   } finally {
     loading.value = false
   }
 }
 
-// ===== 编辑 modal =====
+// ===== 编辑 dialog =====
 function openEdit() {
   if (!profileUser.value) return
   editNickname.value = profileUser.value.nickname
@@ -208,8 +225,9 @@ async function submitEdit() {
     }
 
     closeEdit()
+    ElMessage.success('资料已更新')
   } catch (err: any) {
-    editError.value = err.response?.data?.message || '保存失败，请重试'
+    editError.value = err?.response?.data?.message || '保存失败，请重试'
   } finally {
     editSubmitting.value = false
   }
@@ -220,23 +238,17 @@ function avatarText(nickname?: string): string {
   return nickname?.[0]?.toUpperCase() || '?'
 }
 
-onMounted(() => {
-  loadProfile()
-})
+onMounted(() => loadProfile())
 
 watch(
   () => route.params.id,
-  () => {
-    loadProfile()
-  }
+  () => loadProfile()
 )
 
 // 登录状态变化（如从占位态点登录后回来）→ 重新加载
 watch(
   () => auth.isLoggedIn,
-  () => {
-    loadProfile()
-  }
+  () => loadProfile()
 )
 
 // ===== 空状态提示（按 tab/scope 给出差异化描述）=====
@@ -252,561 +264,285 @@ const emptyHint = computed(() => {
 
 <template>
   <div class="profile">
-    <!-- ===== 顶部条（per-page header） ===== -->
-    <header class="topbar">
-      <button class="icon-btn" aria-label="打开侧边栏" @click="sidebar.open()">☰</button>
-      <button v-if="isOwner" class="edit-pill" @click="openEdit">
-        <svg viewBox="0 0 24 24" class="edit-pencil" aria-hidden="true">
-          <path
-            d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-            fill="currentColor"
-          />
-        </svg>
-        编辑主页
-      </button>
-      <div class="topbar-spacer"></div>
-      <button class="icon-btn" aria-label="二维码">▦</button>
-      <button class="icon-btn" aria-label="分享">↗</button>
-    </header>
+    <!-- ===== 未登录占位态 ===== -->
+    <el-card v-if="notLoggedIn" shadow="never" class="guest-card">
+      <el-empty description="登录后查看你的主页">
+        <el-button type="primary" @click="goLogin">立即登录</el-button>
+      </el-empty>
+    </el-card>
 
-    <!-- ===== 未登录占位态：进「我」但没登录 ===== -->
-    <section v-if="notLoggedIn" class="guest-state">
-      <div class="guest-avatar">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.6" />
-          <path
-            d="M4 20c0-4 3.6-6 8-6s8 2 8 6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            stroke-linecap="round"
-          />
-        </svg>
-      </div>
-      <h2 class="guest-title">登录后查看我的主页</h2>
-      <p class="guest-sub">登录即可发布笔记、点赞评论、查看自己的内容</p>
-      <button class="guest-btn" @click="goLogin">立即登录 / 注册</button>
-    </section>
+    <EmptyState v-else-if="loading" variant="loading" title="加载主页..." />
 
-    <!-- ===== 用户信息 ===== -->
-    <section v-else class="user-info">
-      <div class="avatar-wrap">
-        <img
-          v-if="avatarUrl"
-          :src="avatarUrl"
-          :alt="profileUser?.nickname"
-          class="avatar-img"
-          @error="($event.target as HTMLImageElement).style.display = 'none'"
-        />
-        <div v-else class="avatar avatar-sm">{{ avatarText(profileUser?.nickname) }}</div>
-        <span v-if="isOwner" class="upload-hint">上传头像</span>
+    <EmptyState
+      v-else-if="errorMsg"
+      variant="error"
+      :title="errorMsg"
+      action="回到首页"
+      @action="router.push('/')"
+    />
+
+    <template v-else-if="profileUser">
+      <!-- ===== 封面 ===== -->
+      <div class="cover" :class="{ 'has-image': profileUser.cover }">
+        <img v-if="profileUser.cover" :src="profileUser.cover" alt="主页封面" />
       </div>
 
-      <div class="user-text">
-        <div class="nickname-row">
-          <h1>{{ profileUser?.nickname || '个人主页' }}</h1>
-          <button v-if="isOwner" class="icon-btn small" aria-label="编辑昵称">✎</button>
-        </div>
-        <div class="xhs-id-row">
-          <span class="xhs-label">小红书号:</span>
-          <span class="xhs-id">{{ profileUser?.id ?? '—' }}</span>
-          <button
-            class="icon-btn small"
-            :title="xhsIdCopyState === 'copied' ? '已复制' : '复制'"
-            @click="copyXhsId"
-          >
-            {{ xhsIdCopyState === 'copied' ? '✓' : '⎘' }}
-          </button>
-        </div>
-      </div>
-    </section>
+      <div class="profile-grid">
+        <!-- ================= 左栏：资料 + 内容 ================= -->
+        <div class="main-col">
+          <!-- 资料卡 -->
+          <el-card shadow="never" class="info-card">
+            <div class="info-body">
+              <el-avatar :size="72" class="avatar">
+                {{ avatarText(profileUser.nickname) }}
+              </el-avatar>
 
-    <!-- ===== 三栏统计 ===== -->
-    <div class="stats">
-      <button class="stat-cell">
-        <strong>{{ stats.following }}</strong>
-        <span>关注</span>
-      </button>
-      <button class="stat-cell">
-        <strong>{{ stats.followers }}</strong>
-        <span>粉丝</span>
-      </button>
-      <button class="stat-cell">
-        <strong>{{ stats.likes }}</strong>
-        <span>获赞与收藏</span>
-      </button>
-    </div>
+              <div class="info-main">
+                <div class="nickname-row">
+                  <h1 class="nickname">{{ profileUser.nickname }}</h1>
 
-    <!-- ===== Bio ===== -->
-    <p class="bio">这个人很懒</p>
+                  <el-button
+                    v-if="isOwner"
+                    type="primary"
+                    plain
+                    round
+                    size="small"
+                    :icon="Edit"
+                    class="edit-btn"
+                    @click="openEdit"
+                  >
+                    编辑资料
+                  </el-button>
+                  <el-button v-else type="primary" plain round size="small" @click="toggleFollow">
+                    {{ following ? '已关注' : '关注' }}
+                  </el-button>
+                </div>
 
-    <!-- ===== 浏览记录 / 钱包 cards ===== -->
-    <div class="quick-cards">
-      <button class="quick-card" @click="handleBrowseHistory">
-        <svg viewBox="0 0 24 24" class="qc-icon" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5" />
-          <path
-            d="M12 7v5l3 2"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-        </svg>
-        <div class="qc-label">浏览记录</div>
-        <div class="qc-sub">看过的笔记</div>
-      </button>
-      <button class="quick-card" @click="handleWallet">
-        <svg viewBox="0 0 24 24" class="qc-icon" aria-hidden="true">
-          <rect
-            x="3"
-            y="6"
-            width="18"
-            height="13"
-            rx="2"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-          <path
-            d="M16 12h2"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
-        </svg>
-        <div class="qc-label">钱包</div>
-        <div class="qc-sub">查看详情</div>
-      </button>
-    </div>
+                <div class="xhs-id">
+                  <span>小红书号：{{ profileUser.id }}</span>
+                  <el-button link size="small" class="copy-btn" @click="copyXhsId">
+                    {{ xhsIdCopyState === 'copied' ? '已复制' : '复制' }}
+                  </el-button>
+                </div>
 
-    <!-- ===== 你可能感兴趣的人 ===== -->
-    <section v-if="!suggestionDismissed" class="suggestions">
-      <header class="suggestions-header">
-        <h2>你可能感兴趣的人 <span class="info-dot" aria-label="说明">ⓘ</span></h2>
-        <button class="icon-btn small" aria-label="关闭" @click="suggestionDismissed = true">
-          ×
-        </button>
-      </header>
-      <div class="suggestion-list">
-        <div v-for="u in suggested" :key="u.id" class="suggestion-item">
-          <div class="avatar avatar-xs">{{ avatarText(u.nickname) }}</div>
-          <div class="sug-name">{{ u.nickname }}</div>
-          <div class="sug-count">笔记 {{ u.postCount }}</div>
-          <button class="follow-btn">关注</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== TAB ===== -->
-    <nav class="tabs">
-      <button class="tab" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">
-        笔记
-      </button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'comments' }"
-        @click="activeTab = 'comments'"
-      >
-        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
-          <path
-            d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-        </svg>
-        评论
-      </button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'favorites' }"
-        @click="activeTab = 'favorites'"
-      >
-        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
-          <path
-            d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-          />
-        </svg>
-        收藏
-      </button>
-      <button class="tab" :class="{ active: activeTab === 'likes' }" @click="activeTab = 'likes'">
-        <svg viewBox="0 0 24 24" class="tab-icon" aria-hidden="true">
-          <path
-            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-          />
-        </svg>
-        赞过
-      </button>
-    </nav>
-
-    <!-- ===== 子筛选 ===== -->
-    <nav class="sub-tabs">
-      <button
-        class="sub-tab"
-        :class="{ active: activeScope === 'public' }"
-        @click="activeScope = 'public'"
-      >
-        公开 <span>{{ counts.public }}</span>
-      </button>
-      <button
-        class="sub-tab"
-        :class="{ active: activeScope === 'private' }"
-        @click="activeScope = 'private'"
-      >
-        <svg viewBox="0 0 24 24" class="lock-icon" aria-hidden="true">
-          <rect
-            x="5"
-            y="11"
-            width="14"
-            height="9"
-            rx="2"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-          <path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.5" />
-        </svg>
-        私密 <span>{{ counts.private }}</span>
-      </button>
-      <button
-        class="sub-tab"
-        :class="{ active: activeScope === 'collections' }"
-        @click="activeScope = 'collections'"
-      >
-        合集 <span>{{ counts.collections }}</span>
-      </button>
-    </nav>
-
-    <!-- ===== 内容区 ===== -->
-    <div v-if="loading" class="state">加载中...</div>
-    <div v-if="errorMsg" class="state error">{{ errorMsg }}</div>
-
-    <!-- 笔记 TAB：双列瀑布流 -->
-    <div
-      v-if="!loading && !errorMsg && activeTab === 'posts' && activeScope === 'public'"
-      class="post-grid"
-    >
-      <router-link v-for="post in posts" :key="post.id" :to="`/post/${post.id}`" class="post-link">
-        <article class="post-card">
-          <div v-if="post.imageUrls && post.imageUrls.length > 0" class="cover">
-            <img :src="post.imageUrls[0]" :alt="`封面`" loading="lazy" />
-            <span v-if="post.imageUrls.length > 1" class="cover-badge">
-              +{{ post.imageUrls.length }}
-            </span>
-          </div>
-
-          <div class="content">{{ post.content }}</div>
-
-          <footer class="meta-row">
-            <span class="time">{{ formatTime(post.createdAt) }}</span>
-            <span v-if="post.topicTag" class="topic">#{{ post.topicTag }}</span>
-          </footer>
-        </article>
-      </router-link>
-
-      <div v-if="posts.length === 0" class="state empty">
-        还没有发过笔记，去 <router-link to="/publish">发布</router-link> 一篇？
-      </div>
-    </div>
-
-    <!-- 其他 tab / 子筛选的空状态 -->
-    <div
-      v-if="!loading && !errorMsg && (activeTab !== 'posts' || activeScope !== 'public')"
-      class="empty-state"
-    >
-      <svg viewBox="0 0 64 64" class="empty-icon" aria-hidden="true">
-        <rect
-          x="14"
-          y="20"
-          width="36"
-          height="32"
-          rx="3"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        />
-        <path d="M14 28h36" stroke="currentColor" stroke-width="2" />
-        <path
-          d="M22 36h20M22 42h14"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-        />
-      </svg>
-      <p class="empty-title">暂无内容</p>
-      <p class="empty-desc">{{ emptyHint }}</p>
-    </div>
-
-    <!-- ===== 编辑资料 modal ===== -->
-    <div v-if="showEditModal" class="modal-mask" @click.self="closeEdit">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
-        <header class="modal-header">
-          <h2 id="edit-title">编辑资料</h2>
-          <button class="modal-close" @click="closeEdit" aria-label="关闭">×</button>
-        </header>
-
-        <div class="modal-body">
-          <div class="field">
-            <label>昵称</label>
-            <input
-              v-model="editNickname"
-              type="text"
-              :maxlength="NICKNAME_MAX_LENGTH"
-              placeholder="你的昵称"
-              :disabled="editSubmitting"
-            />
-            <div class="counter">{{ editNickname.length }} / {{ NICKNAME_MAX_LENGTH }}</div>
-          </div>
-
-          <div class="field">
-            <label>头像 URL</label>
-            <input
-              v-model="editAvatar"
-              type="url"
-              placeholder="https://..."
-              :disabled="editSubmitting"
-            />
-            <div v-if="editAvatar.trim()" class="preview preview-avatar">
-              <img :src="editAvatar" alt="头像预览" />
+                <div class="stats">
+                  <span class="stat"
+                    ><b>{{ stats.following }}</b> 关注</span
+                  >
+                  <span class="stat"
+                    ><b>{{ stats.followers }}</b> 粉丝</span
+                  >
+                  <span class="stat"
+                    ><b>{{ stats.likes }}</b> 获赞与收藏</span
+                  >
+                </div>
+              </div>
             </div>
-          </div>
+          </el-card>
 
-          <div class="field">
-            <label>封面 URL</label>
-            <input
-              v-model="editCover"
-              type="url"
-              placeholder="https://..."
-              :disabled="editSubmitting"
+          <!-- 内容区 -->
+          <el-tabs v-model="activeTab" class="content-tabs">
+            <el-tab-pane
+              v-for="tab in tabs"
+              :key="tab.key"
+              :label="tab.key === 'posts' ? `${tab.label} ${total}` : tab.label"
+              :name="tab.key"
             />
-            <div v-if="editCover.trim()" class="preview preview-cover">
-              <img :src="editCover" alt="封面预览" />
-            </div>
-          </div>
 
-          <div v-if="editError" class="error">{{ editError }}</div>
+            <template #extra>
+              <el-radio-group v-if="activeTab === 'posts'" v-model="activeScope" size="small">
+                <el-radio-button v-for="s in scopes" :key="s.key" :value="s.key">
+                  {{ s.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </template>
+          </el-tabs>
+
+          <EmptyState
+            v-if="activeTab !== 'posts'"
+            icon="🚧"
+            :title="emptyHint"
+            hint="该功能正在开发中"
+          />
+
+          <el-empty v-else-if="posts.length === 0" :description="emptyHint" />
+
+          <div v-else class="post-grid">
+            <router-link
+              v-for="(post, index) in posts"
+              :key="post.id"
+              :to="`/post/${post.id}`"
+              class="post-link"
+            >
+              <el-card shadow="never" class="post-card" body-class="post-body">
+                <div class="cover" :class="`ratio-${index % 3}`">
+                  <img
+                    v-if="post.imageUrls?.length"
+                    :src="post.imageUrls[0]"
+                    :alt="`${post.author?.nickname} 的笔记封面`"
+                    loading="lazy"
+                  />
+                  <span v-else class="cover-blank">纯文字</span>
+                </div>
+                <p class="content">{{ post.content }}</p>
+                <div class="post-meta">
+                  <span class="stat">
+                    <el-icon><component :is="Star" /></el-icon>{{ post.likeCount }}
+                  </span>
+                  <span class="stat">
+                    <el-icon><component :is="ChatDotRound" /></el-icon>{{ post.commentCount }}
+                  </span>
+                  <span class="time">{{ formatTime(post.createdAt) }}</span>
+                </div>
+              </el-card>
+            </router-link>
+          </div>
         </div>
 
-        <footer class="modal-footer">
-          <button class="btn btn-secondary" @click="closeEdit" :disabled="editSubmitting">
-            取消
-          </button>
-          <button
-            class="btn btn-primary"
-            @click="submitEdit"
-            :disabled="editSubmitting || !editNickname.trim()"
+        <!-- ================= 右栏 ================= -->
+        <aside class="side-col">
+          <el-card shadow="never" class="side-card">
+            <template #header><span class="side-title">常用功能</span></template>
+            <div class="side-actions">
+              <el-button class="side-btn" :icon="Plus" @click="onPlaceholderClick('发布')">
+                发布新笔记
+              </el-button>
+              <el-button class="side-btn" @click="onPlaceholderClick('浏览记录')">
+                浏览记录
+              </el-button>
+              <el-button class="side-btn" @click="onPlaceholderClick('钱包')">钱包</el-button>
+            </div>
+          </el-card>
+
+          <el-card
+            v-if="suggested.length > 0 && !suggestionDismissed"
+            shadow="never"
+            class="side-card"
           >
-            {{ editSubmitting ? '保存中...' : '保存' }}
-          </button>
-        </footer>
+            <template #header>
+              <span class="side-title">你可能感兴趣的人</span>
+              <el-button link size="small" @click="suggestionDismissed = true">换一批</el-button>
+            </template>
+            <ul class="suggest-list">
+              <li v-for="u in suggested" :key="u.id" class="suggest-item">
+                <el-avatar :size="36" class="avatar-sm">{{ avatarText(u.nickname) }}</el-avatar>
+                <div class="suggest-info">
+                  <div class="suggest-name">{{ u.nickname }}</div>
+                  <div class="suggest-count">{{ u.postCount }} 篇笔记</div>
+                </div>
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  round
+                  @click="onPlaceholderClick('关注')"
+                >
+                  关注
+                </el-button>
+              </li>
+            </ul>
+          </el-card>
+        </aside>
       </div>
-    </div>
+    </template>
+
+    <!-- ===== 编辑资料 dialog ===== -->
+    <el-dialog
+      v-model="showEditModal"
+      title="编辑资料"
+      width="440px"
+      :close-on-click-modal="false"
+      @close="closeEdit"
+    >
+      <el-form label-position="top">
+        <el-form-item label="昵称" required :error="editError">
+          <el-input
+            v-model="editNickname"
+            :maxlength="NICKNAME_MAX_LENGTH"
+            show-word-limit
+            placeholder="给自己起个名字"
+          />
+        </el-form-item>
+        <el-form-item label="头像地址">
+          <el-input v-model="editAvatar" placeholder="https://... 图片链接" clearable />
+        </el-form-item>
+        <el-form-item label="主页封面地址">
+          <el-input v-model="editCover" placeholder="https://... 图片链接" clearable />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="closeEdit">取消</el-button>
+        <el-button type="primary" :loading="editSubmitting" @click="submitEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .profile {
-  max-width: 720px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  padding: 0 0 24px;
 }
 
-/* ===== 顶部条 ===== */
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  /* sticky 顶栏：纯色底 */
-  background: var(--background);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 5;
+.guest-card {
+  padding: 40px 0;
 }
 
-.topbar-spacer {
-  flex: 1;
+/* ===== 封面 ===== */
+.cover {
+  height: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(120deg, var(--muted), var(--secondary));
+  margin-bottom: 20px;
 }
 
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  color: var(--foreground);
-  font-size: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-  line-height: 1;
-}
-
-.icon-btn:hover {
-  background: var(--muted);
-}
-
-.icon-btn.small {
-  width: 24px;
-  height: 24px;
-  font-size: 13px;
-}
-
-.edit-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.edit-pill:hover {
-  background: var(--glass-bg-strong);
-}
-
-.edit-pencil {
-  width: 14px;
-  height: 14px;
-}
-
-/* ===== 未登录占位态 ===== */
-.guest-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 56px 24px 64px;
-  gap: 8px;
-}
-
-.guest-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted-foreground);
-  margin-bottom: 8px;
-}
-
-.guest-avatar svg {
-  width: 30px;
-  height: 30px;
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
-.guest-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--foreground);
+/* ===== 双栏 ===== */
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
 }
 
-.guest-sub {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--muted-foreground);
+/* 视口不够宽时右栏落到下方 */
+@media (max-width: 1100px) {
+  .profile-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side-col {
+    position: static;
+  }
 }
 
-.guest-btn {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  border: none;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 9px 26px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: filter 0.15s;
+.main-col {
+  min-width: 0;
 }
 
-.guest-btn:hover {
-  filter: brightness(1.08);
-}
-
-/* ===== 用户信息 ===== */
-.user-info {
+/* ===== 资料卡 ===== */
+.info-body {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px 0;
-}
-
-.avatar-wrap {
-  position: relative;
-  flex-shrink: 0;
+  gap: 18px;
+  align-items: flex-start;
 }
 
 .avatar {
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 26px;
   flex-shrink: 0;
 }
 
-.avatar-sm {
-  width: 60px;
-  height: 60px;
-  font-size: 22px;
-}
-
-.avatar-xs {
-  width: 44px;
-  height: 44px;
-  font-size: 16px;
-}
-
-.avatar-img {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.upload-hint {
-  position: absolute;
-  inset: auto 0 -8px;
-  margin: 0 auto;
-  width: max-content;
-  font-size: 11px;
-  color: var(--muted-foreground);
-  background: var(--background);
-  padding: 1px 6px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-}
-
-.user-text {
+.info-main {
   flex: 1;
   min-width: 0;
 }
@@ -814,657 +550,219 @@ const emptyHint = computed(() => {
 .nickname-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
 }
 
-.nickname-row h1 {
+.nickname {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--foreground);
-}
-
-.xhs-id-row {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--muted-foreground);
-  font-size: 12px;
+  letter-spacing: -0.01em;
 }
 
 .xhs-id {
-  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
 }
 
-/* ===== 三栏统计 ===== */
+.copy-btn {
+  padding: 0;
+  height: auto;
+}
+
 .stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  padding: 14px 20px 0;
-  border-bottom: 0;
-}
-
-.stat-cell {
-  background: transparent;
-  border: none;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 8px 0;
-  cursor: pointer;
-  font-family: inherit;
+  gap: 20px;
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.stat b {
   color: var(--foreground);
-  transition: background 0.15s;
-}
-
-.stat-cell:hover {
-  background: var(--muted);
-  border-radius: var(--radius);
-}
-
-.stat-cell strong {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 15px;
+  margin-right: 3px;
   font-variant-numeric: tabular-nums;
 }
 
-.stat-cell span {
-  font-size: 12px;
-  color: var(--muted-foreground);
+/* ===== 内容区 ===== */
+.content-tabs {
+  margin-top: 24px;
 }
 
-/* ===== Bio ===== */
-.bio {
-  margin: 12px 20px 0;
-  font-size: 13px;
-  color: var(--muted-foreground);
-  line-height: 1.5;
+.content-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
 }
 
-/* ===== Quick cards ===== */
-.quick-cards {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 14px 20px 0;
+.content-tabs :deep(.el-tabs__item) {
+  font-size: 15px;
 }
 
-.quick-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  font-family: inherit;
-  color: var(--foreground);
-  text-align: left;
-  transition: all 0.15s;
-}
-
-.quick-card:hover {
-  background: var(--muted);
-  border-color: var(--muted-foreground);
-}
-
-.qc-icon {
-  width: 28px;
-  height: 28px;
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.qc-label {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.qc-sub {
-  font-size: 11px;
-  color: var(--muted-foreground);
-  margin-top: 1px;
-}
-
-/* ===== Suggestions ===== */
-.suggestions {
-  margin: 16px 16px 0;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
-
-.suggestions-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.suggestions-header h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--foreground);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.info-dot {
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
-
-.suggestion-list {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.suggestion-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.sug-name {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--foreground);
-  text-align: center;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sug-count {
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-
-.follow-btn {
-  margin-top: 4px;
-  padding: 4px 14px;
-  border: 1px solid var(--primary);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--primary);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.follow-btn:hover {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-
-/* ===== Tabs ===== */
-.tabs {
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  margin: 18px 0 0;
-  padding: 0 8px;
-  gap: 4px;
-}
-
-.tab {
-  flex: 1;
-  background: none;
-  border: none;
-  color: var(--muted-foreground);
-  font-size: 14px;
-  font-weight: 500;
-  padding: 12px 0;
-  cursor: pointer;
-  font-family: inherit;
-  position: relative;
-  transition: color 0.15s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-.tab:hover {
-  color: var(--foreground);
-}
-
-.tab.active {
-  color: var(--foreground);
-  font-weight: 600;
-}
-
-.tab.active::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -1px;
-  transform: translateX(-50%);
-  width: 24px;
-  height: 2px;
-  background: var(--primary);
-  border-radius: 1px;
-}
-
-.tab-icon {
-  width: 14px;
-  height: 14px;
-}
-
-/* ===== Sub Tabs ===== */
-.sub-tabs {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 10px 20px 4px;
-  border-bottom: 1px solid var(--border);
-}
-
-.sub-tab {
-  background: none;
-  border: none;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 4px 0;
-  cursor: pointer;
-  font-family: inherit;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: color 0.15s;
-}
-
-.sub-tab:hover {
-  color: var(--foreground);
-}
-
-.sub-tab.active {
-  color: var(--foreground);
-  font-weight: 600;
-}
-
-.sub-tab span {
-  font-variant-numeric: tabular-nums;
-}
-
-.lock-icon {
-  width: 12px;
-  height: 12px;
-}
-
-/* ===== Post grid（与原版一致） ===== */
+/* ===== 笔记栅格 ===== */
 .post-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
 .post-link {
-  text-decoration: none;
-  color: inherit;
   display: block;
+  color: inherit;
 }
 
 .post-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
   transition:
-    box-shadow 0.25s,
-    transform 0.25s,
-    border-color 0.2s;
-  display: flex;
-  flex-direction: column;
+    transform 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .post-link:hover .post-card {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-3px) scale(1.015);
-  border-color: var(--muted-foreground);
+  transform: translateY(-2px);
+}
+
+.post-body {
+  padding: 0 0 10px;
 }
 
 .cover {
   width: 100%;
   aspect-ratio: 3 / 4;
-  overflow: hidden;
   background: var(--muted);
-  position: relative;
+  overflow: hidden;
+}
+
+.ratio-1 {
+  aspect-ratio: 1 / 1;
+}
+.ratio-2 {
+  aspect-ratio: 4 / 5;
 }
 
 .cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
 }
 
-.cover-badge {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  background: rgba(0, 0, 0, 0.75);
-  color: white;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 500;
+.post-link:hover .cover img {
+  transform: scale(1.05);
+}
+
+.cover-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+  color: var(--muted-foreground);
 }
 
 .content {
-  font-size: 14px;
+  margin: 10px 12px 8px;
+  font-size: 13px;
   line-height: 1.5;
-  color: var(--foreground);
-  padding: 10px 12px 6px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
-  flex: 1;
 }
 
-.meta-row {
+.post-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 12px 10px;
+  gap: 12px;
+  padding: 0 12px;
+  font-size: 12px;
   color: var(--muted-foreground);
-  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
-.topic {
-  background: var(--muted);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  color: var(--foreground);
+.post-meta .stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
-/* ===== Empty state ===== */
-.empty-state {
+.post-meta .time {
+  margin-left: auto;
+}
+
+/* ===== 右栏 ===== */
+.side-col {
+  position: sticky;
+  top: calc(var(--top-bar-height) + 24px);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-  color: var(--muted-foreground);
+  gap: 16px;
 }
 
-.empty-icon {
-  width: 80px;
-  height: 80px;
-  margin-bottom: 12px;
-  opacity: 0.6;
-}
-
-.empty-title {
-  font-size: 14px;
+.side-title {
   font-weight: 600;
-  color: var(--foreground);
-  margin: 0 0 4px;
-}
-
-.empty-desc {
-  font-size: 12px;
-  margin: 0;
-}
-
-/* ===== 状态 ===== */
-.state {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--muted-foreground);
   font-size: 14px;
 }
 
-.state.error {
-  color: var(--destructive);
-}
-
-.state.empty a {
-  color: var(--foreground);
-  text-decoration: underline;
-}
-
-/* ===== Modal（与原版一致） ===== */
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 16px;
-  animation: fadeIn 0.15s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.modal {
-  background: var(--card);
-  border-radius: 12px;
-  width: 100%;
-  max-width: 440px;
-  max-height: 90vh;
+.side-actions {
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-lg);
-  animation: slideUp 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: 8px;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.side-btn {
+  width: 100%;
+  justify-content: flex-start;
+  margin-left: 0;
 }
 
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h2 {
+.suggest-list {
+  list-style: none;
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--foreground);
+  padding: 0;
 }
 
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--muted-foreground);
-  font-size: 22px;
-  cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+.suggest-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-family: inherit;
-  line-height: 1;
-  transition: background 0.15s;
-}
-
-.modal-close:hover {
-  background: var(--muted);
-}
-
-.modal-body {
-  padding: 20px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.field {
-  margin-bottom: 16px;
-}
-
-.field label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 6px;
-  color: var(--foreground);
-}
-
-.field input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-family: inherit;
-  background: var(--background);
-  color: var(--foreground);
-  transition: border-color 0.15s;
-}
-
-.field input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.field input:disabled {
-  opacity: 0.5;
-}
-
-.counter {
-  font-size: 11px;
-  color: var(--muted-foreground);
-  text-align: right;
-  margin-top: 4px;
-}
-
-.preview {
-  margin-top: 8px;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--muted);
-}
-
-.preview-avatar img {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-.preview-cover img {
-  width: 100%;
-  height: 80px;
-  object-fit: cover;
-}
-
-.error {
-  color: var(--destructive);
-  font-size: 13px;
+  gap: 10px;
   padding: 8px 0;
 }
 
-.modal-footer {
-  display: flex;
-  gap: 8px;
-  padding: 12px 20px;
+.suggest-item + .suggest-item {
   border-top: 1px solid var(--border);
 }
 
-.btn {
-  flex: 1;
-  padding: 8px 16px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  border: 1px solid transparent;
-  transition: all 0.15s;
-}
-
-.btn-secondary {
-  background: var(--background);
-  border-color: var(--border);
-  color: var(--foreground);
-}
-
-.btn-secondary:hover {
+.avatar-sm {
   background: var(--muted);
+  color: var(--foreground);
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
-.btn-primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
+.suggest-info {
+  flex: 1;
+  min-width: 0;
 }
 
-.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.05);
+.suggest-name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ===== 移动端适配 ===== */
-@supports (padding: max(0px)) {
-  /* 适配 iPhone 顶部刘海 / 底部 home 条 */
-  .topbar {
-    padding-top: calc(10px + env(safe-area-inset-top, 0px));
-  }
-}
-@media (max-width: 480px) {
-  .topbar {
-    padding-left: 12px;
-    padding-right: 12px;
-    gap: 6px;
-  }
-  .icon-btn {
-    width: 32px;
-    height: 32px;
-  }
-  .edit-pill {
-    padding: 5px 10px;
-    font-size: 12px;
-  }
-  .stats-section,
-  .tabs-section,
-  .post-grid {
-    padding: 0 12px;
-  }
+.suggest-count {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 2px;
 }
 </style>
