@@ -27,6 +27,8 @@ NUL
 # 截图（开发时的临时视觉记录，不入版本库）
 screenshots/
 **/screenshots/
+shots/
+**/shots/
 # 但 README 用的正式截图要入库
 !docs/screenshots/
 !docs/screenshots/**
