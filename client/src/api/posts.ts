@@ -71,11 +71,12 @@ export interface LikeResponse {
 }
 
 // ===== API 方法 =====
+// request 实例在类型上已经剥掉了 AxiosResponse 包装（见 request.ts），
+// 所以这里直接 return 即可，不需要再写 `as unknown as Post` 之类的断言。
 export const postsApi = {
   // 发布笔记
-  async createPost(payload: CreatePostPayload): Promise<Post> {
-    const res = await request.post<Post>('/posts', payload)
-    return res as unknown as Post
+  createPost(payload: CreatePostPayload): Promise<Post> {
+    return request.post<Post>('/posts', payload)
   },
 
   // 获取 Feed 列表
@@ -84,7 +85,7 @@ export const postsApi = {
   //   pageSize  每页条数
   //   channel   频道过滤：discover(发现) / follow(关注) / ya(雅安) / etc.
   //   category  分类过滤：recommend / video / hot / live / drama / exp
-  async getFeed(
+  getFeed(
     params: {
       page?: number
       pageSize?: number
@@ -92,55 +93,46 @@ export const postsApi = {
       category?: string
     } = {}
   ): Promise<FeedResponse> {
-    const res = await request.get<FeedResponse>('/posts/feed', { params })
-    return res as unknown as FeedResponse
+    return request.get<FeedResponse>('/posts/feed', { params })
   },
 
   // 获取单篇笔记详情
-  async getById(id: number): Promise<Post> {
-    const res = await request.get<Post>(`/posts/${id}`)
-    return res as unknown as Post
+  getById(id: number): Promise<Post> {
+    return request.get<Post>(`/posts/${id}`)
   },
 
   // 获取当前用户的帖子列表（需要 Bearer token）
-  async getMyPosts(): Promise<UserPostsResponse> {
-    const res = await request.get<UserPostsResponse>('/users/me/posts')
-    return res as unknown as UserPostsResponse
+  getMyPosts(): Promise<UserPostsResponse> {
+    return request.get<UserPostsResponse>('/users/me/posts')
   },
 
   // 获取指定用户的帖子列表（公开）
-  async getUserPosts(userId: number): Promise<UserPostsResponse> {
-    const res = await request.get<UserPostsResponse>(`/users/${userId}/posts`)
-    return res as unknown as UserPostsResponse
+  getUserPosts(userId: number): Promise<UserPostsResponse> {
+    return request.get<UserPostsResponse>(`/users/${userId}/posts`)
   },
 
   // 点赞（幂等：已赞则不重复）
-  async likePost(postId: number): Promise<LikeResponse> {
-    const res = await request.post(`/posts/${postId}/like`)
-    return res as unknown as LikeResponse
+  likePost(postId: number): Promise<LikeResponse> {
+    return request.post<LikeResponse>(`/posts/${postId}/like`)
   },
 
   // 取消点赞
-  async unlikePost(postId: number): Promise<LikeResponse> {
-    const res = await request.delete(`/posts/${postId}/like`)
-    return res as unknown as LikeResponse
+  unlikePost(postId: number): Promise<LikeResponse> {
+    return request.delete<LikeResponse>(`/posts/${postId}/like`)
   },
 
   // 获取点赞数（公开）
-  async getPostLikes(postId: number): Promise<LikeResponse> {
-    const res = await request.get(`/posts/${postId}/likes`)
-    return res as unknown as LikeResponse
+  getPostLikes(postId: number): Promise<LikeResponse> {
+    return request.get<LikeResponse>(`/posts/${postId}/likes`)
   },
 
   // 列出评论
-  async getComments(postId: number): Promise<CommentsResponse> {
-    const res = await request.get(`/posts/${postId}/comments`)
-    return res as unknown as CommentsResponse
+  getComments(postId: number): Promise<CommentsResponse> {
+    return request.get<CommentsResponse>(`/posts/${postId}/comments`)
   },
 
   // 发评论
-  async postComment(postId: number, content: string): Promise<Comment> {
-    const res = await request.post(`/posts/${postId}/comments`, { content })
-    return res as unknown as Comment
+  postComment(postId: number, content: string): Promise<Comment> {
+    return request.post<Comment>(`/posts/${postId}/comments`, { content })
   }
 }
