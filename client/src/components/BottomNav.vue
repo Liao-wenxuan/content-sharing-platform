@@ -95,15 +95,9 @@ const tabs: Tab[] = [
   /* 5 等分，中间 + 占位与其余 4 个等宽 */
   grid-template-columns: repeat(4, 1fr) 1.4fr;
   align-items: center;
-  /* Liquid glass 底部导航：半透明 + 模糊透出背景 */
-  background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-top: 1px solid var(--glass-border-dk);
-  /* 顶部 1px 折射线 */
-  box-shadow:
-    0 -1px 0 var(--glass-highlight) inset,
-    var(--glass-shadow);
+  /* 底部导航：纯色底 + 顶部细分隔线（小红书移动端） */
+  background: var(--background);
+  border-top: 1px solid var(--border);
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
   z-index: 50;
 }
