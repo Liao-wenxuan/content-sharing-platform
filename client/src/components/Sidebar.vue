@@ -275,19 +275,13 @@ onUnmounted(() => {
   bottom: 0;
   width: 300px;
   max-width: 80vw;
-  /* Liquid glass 抽屉：深色 / 浅色都用同一套玻璃 token */
-  background: var(--glass-bg-strong);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  /* 抽屉：纯色底（小红书移动端不做毛玻璃） */
+  background: var(--background);
   color: var(--foreground);
   z-index: 101;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--glass-border);
-  /* 右侧 1px 折射线 + 大阴影 */
-  box-shadow:
-    4px 0 32px rgba(0, 0, 0, 0.25),
-    inset 1px 0 0 var(--glass-highlight);
+  border-right: 1px solid var(--border);
 }
 
 /* ===== 顶部安全区（避开状态栏 / 摄像头） ===== */
@@ -325,10 +319,8 @@ onUnmounted(() => {
   padding: 12px;
   margin-bottom: 4px;
   border-radius: var(--radius);
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
+  background: transparent;
+  border: 1px solid var(--border);
   cursor: pointer;
   font-family: inherit;
   text-align: left;
@@ -340,8 +332,7 @@ onUnmounted(() => {
 }
 
 .user-card:hover {
-  background: var(--glass-bg-strong);
-  border-color: var(--glass-border);
+  background: var(--muted);
   transform: translateX(2px);
 }
 
@@ -356,7 +347,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--glass-border);
 }
 
 .user-avatar-img {
@@ -410,11 +400,9 @@ onUnmounted(() => {
 
 /* ===== 分组卡片 ===== */
 .group-card {
-  /* 玻璃组卡片：dark / light 都用同一 token */
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border-dk);
+  /* 分组卡片：纯色底 + 描边 */
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 4px 0;
   overflow: hidden;
@@ -438,11 +426,11 @@ onUnmounted(() => {
 }
 
 .menu-item:hover {
-  background: var(--glass-bg-strong);
+  background: var(--muted);
 }
 
 .menu-item:active {
-  background: var(--glass-bg-strong);
+  background: var(--secondary);
 }
 
 .menu-icon {
@@ -493,10 +481,8 @@ onUnmounted(() => {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border-dk);
+  background: var(--muted);
+  border: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -506,7 +492,7 @@ onUnmounted(() => {
 }
 
 .action-btn:hover .action-circle {
-  background: var(--glass-bg-strong);
+  background: var(--secondary);
 }
 
 .action-btn:active .action-circle {
