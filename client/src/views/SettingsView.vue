@@ -329,11 +329,9 @@ function goBack() {
 }
 
 .group-card {
-  /* 玻璃设置卡：dark / light 都用同一 token */
-  background: var(--glass-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid var(--glass-border-dk);
+  /* 设置卡：纯色底 + 描边 */
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   position: relative;
