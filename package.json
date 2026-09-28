@@ -8,6 +8,7 @@
     "lint:fix": "eslint . --ext .ts,.vue --fix",
     "format": "prettier --write \"**/*.{ts,vue,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,vue,json,md,css}\"",
+    "test:e2e": "node scripts/desktop-smoke.mjs",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -20,6 +21,7 @@
     "eslint-plugin-vue": "^9.28.0",
     "husky": "^9.1.6",
     "lint-staged": "^15.2.10",
+    "playwright": "^1.63.0",
     "prettier": "^3.3.3",
     "vue-eslint-parser": "^9.4.3"
   }
