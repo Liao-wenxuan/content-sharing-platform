@@ -56,6 +56,11 @@
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', sans-serif;
 
+  /* —— 桌面三栏布局尺寸 —— */
+  --side-nav-width: 216px;
+  --top-bar-height: 60px;
+  --content-max-width: 1080px;
+
   --shadow-sm: none;
   --shadow: none;
   --shadow-md: none;
@@ -123,10 +128,11 @@ body {
   transition:
     background-color 0.3s ease,
     color 0.3s ease;
-  /* 移动端 Safari 弹性滚动会让整页横向晃动；锁死 X 轴溢出 */
-  overflow-x: hidden;
-  /* 防止整页竖向 overscroll 时背景露出 */
-  background-attachment: fixed;
+  /*
+   * 不要给 html/body 加 overflow-x: hidden。
+   * 它会让 body 变成滚动容器，导致 SideNav / TopBar 的 position: sticky
+   * 相对 body 而不是 viewport 计算，吸顶/吸侧会静默失效。
+   */
 }
 
 #app {
