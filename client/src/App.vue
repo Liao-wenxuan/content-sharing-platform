@@ -1,87 +1,85 @@
 <script setup lang="ts">
-import { onMounted, computed, watch, nextTick } from 'vue'
+/**
+ * 应用外壳（桌面端三栏布局）
+ *
+ *   ┌──────────┬─────────────────────────┐
+ *   │          │ TopBar（sticky）        │
+ *   │ SideNav  ├─────────────────────────┤
+ *   │ (sticky) │ <router-view>           │
+ *   └──────────┴─────────────────────────┘
+ *
+ * 与旧版的差别：
+ * - 移除移动端的 BottomNav / 抽屉 Sidebar / 双层 HomeTopTabs
+ * - 新增固定左栏 SideNav 与顶栏 TopBar
+ * - 登录页走独立全屏布局（不进三栏壳）
+ */
+import { computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import BottomNav from '@/components/BottomNav.vue'
-import Sidebar from '@/components/Sidebar.vue'
-import ToastHost from '@/components/ToastHost.vue'
+import SideNav from '@/components/SideNav.vue'
+import TopBar from '@/components/TopBar.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
-import HomeTopTabs from '@/components/HomeTopTabs.vue'
 
-const auth = useAuthStore()
 const route = useRoute()
 
-// 只在 HomeView 显示顶部双层 tab 栏（脱离路由级 max-width，铺满 viewport）
-const showTopTabs = computed(() => route.name === 'home')
+/** 登录页不套三栏壳：全屏居中更符合登录表单的阅读节奏 */
+const isAuthPage = computed(() => route.name === 'login')
 
-// 路由切换时回到顶部（避免从详情页返回时还在中间位置）
-// 仅在 path 变化时触发；同 path 的 query 变化（如 tab 切换）保留滚动位置
+// 路由切换时回到顶部（避免从详情页返回时还停在列表中部）
+// 仅在 path 变化时触发；同 path 的 query 变化保留滚动位置
 watch(
   () => route.path,
   () => {
-    nextTick(() => {
-      // 'auto' = 瞬时跳转（不做 smooth 动画），避免路由切换时页面"滑"一下
-      window.scrollTo({ top: 0, behavior: 'auto' })
-    })
+    nextTick(() => window.scrollTo({ top: 0, behavior: 'auto' }))
   }
 )
-
-// 主题初始化（具体切换逻辑搬到 SettingsView 里）
-onMounted(() => {
-  const urlTheme = new URLSearchParams(window.location.search).get('theme')
-  if (urlTheme === 'dark' || urlTheme === 'light') {
-    document.documentElement.classList.toggle('dark', urlTheme === 'dark')
-    localStorage.setItem('theme', urlTheme)
-  } else {
-    document.documentElement.classList.toggle('dark', localStorage.getItem('theme') === 'dark')
-  }
-})
 </script>
 
 <template>
-  <div id="app">
-    <!--
-      顶部 tab 栏：在 .main 外、#app 内，position: fixed 铺满 viewport。
-      因为脱离文档流，.main 需要 .has-top-tabs 的 padding-top 让位。
-    -->
-    <HomeTopTabs v-if="showTopTabs" />
+  <!-- ===== 独立全屏页（登录） ===== -->
+  <div v-if="isAuthPage" class="standalone">
+    <ErrorBoundary>
+      <router-view />
+    </ErrorBoundary>
+  </div>
 
-    <main class="main" :class="{ 'has-top-tabs': showTopTabs }">
-      <!-- 全局错误边界：子组件 render 期同步异常时降级，避免白屏 -->
-      <ErrorBoundary>
-        <router-view />
-      </ErrorBoundary>
-    </main>
+  <!-- ===== 桌面三栏 ===== -->
+  <div v-else class="shell">
+    <SideNav />
 
-    <BottomNav v-if="auth.isLoggedIn || true" />
+    <div class="shell-body">
+      <TopBar />
 
-    <!-- 侧边栏：Teleport 到 body，独立层级 -->
-    <Sidebar />
-
-    <!-- 全局 toast 通知（独立层级） -->
-    <ToastHost />
+      <main class="content">
+        <ErrorBoundary>
+          <router-view />
+        </ErrorBoundary>
+      </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.main {
-  /* 底部 nav 高度 + 安全区，避免内容被遮挡 */
-  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+.shell {
+  display: flex;
   min-height: 100vh;
 }
 
-/*
- * 只有首页才需要给 fixed 的 HomeTopTabs 让位。
- * 其他页面（详情 / 发布 / 消息 / 我的 / 登录）没有这根顶栏，
- * 如果无条件加 padding-top 就会凭空多出 88~92px 空白。
- */
-.main.has-top-tabs {
-  padding-top: 92px;
+.shell-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-@media (max-width: 480px) {
-  .main.has-top-tabs {
-    padding-top: 88px;
-  }
+.content {
+  flex: 1;
+  padding: 24px 24px 48px;
+}
+
+.standalone {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
