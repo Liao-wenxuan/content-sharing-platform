@@ -107,12 +107,27 @@ const handleWallet = () => {
   router.push('/profile/me')
 }
 
+// ===== 未登录占位态 =====
+// 路由层已放行 /profile/me，未登录时不再跳转登录页，
+// 而是展示「登录后查看我的主页」占位 + 登录入口。
+const notLoggedIn = computed(
+  () => route.params.id === 'me' && !auth.isLoggedIn && targetId.value === null
+)
+
+function goLogin() {
+  router.push({ path: '/login', query: { redirect: route.fullPath } })
+}
+
 // ===== 加载 =====
 async function loadProfile() {
   const id = targetId.value
   if (id === null) {
+    // 未登录访问「我」→ 走占位态，不报错也不跳登录
     if (route.params.id === 'me' && !auth.isLoggedIn) {
-      router.push({ path: '/login', query: { redirect: route.fullPath } })
+      loading.value = false
+      errorMsg.value = ''
+      profileUser.value = null
+      posts.value = []
       return
     }
     errorMsg.value = '用户 id 无效'
@@ -216,6 +231,14 @@ watch(
   }
 )
 
+// 登录状态变化（如从占位态点登录后回来）→ 重新加载
+watch(
+  () => auth.isLoggedIn,
+  () => {
+    loadProfile()
+  }
+)
+
 // ===== 空状态提示（按 tab/scope 给出差异化描述）=====
 const emptyHint = computed(() => {
   if (activeTab.value === 'comments') return '还没有发过评论'
@@ -246,8 +269,27 @@ const emptyHint = computed(() => {
       <button class="icon-btn" aria-label="分享">↗</button>
     </header>
 
+    <!-- ===== 未登录占位态：进「我」但没登录 ===== -->
+    <section v-if="notLoggedIn" class="guest-state">
+      <div class="guest-avatar">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <path
+            d="M4 20c0-4 3.6-6 8-6s8 2 8 6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+      </div>
+      <h2 class="guest-title">登录后查看我的主页</h2>
+      <p class="guest-sub">登录即可发布笔记、点赞评论、查看自己的内容</p>
+      <button class="guest-btn" @click="goLogin">立即登录 / 注册</button>
+    </section>
+
     <!-- ===== 用户信息 ===== -->
-    <section class="user-info">
+    <section v-else class="user-info">
       <div class="avatar-wrap">
         <img
           v-if="avatarUrl"
@@ -647,6 +689,65 @@ const emptyHint = computed(() => {
 .edit-pencil {
   width: 14px;
   height: 14px;
+}
+
+/* ===== 未登录占位态 ===== */
+.guest-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 24px 64px;
+  gap: 8px;
+}
+
+.guest-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  margin-bottom: 8px;
+}
+
+.guest-avatar svg {
+  width: 30px;
+  height: 30px;
+  display: block;
+}
+
+.guest-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.guest-sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.guest-btn {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border: none;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 26px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: filter 0.15s;
+}
+
+.guest-btn:hover {
+  filter: brightness(1.08);
 }
 
 /* ===== 用户信息 ===== */
