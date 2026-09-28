@@ -157,6 +157,9 @@ async function handleSubmit() {
 .login-card {
   width: 100%;
   max-width: 400px;
+  /* 必须显式 auto 外边距：.login-page 是整宽的 flex 子项，
+     只写 max-width 的话卡片会贴左边而不是居中 */
+  margin: 0 auto;
 }
 
 .login-card :deep(.el-card__body) {
