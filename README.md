@@ -1,20 +1,20 @@
 ﻿# 内容社区 (Content Sharing Platform)
 
-一个仿小红书 UI/UX 的全栈内容社区前端 + 后端项目。零外部依赖、本地 SQLite 存储、纯手写实现（不引入 UI 组件库 / ORM），目标是展示一个完整的前后端分离项目的工程能力。
+一个仿小红书 UI/UX 的全栈内容社区前端 + 后端项目。**PC 桌面端**布局，组件层使用 Element Plus（完全接管其主题变量），后端零外部框架、本地 SQLite 存储、ORM 层手写 SQL。目标是展示一个完整的前后端分离项目的工程能力。
 
 ## ✨ 已实现功能
 
-| 模块     | 功能                                                                                                         |
-| -------- | ------------------------------------------------------------------------------------------------------------ |
-| 账号     | 注册 / 登录 / JWT 鉴权 / 自动登录态持久化 (Pinia + localStorage)                                             |
-| 内容     | 发布笔记 (文本 + 1~9 张图，带上传进度条) / masonry 瀑布流 feed + hover 预览 / 笔记详情 / 图片 carousel       |
-| 互动     | 点赞 (可选登录态) / 评论 (登录态) / 评论列表                                                                 |
-| 个人主页 | banner / 头像 / 三栏统计 / 浏览记录 + 钱包入口 / 推荐关注 / 4 个 tab + 公开/私密/合集筛选 / 编辑资料 modal   |
-| 消息     | 3 个 tab pill（赞 / 新增关注 / 评论和@）+ 活动流过滤 + 推荐关注 + 通知开关（UI 框架已搭好）                  |
-| 侧边栏   | 小红书风格抽屉（用户卡片 + 9 个分组菜单 + 3 个底部圆形按钮 + 玻璃拟态）                                      |
-| 首页 tab | 双层 tab 栏：上层频道（关注 / 发现 / 雅安）/ 下层分类（推荐 / 视频 / 热点 / 直播 / 短剧 / 经验），fixed 吸顶 |
-| 设置     | 设置页（5 组设置项 + 深色模式切换 + 退出登录 + 协议链接）                                                    |
-| 主题     | 暗色 / 亮色切换 (URL 参数可强制 + localStorage 持久化)                                                       |
+| 模块     | 功能                                                                                                |
+| -------- | --------------------------------------------------------------------------------------------------- |
+| 账号     | 注册 / 登录 / JWT 鉴权 / 自动登录态持久化 (Pinia + localStorage)                                    |
+| 内容     | 发布笔记 (文本 + 1~9 张图，带逐图上传进度条) / 自适应栅格 feed / 笔记详情 / 图片灯箱预览            |
+| 互动     | 点赞 (可选登录态) / 评论 (登录态) / 评论列表                                                        |
+| 个人主页 | 封面 banner / 头像 / 三栏统计 / 4 个 tab + 公开/私密/合集筛选 / ElDialog 编辑资料 / 推荐关注        |
+| 消息     | 3 个分类（赞和收藏 / 新增关注 / 评论和@）+ 活动流过滤 + 推荐关注 + 通知开关（后端 API 待补）        |
+| 布局     | 桌面三栏：左侧固定 ElMenu 导航 + 顶部栏（搜索 / 发布 / 主题 / 用户菜单）+ 内容区；登录页走独立全屏  |
+| 首页 tab | 频道（关注 / 发现 / 雅安）用 ElTabs，分类（推荐 / 视频 / 热点 / 直播 / 短剧 / 经验）用 ElRadioGroup |
+| 设置     | 5 组设置项卡片 + 深色模式 ElSwitch + 账号摘要 + 退出登录 + 协议链接                                 |
+| 主题     | 暗色 / 亮色切换（`html.dark` 驱动，Element Plus 变量同步切换 + localStorage 持久化）                |
 
 > 路线图见 [docs/architecture.md](docs/architecture.md#路线图)
 
@@ -25,6 +25,7 @@
 - Vue 3.5 (Composition API + `<script setup>`)
 - TypeScript 5.6
 - Vite 6 (含 `/uploads` 反代解决 dev 跨域)
+- **Element Plus 2.14** + `@element-plus/icons-vue`，通过 `unplugin-vue-components` 按需自动引入
 - Pinia 4 + `pinia-plugin-persistedstate` (auth 持久化)
 - Vue Router 4
 - Axios 1 (formdata 走原生 XHR 绕开 multipart bug)
@@ -59,13 +60,16 @@ npm run dev          # vite
 content-sharing-platform/
 ├─ client/                     # Vue 3 + Vite 前端
 │  ├─ src/
-│  │  ├─ views/                # 路由级页面（HomeView / ProfileView / PublishView / PostDetailView / MessagesView / MarketView / LoginView）
-│  │  ├─ components/           # BottomNav 等复用组件
+│  │  ├─ views/                # 9 个路由级页面（Home / PostDetail / Publish / Profile / Messages / Market / Settings / Login / NotFound）
+│  │  ├─ components/           # SideNav（左侧导航）/ TopBar（顶部栏）/ EmptyState / ErrorBoundary
+│  │  ├─ assets/styles/        # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）
+│  │  ├─ composables/          # useRelativeTime（相对时间） / useTheme（主题共享状态）
 │  │  ├─ api/                  # request.ts (axios 实例 + 拦截器) / auth.ts / posts.ts
-│  │  ├─ stores/               # Pinia: auth.ts
-│  │  ├─ router/               # Vue Router 配置
+│  │  ├─ stores/               # Pinia: auth / toast / homeTabs
+│  │  ├─ router/               # Vue Router 配置（含 requiresAuth / guestOnly 守卫）
 │  │  └─ constants.ts          # 客户端常量（与 server mirror）
-│  └─ vite.config.ts           # 含 /uploads 反代
+│  ├─ components.d.ts          # unplugin-vue-components 生成的组件声明
+│  └─ vite.config.ts           # 按需引入插件 + /uploads 反代
 │
 ├─ server/                     # Express + SQLite 后端
 │  ├─ src/
@@ -82,10 +86,11 @@ content-sharing-platform/
 
 ## 🎯 设计决策（简历可以聊的点）
 
-- **不引 UI 库**：所有交互组件（dropzone / modal / tabs / bottom nav / sidebar / drawer）手写，证明能直接落地设计稿
+- **用 Element Plus，但主题 100% 自己接管**：组件库只提供行为和骨架，视觉完全由 `element-theme.css` 重写 `--el-*` 变量 + 覆写组件选择器（见下方"主题接管"），交付出来仍然是自己的设计系统，而不是默认蓝配默认圆角
 - **不引 ORM**：手写 SQL（`better-sqlite3.prepare(...).all()`），同步接口比 async 好读
 - **不引 Tailwind**：CSS variables 主题切换 + scoped CSS，便于改设计 token
-- **Flat + Outline 设计系统**：对齐小红书移动端——纯色底（dark `#000` / light `#fff`）、无毛玻璃无渐变光斑、1px 描边分组、红色 `#ff2d55` 只用于强调（关注按钮 / 话题标签 / 选中态）；dark / light 双主题共用一套 token
+- **Flat + Outline 设计系统**：对齐小红书——纯色底（dark `#000` / light `#fff`）、无毛玻璃无渐变光斑、1px 描边分组、红色 `#ff2d55` 只用于强调（关注按钮 / 话题标签 / 选中态）；dark / light 双主题共用一套 token
+- **组件按需引入而非全量注册**：`unplugin-vue-components` + `ElementPlusResolver`，构建产物里每个 EP 组件是独立 chunk，首页不加载 `el-upload` / `el-dialog` 的代码
 - **防御性校验**：所有限制（content ≤ 500 字、图 ≤ 10MB）双端校验，client 立即反馈 + server 拒绝非法请求
 - **Vue 3 reactivity 坑**：uploaded image 对象用 `reactive()` 显式包一层，绕开 `ref([]).push(plain)` 不会自动 proxy 子项的陷阱（详见 [docs/architecture.md](docs/architecture.md#踩过的坑)）
 - **后端 hardening**：dotenv + 启动期 env 校验、express-rate-limit（auth 5/min，写接口 20/min）、统一错误中间件（multer / JSON parse / 404）、password 列名迁移到 password_hash
@@ -95,17 +100,20 @@ content-sharing-platform/
 
 ### 前端
 
-| 亮点                            | 实现                                                                                                                                                                                                                                   | 踩过的坑                                                                                                                       |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| **Flat + Outline 设计系统**     | 纯色底 + 1px 描边分组 + 红色仅用于强调；12 个 token（`--background/foreground/border/muted/accent/chip-*`）+ 5 个 utility class（`.glass` / `.glass-pill` / `.glass-input` / `.btn-accent` / `.btn-outline`），dark / light 双主题共用 | 全局零 `backdrop-filter`：小红书移动端不做毛玻璃，模糊层在纯色底上反而显脏；`color-mix()` 而不是硬编码两套色值，避免双主题分叉 |
-| **fixed vs sticky 的取舍**      | 顶部 tab 栏本来用 `position: sticky`，实测在 `html, body { overflow-x: hidden }` 下会静默失效（scroll 越过元素后整个消失），改成 `fixed` + 容器 `padding-top` 让位                                                                     | sticky 的有效性取决于**所有祖先**的 `overflow` / `transform` / `filter`，比想象中苛刻得多；fixed 更可控                        |
-| **共享状态用 store 不用 props** | `homeTabs` Pinia store 让 `App.vue` 的 HomeTopTabs 和 `HomeView` 的 watch 订阅同一份 channel / category state                                                                                                                          | 组件层级跨越 `router-view` 时 props drilling 不可行                                                                            |
-| **路由级错误边界**              | `ErrorBoundary.vue` 用 `onErrorCaptured` 捕获 render 期同步异常，渲染降级 UI + 重试按钮，避免白屏                                                                                                                                      | 只兜同步异常；异步错误靠每个 view 自己的 `errorMsg` ref                                                                        |
-| **抽 EmptyState 消除重复**      | 3 个 variant（loading / empty / error）+ `compact` prop，替代 4 个 view 里各自写的 `class="state empty"`                                                                                                                               | —                                                                                                                              |
-| **404 catch-all**               | `/:pathMatch(.*)*` 路由 + 玻璃风格 NotFoundView                                                                                                                                                                                        | —                                                                                                                              |
-| **上传进度条绕开 axios**        | 用原生 `XMLHttpRequest.upload.onprogress` 而不是 axios                                                                                                                                                                                 | axios 1.x 在 instance 默认 `Content-Type: application/json` 时会把 FormData 转成 JSON 字符串发出去，multer 收不到文件          |
-| **图片 carousel**               | 主图（4:5）+ 计数徽章 + 左右切换 + 圆点指示器（激活态拉长）+ 缩略图条                                                                                                                                                                  | —                                                                                                                              |
-| **masonry 瀑布流**              | 纯 CSS：2 列 grid + 6 张一组循环 `aspect-ratio`（1/1 → 3/4 → 4/5 → 3/5 → 2/3 → 5/6）+ `align-items: start`                                                                                                                             | 浏览器原生 `grid-template-rows: masonry` 只有 Firefox 支持，只能模拟                                                           |
+| 亮点                            | 实现                                                                                                                                                                                             | 踩过的坑                                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Element Plus 主题接管**       | `element-theme.css` 用 `html.dark` / `html:not(.dark)` 双选择器重写 40+ 个 `--el-*` 变量（主色 / 背景层级 / 文字层级 / 描边 / 填充 / 阴影 / 圆角），再覆写输入框、卡片、弹层、菜单、表格的选择器 | Element Plus 自带的深色变量用 `html.dark`（特异度 0,1,1），比 `:root`（0,1,0）高。只写 `:root` 的话，用户切深色时会被官方变量反覆盖                    |
+| **按需引入 + 全局变量分层**     | 组件与组件样式由 `unplugin-vue-components` 自动 import；`main.ts` 只手动引三份全局 CSS：`base.css`（官方 `:root` 变量）→ `dark/css-vars.css` → 自己的 `element-theme.css`                        | 单独引 `element-plus/dist/index.css` 是 360KB 全量样式，会和按需引入的样式重复；单独引组件样式又缺 `:root` 变量，组件颜色全丢                          |
+| **CSS import 顺序即优先级**     | 自定义主题文件必须放在官方样式**之后**且选择器特异度相同，否则被官方规则盖掉                                                                                                                     | "我的主题没生效" 十次里有八次是顺序或特异度问题，不是变量名写错                                                                                        |
+| **响应式双栏降级**              | 详情 / 发布 / 主页 / 消息四个页面都是 `1fr + 固定右栏` 的 grid，≤1100px 时降级成单栏、右栏 `position: static`                                                                                    | 桌面布局在窄视口下会把左栏压到几十像素，两栏直接叠在一起。侧栏 216px 是固定成本，必须按**内容区**而不是视口宽度算断点                                  |
+| **sticky 的前置条件**           | 移除了 `html, body { overflow-x: hidden }`，SideNav / TopBar 的 `position: sticky` 才稳定                                                                                                        | 祖先有 `overflow: hidden` 时 sticky 相对祖先滚动区而非 viewport 计算，会静默失效——不报错，元素就是不吸顶                                               |
+| **共享状态用 store 不用 props** | `homeTabs` store 让 HomeView 的 ElTabs / ElRadioGroup 和频道分类筛选订阅同一份 channel / category state                                                                                          | 组件层级跨越 `router-view` 时 props drilling 不可行                                                                                                    |
+| **路由级错误边界**              | `ErrorBoundary.vue` 用 `onErrorCaptured` 捕获 render 期同步异常，渲染降级 UI + 重试按钮，避免白屏                                                                                                | 只兜同步异常；异步错误靠每个 view 自己的 `errorMsg` ref                                                                                                |
+| **抽 EmptyState 消除重复**      | 封装 `loading` / `empty` / `error` 三态 + `compact` prop，内部直接用 ElSkeleton / ElEmpty                                                                                                        | —                                                                                                                                                      |
+| **404 catch-all**               | `/:pathMatch(.*)*` 路由 + ElResult 风格的 NotFoundView                                                                                                                                           | —                                                                                                                                                      |
+| **上传进度条绕开 axios**        | 用原生 `XMLHttpRequest.upload.onprogress` 而不是 axios                                                                                                                                           | axios 1.x 在 instance 默认 `Content-Type: application/json` 时会把 FormData 转成 JSON 字符串发出去，multer 收不到文件                                  |
+| **API 层类型对齐**              | 响应拦截器 `return response.data` 抹掉 `AxiosResponse` 包装，但 axios 1.x 的类型不会传播拦截器返回类型。给实例加一层 `UnwrappedInstance` 接口断言，让静态类型和运行时一致                        | 之前的写法让 `await request.post<Foo>()` 被推断成 `AxiosResponse<Foo>`，调用方读 `.foo` 直接 TS2339；靠 `as unknown as Foo` 到处打补丁只是把问题藏起来 |
+| **瀑布流栅格**                  | 纯 CSS：`repeat(auto-fill, minmax(240px, 1fr))` 自适应列数 + 6 张一组循环 `aspect-ratio`（1/1 → 3/4 → 4/5 → 3/5 → 2/3 → 5/6）+ `align-items: start`                                              | 浏览器原生 `grid-template-rows: masonry` 只有 Firefox 支持，只能用 nth-child 模拟                                                                      |
 
 ### 后端
 
@@ -120,17 +128,19 @@ content-sharing-platform/
 
 ### 工程化
 
-| 亮点                             | 实现                                                                                                                                                                                                             |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                        |
-| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威 |
-| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 20；本地能过的命令 CI 也必须能过                                                  |
-| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                         |
+| 亮点                             | 实现                                                                                                                                                                                                                               |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                          |
+| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                   |
+| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对 |
+| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 20；本地能过的命令 CI 也必须能过                                                                    |
+| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"                                                      |
+| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                           |
 
 ## 📚 文档
 
 - [架构图 / 数据模型 / 关键流程 / 踩坑记录](docs/architecture.md)
-- 路线图：发布笔记 → 点赞 / 评论 → 个人主页重构 → 图片上传 → **当前**（布局对齐 + 代码抛光）
+- 路线图：发布笔记 → 点赞 / 评论 → 个人主页重构 → 图片上传 → 移动端对齐 → **当前**（PC 桌面端 + Element Plus 重构）
 
 ## 🔐 安全性
 
@@ -139,6 +149,7 @@ content-sharing-platform/
 - 所有写接口（发布 / 评论 / 点赞 / 上传）走 `requireAuth` 中间件
 - 上传：multer 校验 mimetype + 单文件 ≤ 10MB + 一次 ≤ 9 张
 - SQL：用 `?` 参数化，无字符串拼接
+- 登录后跳转 `?redirect=` 只接受站内路径（`startsWith('/')` 且不以 `//` 开头），防开放重定向
 - CORS：开发全开；生产应限制 origin
 
 ## 📄 License
