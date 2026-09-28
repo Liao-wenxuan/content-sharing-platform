@@ -1,6 +1,16 @@
 <script setup lang="ts">
+/**
+ * 笔记详情页（桌面端）
+ *
+ * 布局改造：从移动端「单列上下堆叠」改成 PC 经典双栏 ——
+ *   左栏：作者栏 + 图片轮播 + 正文
+ *   右栏：评论区（sticky，跟随滚动）
+ * 图片轮播从手写 dot 指示器换成 Element Plus 的 ElImage + preview 灯箱。
+ */
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Star, ChatDotRound, Collection, ArrowLeft } from '@element-plus/icons-vue'
 import { postsApi, type Post, type Comment } from '@/api/posts'
 import { useAuthStore } from '@/stores/auth'
 import { COMMENT_MAX_LENGTH } from '@/constants'
@@ -63,10 +73,10 @@ async function loadPost() {
     // 收藏从 localStorage 读取
     favorited.value = loadFavorites().has(id)
   } catch (err: any) {
-    if (err.response?.status === 404) {
+    if (err?.response?.status === 404) {
       errorMsg.value = '笔记不存在或已被删除'
     } else {
-      errorMsg.value = err.response?.data?.message || '加载失败'
+      errorMsg.value = err?.response?.data?.message || '加载失败'
     }
   } finally {
     loading.value = false
@@ -81,7 +91,7 @@ async function loadComments() {
   try {
     const data = await postsApi.getComments(currentPostId.value)
     comments.value = data.list
-  } catch (err: any) {
+  } catch (err) {
     console.error('[Load Comments]', err)
     // 评论失败不致命，给个空列表即可
     comments.value = []
@@ -115,13 +125,13 @@ async function toggleLike() {
     // 回滚
     liked.value = wasLiked
     likeCount.value += wasLiked ? 1 : -1
-    alert(err.response?.data?.message || '操作失败，请重试')
+    ElMessage.error(err?.response?.data?.message || '操作失败，请重试')
   } finally {
     liking.value = false
   }
 }
 
-// ===== 收藏（local-only） =====
+// ===== 收藏（local-only） ======
 // 后端暂无收藏接口，本地持久化到 localStorage，按 postId 区分
 const FAV_KEY = 'sg:favorites'
 
@@ -175,7 +185,7 @@ async function submitComment() {
     newComment.value = ''
     if (post.value) post.value.commentCount += 1
   } catch (err: any) {
-    commentError.value = err.response?.data?.message || '评论失败，请重试'
+    commentError.value = err?.response?.data?.message || '评论失败，请重试'
   } finally {
     submittingComment.value = false
   }
@@ -199,21 +209,10 @@ function goBack() {
   router.push('/')
 }
 
-// 滚动到评论区（点击评论按钮）
-function scrollToComments() {
-  const el = document.querySelector('.comment-section')
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-}
-
-const commentLength = computed(() => newComment.value.length)
-
-// ===== 图片 carousel =====
-// 当前显示的图片索引；多图时可切换
+// ===== 图片轮播 =====
+// 当前主图索引；缩略图点击切换，切 post 时重置
 const currentImageIndex = ref(0)
 
-// post 切换 / 重新加载时重置索引
 watch(
   () => currentPostId.value,
   () => {
@@ -221,55 +220,20 @@ watch(
   }
 )
 
-const imageCount = computed(() => post.value?.imageUrls?.length ?? 0)
-const hasMultipleImages = computed(() => imageCount.value > 1)
-
-function selectImage(index: number) {
-  currentImageIndex.value = index
-}
-
 // ===== 生命周期 =====
-onMounted(() => {
-  loadPost()
-})
+onMounted(() => loadPost())
 
 watch(
   () => route.params.id,
-  () => {
-    loadPost()
-  }
+  () => loadPost()
 )
 </script>
 
 <template>
   <div class="detail">
-    <!-- 顶部 sticky bar：返回 / 分享（纯色底，无毛玻璃） -->
-    <header class="topbar">
-      <button class="topbar-btn" @click="goBack" aria-label="返回">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M15 18l-6-6 6-6"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
-      <div class="topbar-spacer"></div>
-      <button class="topbar-btn" aria-label="分享">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M12 15V3m0 0L8 7m4-4 4 4"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </button>
+    <header class="page-header">
+      <el-button link :icon="ArrowLeft" class="back-btn" @click="goBack">返回</el-button>
+      <h1 class="page-title">笔记详情</h1>
     </header>
 
     <EmptyState v-if="loading" variant="loading" title="加载笔记..." hint="马上就好" />
@@ -282,322 +246,217 @@ watch(
       @action="goBack"
     />
 
-    <template v-else-if="post">
-      <!-- ===== 作者栏：头像 + 昵称 + 红色关注按钮 ===== -->
-      <header class="author-bar">
-        <div class="avatar-lg">{{ avatarText(post.author?.nickname) }}</div>
-        <div class="author-meta">
-          <div class="author-nick">{{ post.author?.nickname || '未知用户' }}</div>
-        </div>
-        <button class="follow-btn" @click="toggleFollow">
-          {{ following ? '已关注' : '关注' }}
-        </button>
-      </header>
-
-      <!-- ===== 图片区：满幅出血，无圆角（小红书移动端）===== -->
-      <section v-if="imageCount > 0" class="image-carousel">
-        <div class="main-image">
-          <img
-            :src="post.imageUrls[currentImageIndex]"
-            :alt="`图片 ${currentImageIndex + 1} / ${imageCount}`"
-            loading="lazy"
-          />
-        </div>
-        <!-- 圆点指示器：激活态红色 + 拉长 -->
-        <div v-if="hasMultipleImages" class="dots" role="tablist">
-          <button
-            v-for="(_, i) in post.imageUrls"
-            :key="i"
-            class="dot"
-            :class="{ active: i === currentImageIndex }"
-            :aria-label="`切换到第 ${i + 1} 张`"
-            :aria-selected="i === currentImageIndex"
-            role="tab"
-            @click="selectImage(i)"
-          />
-        </div>
-      </section>
-
-      <!-- ===== 正文区：平铺，无卡片 ===== -->
-      <section class="post-body">
-        <div class="content">{{ post.content }}</div>
-
-        <div v-if="post.topicTag" class="topic">#{{ post.topicTag }}</div>
-
-        <!-- 信息元数据：描边胶囊（地点 / 活动 / 搜索） -->
-        <div class="meta-chips">
-          <span class="chip">
-            <svg viewBox="0 0 24 24" class="chip-icon" aria-hidden="true">
-              <path
-                d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linejoin="round"
-              />
-              <circle
-                cx="12"
-                cy="10"
-                r="2.4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.7"
-              />
-            </svg>
-            地点
-          </span>
-          <span v-if="post.topicTag" class="chip">
-            <svg viewBox="0 0 24 24" class="chip-icon" aria-hidden="true">
-              <rect
-                x="3"
-                y="5"
-                width="18"
-                height="16"
-                rx="2"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.7"
-              />
-              <path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.7" />
-            </svg>
-            活动
-          </span>
-          <span class="chip">
-            <svg viewBox="0 0 24 24" class="chip-icon" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.7" />
-              <path
-                d="m20 20-3.5-3.5"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-              />
-            </svg>
-            请你想搜
-          </span>
-        </div>
-
-        <footer class="post-footer">
-          <span class="post-time">{{ formatTime(post.createdAt) }}</span>
-          <span class="post-id">笔记 #{{ post.id }}</span>
-        </footer>
-      </section>
-
-      <!-- ===== 互动栏（点赞 / 收藏 / 评论） ===== -->
-      <div class="action-bar">
-        <!-- 点赞 -->
-        <button
-          class="action-btn like-btn"
-          :class="{ liked }"
-          :disabled="liking"
-          @click="toggleLike"
-          :aria-label="liked ? '取消点赞' : '点赞'"
-        >
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              v-if="liked"
-              d="M12 21s-7.5-4.6-9.5-9.1C1.1 8.2 3 5 6.3 5c1.9 0 3.4 1 4.2 2.4l1.5 1.9 1.5-1.9C14.3 6 15.8 5 17.7 5 21 5 22.9 8.2 21.5 11.9 19.5 16.4 12 21 12 21z"
-              fill="currentColor"
-            />
-            <path
-              v-else
-              d="M12 21s-7.5-4.6-9.5-9.1C1.1 8.2 3 5 6.3 5c1.9 0 3.4 1 4.2 2.4l1.5 1.9 1.5-1.9C14.3 6 15.8 5 17.7 5 21 5 22.9 8.2 21.5 11.9 19.5 16.4 12 21 12 21z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span class="action-label">{{ liked ? '已赞' : '点赞' }}</span>
-          <span class="action-count">{{ likeCount }}</span>
-        </button>
-
-        <!-- 收藏（local-only） -->
-        <button
-          class="action-btn fav-btn"
-          :class="{ active: favorited }"
-          @click="toggleFavorite"
-          :aria-label="favorited ? '取消收藏' : '收藏'"
-        >
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              v-if="favorited"
-              d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"
-              fill="currentColor"
-            />
-            <path
-              v-else
-              d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span class="action-label">{{ favorited ? '已收藏' : '收藏' }}</span>
-        </button>
-
-        <!-- 评论（点击跳到评论列表） -->
-        <button class="action-btn" @click="scrollToComments" aria-label="查看评论">
-          <svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M21 12c0 4.4-4 8-9 8a9.7 9.7 0 0 1-3.8-.7L3 21l1.4-4.5A7.7 7.7 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8z"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <span class="action-label">评论</span>
-          <span class="action-count">{{ post.commentCount }}</span>
-        </button>
-      </div>
-
-      <!-- ===== 评论输入框 ===== -->
-      <section class="composer">
-        <div v-if="!auth.isLoggedIn" class="composer-locked">
-          <button
-            class="link-btn"
-            @click="router.push({ path: '/login', query: { redirect: route.fullPath } })"
-          >
-            登录后参与评论
-          </button>
-        </div>
-        <template v-else>
-          <div class="composer-row">
-            <div class="avatar avatar-sm">{{ avatarText(auth.user?.nickname) }}</div>
-            <textarea
-              v-model="newComment"
-              class="composer-input"
-              placeholder="说点什么..."
-              rows="2"
-              :maxlength="COMMENT_MAX_LENGTH"
-              @input="onCommentInput"
-              :disabled="submittingComment"
-            ></textarea>
+    <div v-else-if="post" class="detail-grid">
+      <!-- ================= 左栏：正文 ================= -->
+      <article class="main-col">
+        <!-- 作者栏 -->
+        <header class="author-bar">
+          <el-avatar :size="44" class="avatar">
+            {{ avatarText(post.author?.nickname) }}
+          </el-avatar>
+          <div class="author-meta">
+            <div class="author-nick">{{ post.author?.nickname || '未知用户' }}</div>
+            <div class="author-time">{{ formatExactTime(post.createdAt) }}</div>
           </div>
-          <div class="composer-actions">
-            <span class="counter" :class="{ over: commentLength > COMMENT_MAX_LENGTH }">
-              {{ commentLength }} / {{ COMMENT_MAX_LENGTH }}
-            </span>
+          <el-button class="follow-btn" type="primary" plain round @click="toggleFollow">
+            {{ following ? '已关注' : '关注' }}
+          </el-button>
+        </header>
+
+        <!-- 图片区：ElImage 自带灯箱预览，缩略图切换主图 -->
+        <section v-if="post.imageUrls?.length" class="image-section">
+          <el-image
+            class="main-image"
+            :src="post.imageUrls[currentImageIndex]"
+            :preview-src-list="post.imageUrls"
+            :initial-index="currentImageIndex"
+            preview-teleported
+            hide-on-click-modal
+            fit="contain"
+          />
+          <div v-if="post.imageUrls.length > 1" class="thumbs">
             <button
-              class="submit-btn"
-              :disabled="!newComment.trim() || submittingComment"
-              @click="submitComment"
+              v-for="(url, i) in post.imageUrls"
+              :key="url"
+              type="button"
+              class="thumb"
+              :class="{ active: i === currentImageIndex }"
+              :aria-label="`查看第 ${i + 1} 张图`"
+              @click="currentImageIndex = i"
             >
-              {{ submittingComment ? '发送中...' : '发送' }}
+              <img :src="url" :alt="`缩略图 ${i + 1}`" loading="lazy" />
             </button>
           </div>
-          <div v-if="commentError" class="composer-error">{{ commentError }}</div>
-        </template>
-      </section>
+        </section>
 
-      <!-- ===== 评论列表 ===== -->
-      <section class="comment-section">
-        <h3 class="section-title">评论 ({{ comments.length }})</h3>
+        <!-- 正文 -->
+        <section class="content-section">
+          <p class="content">{{ post.content }}</p>
 
-        <div v-if="loadingComments" class="comment-loading">
-          <EmptyState variant="loading" title="加载评论中..." compact />
-        </div>
+          <el-tag v-if="post.topicTag" type="danger" effect="plain" round class="topic-tag">
+            # {{ post.topicTag }}
+          </el-tag>
 
-        <EmptyState
-          v-else-if="comments.length === 0"
-          icon="💬"
-          title="还没有评论"
-          hint="来抢沙发 ✨"
-          compact
-        />
+          <div class="actions">
+            <el-button
+              class="action-btn"
+              :type="liked ? 'danger' : 'default'"
+              :plain="!liked"
+              round
+              :loading="liking"
+              @click="toggleLike"
+            >
+              <el-icon><component :is="Star" /></el-icon>
+              {{ liked ? '已赞' : '点赞' }} {{ likeCount }}
+            </el-button>
 
-        <ul v-else class="comment-list">
-          <li v-for="c in comments" :key="c.id" class="comment-item">
-            <div class="avatar avatar-sm">{{ avatarText(c.author?.nickname) }}</div>
-            <div class="comment-body">
-              <div class="comment-meta">
-                <span class="comment-author">{{ c.author?.nickname || '未知用户' }}</span>
-                <span class="comment-time" :title="formatExactTime(c.createdAt)">
-                  {{ formatTime(c.createdAt) }}
-                </span>
-              </div>
-              <div class="comment-content">{{ c.content }}</div>
+            <el-button
+              class="action-btn"
+              :type="favorited ? 'warning' : 'default'"
+              :plain="!favorited"
+              round
+              @click="toggleFavorite"
+            >
+              <el-icon><component :is="Collection" /></el-icon>
+              {{ favorited ? '已收藏' : '收藏' }}
+            </el-button>
+
+            <span class="stat-hint">
+              <el-icon><component :is="ChatDotRound" /></el-icon>
+              {{ post.commentCount }} 条评论
+            </span>
+          </div>
+        </section>
+      </article>
+
+      <!-- ================= 右栏：评论区 ================= -->
+      <aside class="comment-section">
+        <el-card shadow="never" class="comment-card" body-class="comment-body">
+          <h2 class="comment-title">评论 · {{ comments.length }}</h2>
+
+          <!-- 输入区 -->
+          <div class="comment-editor">
+            <el-input
+              v-model="newComment"
+              type="textarea"
+              :rows="3"
+              :maxlength="COMMENT_MAX_LENGTH"
+              show-word-limit
+              resize="none"
+              placeholder="说点什么..."
+              @input="onCommentInput"
+              @keydown.ctrl.enter="submitComment"
+            />
+            <div class="editor-actions">
+              <el-button
+                type="primary"
+                :loading="submittingComment"
+                :disabled="!newComment.trim()"
+                @click="submitComment"
+              >
+                发表评论
+              </el-button>
             </div>
-          </li>
-        </ul>
-      </section>
-    </template>
+            <p v-if="commentError" class="comment-error">{{ commentError }}</p>
+          </div>
+
+          <!-- 列表 -->
+          <el-divider />
+
+          <EmptyState v-if="loadingComments" variant="loading" title="加载评论中..." compact />
+
+          <el-empty
+            v-else-if="comments.length === 0"
+            description="还没有评论，来抢第一条"
+            :image-size="60"
+          />
+
+          <ul v-else class="comment-list">
+            <li v-for="item in comments" :key="item.id" class="comment-item">
+              <el-avatar :size="32" class="avatar-sm">
+                {{ avatarText(item.author?.nickname) }}
+              </el-avatar>
+              <div class="comment-main">
+                <div class="comment-head">
+                  <span class="comment-author">{{ item.author?.nickname || '未知用户' }}</span>
+                  <span class="comment-time">{{ formatTime(item.createdAt) }}</span>
+                </div>
+                <p class="comment-text">{{ item.content }}</p>
+              </div>
+            </li>
+          </ul>
+        </el-card>
+      </aside>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* ============================================================
- * 笔记详情 —— 对齐小红书移动端
- *   纯色底 · 满幅出血图 · 描边胶囊 · 红色仅用于强调 · 无卡片无毛玻璃
- * ============================================================ */
-
 .detail {
-  max-width: 560px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
-  padding: 0 0 24px;
 }
 
-/* ===== 顶部 sticky bar：纯色底，无模糊 ===== */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  background: var(--background);
-}
-
-.topbar-spacer {
-  flex: 1;
-}
-
-.topbar-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  color: var(--foreground);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  transition: background 0.15s;
-}
-
-.topbar-btn:hover {
-  background: var(--muted);
-}
-
-.topbar-btn svg {
-  width: 22px;
-  height: 22px;
-  display: block;
-}
-
-/* ===== 作者栏：头像 + 昵称 + 红色关注按钮 ===== */
-.author-bar {
+.page-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  margin-bottom: 20px;
 }
 
-.avatar-lg {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--muted);
-  color: var(--muted-foreground);
+.back-btn {
+  padding: 0;
+  height: auto;
+  font-size: 14px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--foreground);
+}
+
+/* ===== 双栏 ===== */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
+  align-items: start;
+}
+
+/*
+ * 视口不够宽时（侧栏 216 + 内容区 + 360 右栏 + 间距）左栏会被压到
+ * 几乎没有宽度，两栏直接叠在一起。所以这里降级成单栏。
+ */
+@media (max-width: 1100px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .comment-card {
+    position: static;
+    max-height: none;
+  }
+}
+
+.main-col {
+  min-width: 0;
+}
+
+/* ===== 作者栏 ===== */
+.author-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 15px;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+
+.avatar {
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 16px;
   flex-shrink: 0;
 }
 
@@ -609,360 +468,201 @@ watch(
 .author-nick {
   font-size: 15px;
   font-weight: 600;
-  color: var(--foreground);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.author-time {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-top: 2px;
 }
 
 .follow-btn {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  border: none;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 18px;
-  cursor: pointer;
-  font-family: inherit;
   flex-shrink: 0;
-  transition: filter 0.15s;
 }
 
-.follow-btn:hover {
-  filter: brightness(1.1);
-}
-
-/* ===== 图片区：满幅出血，无圆角 ===== */
-.image-carousel {
-  margin-bottom: 4px;
+/* ===== 图片区 ===== */
+.image-section {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .main-image {
+  display: block;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
+  aspect-ratio: 4 / 3;
   background: var(--muted);
 }
 
-.main-image img {
+.main-image :deep(.el-image__inner) {
+  object-fit: contain;
+}
+
+/* 缩略图条 */
+.thumbs {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.thumb {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--muted);
+  opacity: 0.6;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
+}
+
+.thumb:hover {
+  opacity: 0.9;
+}
+
+.thumb.active {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+.thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-/* 圆点指示器：小红书风格，激活态红色 + 拉长 */
-.dots {
-  display: flex;
-  justify-content: center;
-  gap: 5px;
-  padding: 10px 0 4px;
-}
-
-.dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  border: none;
-  background: var(--muted-foreground);
-  opacity: 0.4;
-  cursor: pointer;
-  padding: 0;
-  transition: all 0.2s ease;
-}
-
-.dot.active {
-  opacity: 1;
-  background: var(--accent);
-  width: 14px;
-  border-radius: 3px;
-}
-
-/* ===== 正文区：平铺，无卡片 ===== */
-.post-body {
-  padding: 12px 16px 0;
+/* ===== 正文 ===== */
+.content-section {
+  padding: 20px 0 8px;
 }
 
 .content {
+  margin: 0;
   font-size: 16px;
-  line-height: 1.7;
-  color: var(--foreground);
+  line-height: 1.8;
   white-space: pre-wrap;
-  word-wrap: break-word;
-  margin-bottom: 10px;
+  word-break: break-word;
 }
 
-.topic {
-  display: inline-block;
-  color: var(--accent);
-  font-size: 15px;
-  margin-bottom: 12px;
+.topic-tag {
+  margin-top: 14px;
 }
 
-/* ===== 信息元数据：描边胶囊 ===== */
-.meta-chips {
+.actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 
-.chip {
+.stat-hint {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--chip-bg);
-  border: 1px solid var(--chip-border);
-  border-radius: 999px;
-  color: var(--chip-text);
-  font-size: 13px;
-  padding: 5px 12px;
-}
-
-.chip-icon {
-  width: 14px;
-  height: 14px;
-  display: block;
-  flex-shrink: 0;
-}
-
-.post-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  margin-left: auto;
   font-size: 13px;
   color: var(--muted-foreground);
-  padding-bottom: 4px;
 }
 
-.post-id {
-  font-size: 12px;
-}
-
-/* ===== 互动栏：底部一排描边按钮 ===== */
-.action-bar {
+/* ===== 评论侧栏 ===== */
+.comment-card {
+  position: sticky;
+  top: calc(var(--top-bar-height) + 24px);
+  max-height: calc(100vh - var(--top-bar-height) - 48px);
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  margin-top: 4px;
+  flex-direction: column;
 }
 
-.action-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--foreground);
-  font-size: 13px;
-  padding: 7px 8px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-
-.action-btn:hover:not(:disabled) {
-  background: var(--muted);
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.action-icon {
-  width: 17px;
-  height: 17px;
-  display: block;
-}
-
-.action-count {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
-
-.like-btn.liked {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.like-btn.liked .action-count {
-  color: var(--accent);
-}
-
-.fav-btn.active {
-  color: #f59e0b;
-  border-color: #f59e0b;
-}
-
-/* ===== 评论输入区 ===== */
-.composer {
-  margin: 8px 16px 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-
-.composer-locked {
-  text-align: center;
-  padding: 10px 0;
-  color: var(--muted-foreground);
-  font-size: 14px;
-}
-
-.link-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 14px;
-  font-family: inherit;
-  padding: 0;
-}
-
-.composer-row {
+.comment-body {
   display: flex;
-  gap: 8px;
-  align-items: flex-start;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px;
 }
 
-.composer-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--foreground);
-  font-size: 15px;
-  font-family: inherit;
-  resize: none;
-  line-height: 1.5;
-  padding: 0;
-  min-height: 40px;
-}
-
-.composer-input:focus {
-  outline: none;
-}
-
-.composer-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-}
-
-.counter {
-  font-size: 12px;
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-
-.counter.over {
-  color: var(--accent);
-}
-
-.submit-btn {
-  background: var(--accent);
-  color: var(--accent-foreground);
-  border: none;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 20px;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.submit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.composer-error {
-  margin-top: 8px;
-  color: var(--destructive);
-  font-size: 12px;
-}
-
-/* ===== 评论列表：纯列表，无卡片 ===== */
-.comment-section {
-  padding: 20px 16px 0;
-}
-
-.section-title {
+.comment-title {
   margin: 0 0 14px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--foreground);
+}
+
+.comment-editor {
+  flex-shrink: 0;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.comment-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--destructive);
 }
 
 .comment-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .comment-item {
   display: flex;
   gap: 10px;
+  padding: 12px 0;
 }
 
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+.comment-item + .comment-item {
+  border-top: 1px solid var(--border-lighter, var(--border));
+}
+
+.avatar-sm {
   background: var(--muted);
-  color: var(--muted-foreground);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 13px;
+  color: var(--foreground);
+  font-size: 12px;
   flex-shrink: 0;
 }
 
-.comment-body {
+.comment-main {
   flex: 1;
   min-width: 0;
 }
 
-.comment-meta {
+.comment-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
-  margin-bottom: 3px;
 }
 
 .comment-author {
   font-size: 13px;
-  color: var(--muted-foreground);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .comment-time {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted-foreground);
-  opacity: 0.7;
 }
 
-.comment-content {
-  font-size: 15px;
+.comment-text {
+  margin: 4px 0 0;
+  font-size: 14px;
   line-height: 1.6;
-  color: var(--foreground);
-  word-wrap: break-word;
-}
-
-@media (max-width: 480px) {
-  .detail {
-    max-width: 100%;
-  }
+  word-break: break-word;
 }
 </style>
