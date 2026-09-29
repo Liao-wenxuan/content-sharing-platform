@@ -9,6 +9,7 @@
     "format": "prettier --write \"**/*.{ts,vue,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,vue,json,md,css}\"",
     "test:e2e": "node scripts/desktop-smoke.mjs",
+    "test:search": "node scripts/search-smoke.mjs",
     "test:center": "node scripts/center-audit.mjs",
     "seed": "node server/seed.mjs",
     "seed:clean": "node server/cleanup-test-data.mjs",

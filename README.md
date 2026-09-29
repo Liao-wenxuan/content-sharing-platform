@@ -7,7 +7,8 @@
 | 模块     | 功能                                                                                                |
 | -------- | --------------------------------------------------------------------------------------------------- |
 | 账号     | 注册 / 登录 / JWT 鉴权 / 自动登录态持久化 (Pinia + localStorage)                                    |
-| 内容     | 发布笔记 (文本 + 1~9 张图，带逐图上传进度条) / 自适应栅格 feed / 笔记详情 / 图片灯箱预览            |
+| 内容     | 发布笔记 (文本 + 1~9 张图，带逐图上传进度条) / 真瀑布流 feed / 笔记详情 / 图片灯箱预览              |
+| 搜索     | 独立搜索页：正文 + 话题标签 + 作者昵称三路匹配 / 最新·最多点赞·最多评论排序 / 命中高亮 / 搜索历史   |
 | 互动     | 点赞 (可选登录态) / 评论 (登录态) / 评论列表                                                        |
 | 个人主页 | 封面 banner / 头像 / 三栏统计 / 4 个 tab + 公开/私密/合集筛选 / ElDialog 编辑资料 / 推荐关注        |
 | 消息     | 3 个分类（赞和收藏 / 新增关注 / 评论和@）+ 活动流过滤 + 推荐关注 + 通知开关（后端 API 待补）        |
@@ -134,7 +135,9 @@ content-sharing-platform/
 | **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                   |
 | **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对 |
 | **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 20；本地能过的命令 CI 也必须能过                                                                    |
-| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"                                                      |
+| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                  |
+| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                              |
+| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                            |
 | **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                           |
 
 ## 📚 文档
