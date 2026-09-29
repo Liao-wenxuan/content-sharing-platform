@@ -46,6 +46,12 @@ const router = createRouter({
       component: () => import('@/views/MarketView.vue')
     },
     {
+      // 搜索结果页：关键词走 ?q=，所以可分享 / 可刷新 / 可前进后退
+      path: '/search',
+      name: 'search',
+      component: () => import('@/views/SearchView.vue')
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),
