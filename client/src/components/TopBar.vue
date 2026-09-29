@@ -5,8 +5,11 @@
  * 布局：左搜索框（撑满）→ 右「发布」按钮 + 主题切换 + 用户菜单。
  * 用户菜单把「个人主页 / 设置 / 退出」收进 ElDropdown，
  * 避免在窄栏里堆一排图标按钮。
+ *
+ * 搜索：回车跳 /search?q=xxx。关键词和 URL 双向同步，
+ * 所以在结果页点顶栏的返回 / 后退 / 刷新都不会串味。
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -29,11 +32,36 @@ const auth = useAuthStore()
 const toast = useToastStore()
 const { isDark, toggleTheme } = useTheme()
 
-const avatarText = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || '?')
+const keyword = ref('')
+
+/** URL 上的 q 是唯一真源，输入框只是它的投影 */
+const urlQuery = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
+
+watch(
+  urlQuery,
+  (q) => {
+    keyword.value = q
+  },
+  { immediate: true }
+)
 
 function onSearch() {
-  ElMessage.info('搜索功能开发中，敬请期待')
+  const kw = keyword.value.trim()
+  if (!kw) {
+    if (route.name === 'search') router.push({ name: 'search' })
+    return
+  }
+  if (route.name !== 'search' || urlQuery.value !== kw) {
+    router.push({ name: 'search', query: { q: kw } })
+  }
 }
+
+function onClear() {
+  keyword.value = ''
+  if (route.name === 'search') router.push({ name: 'search' })
+}
+
+const avatarText = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || '?')
 
 function goPublish() {
   router.push('/publish')
@@ -60,11 +88,13 @@ function handleCommand(command: string) {
   <header class="top-bar">
     <!-- 搜索 -->
     <el-input
+      v-model="keyword"
       class="search-input"
       placeholder="搜索你感兴趣的内容"
       :prefix-icon="Search"
       clearable
       @keyup.enter="onSearch"
+      @clear="onClear"
     />
 
     <div class="bar-actions">
