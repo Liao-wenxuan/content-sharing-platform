@@ -11,7 +11,15 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, EditPen, ChatDotRound, Shop, User, Setting } from '@element-plus/icons-vue'
+import {
+  Compass,
+  Search,
+  EditPen,
+  ChatDotRound,
+  Shop,
+  User,
+  Setting
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -30,6 +38,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { path: '/', label: '发现', icon: Compass },
+  { path: '/search', label: '搜索', icon: Search },
   { path: '/publish', label: '发布', icon: EditPen, requiresAuth: true },
   { path: '/messages', label: '消息', icon: ChatDotRound, requiresAuth: true },
   { path: '/market', label: '市集', icon: Shop },
