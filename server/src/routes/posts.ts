@@ -195,6 +195,98 @@ router.get('/feed', (req: Request, res: Response) => {
   }
 })
 
+// ===== GET /search 搜索笔记 =====
+// 注意：必须注册在 /:id 之前！Express 按注册顺序匹配，
+// 否则 "/search" 会被 "/:id" 当成 id="search" 然后 parseInt 得到 NaN → 400
+router.get('/search', optionalAuth, (req: Request, res: Response) => {
+  try {
+    const raw = String(req.query.q ?? '').trim()
+    if (!raw) {
+      return res.status(400).json({ message: '搜索词不能为空' })
+    }
+    if (raw.length > 50) {
+      return res.status(400).json({ message: '搜索词过长' })
+    }
+
+    const page = Math.max(1, parseInt(String(req.query.page)) || 1)
+    const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
+    const offset = (page - 1) * pageSize
+
+    // LIKE 通配符转义：搜 "100%" 时不转义会变成 "%" 通配，把整表捞出来
+    const pattern = `%${raw.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+
+    // 排序白名单（防 SQL 注入：绝不能把 req.query.sort 直接拼进 ORDER BY）
+    const ORDER_BY: Record<string, string> = {
+      latest: 'p.created_at DESC, p.id DESC',
+      hot: 'like_count DESC, p.id DESC',
+      comment: 'comment_count DESC, p.id DESC'
+    }
+    const sortKey = String(req.query.sort ?? 'latest')
+    const orderBy = ORDER_BY[sortKey] ?? ORDER_BY.latest
+
+    // 搜索范围：正文 / 话题标签 / 作者昵称
+    const whereClause = `WHERE (
+      p.content LIKE ? ESCAPE '\\'
+      OR p.topic_tag LIKE ? ESCAPE '\\'
+      OR u.nickname LIKE ? ESCAPE '\\'
+    )`
+    const whereParams = [pattern, pattern, pattern]
+
+    const total = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM posts p JOIN users u ON p.user_id = u.id ${whereClause}`
+        )
+        .get(...whereParams) as { count: number }
+    ).count
+
+    const rows = db
+      .prepare(
+        `
+      SELECT
+        p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
+        u.nickname AS author_nickname, u.avatar AS author_avatar,
+        (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
+        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
+      FROM posts p
+      JOIN users u ON p.user_id = u.id
+      ${whereClause}
+      ORDER BY ${orderBy}
+      LIMIT ? OFFSET ?
+    `
+      )
+      .all(...whereParams, pageSize, offset) as any[]
+
+    res.json({
+      query: raw,
+      list: rows.map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        content: row.content,
+        imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
+        topicTag: row.topic_tag,
+        createdAt: toISO(row.created_at),
+        likeCount: row.like_count,
+        commentCount: row.comment_count,
+        author: {
+          id: row.user_id,
+          nickname: row.author_nickname,
+          avatar: row.author_avatar
+        }
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        hasMore: offset + rows.length < total
+      }
+    })
+  } catch (err: any) {
+    console.error('[Search Posts Error]', err)
+    res.status(500).json({ message: err.message || '搜索失败' })
+  }
+})
+
 // ===== GET /:id 单篇笔记详情 =====
 // 注意：必须注册在 /feed 后面！Express 按顺序匹配，否则 /feed 会被当成 :id="feed"
 router.get('/:id', optionalAuth, (req: Request, res: Response) => {
