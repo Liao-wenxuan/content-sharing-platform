@@ -79,7 +79,21 @@ router.get('/feed', (req: Request, res: Response) => {
 
     // 2. 解析过滤参数（防 SQL 注入：白名单枚举）
     const ALLOWED_CHANNELS = ['discover', 'follow', 'ya'] as const
-    const ALLOWED_CATEGORIES = ['recommend', 'video', 'hot', 'live', 'drama', 'exp'] as const
+    // 频道值对齐前端首页频道栏（推荐/穿搭/美食/...），最终落到 topic_tag 上过滤
+    const ALLOWED_CATEGORIES = [
+      'recommend',
+      'outfit',
+      'food',
+      'beauty',
+      'movie',
+      'workplace',
+      'emotion',
+      'home',
+      'game',
+      'travel',
+      'fitness',
+      'video'
+    ] as const
     const channelParam = String(req.query.channel || 'discover')
     const categoryParam = String(req.query.category || '')
     const channel = (ALLOWED_CHANNELS as readonly string[]).includes(channelParam)
@@ -88,6 +102,23 @@ router.get('/feed', (req: Request, res: Response) => {
     const category = (ALLOWED_CATEGORIES as readonly string[]).includes(categoryParam)
       ? categoryParam
       : ''
+
+    // 频道 key → 库里存的话题标签文案。
+    // 接口层用稳定的英文 key，存储层用中文标签，以后加频道只改这一处。
+    const CATEGORY_LABEL: Record<string, string> = {
+      recommend: '推荐',
+      outfit: '穿搭',
+      food: '美食',
+      beauty: '彩妆',
+      movie: '影视',
+      workplace: '职场',
+      emotion: '情感',
+      home: '家居',
+      game: '游戏',
+      travel: '旅行',
+      fitness: '健身',
+      video: '视频'
+    }
 
     // 3. 拼 WHERE：channel=follow 当前不返回数据；其他都按全量 + category 模糊匹配
     //    后续接入关注关系时改这里即可，前端 API 不用变
@@ -98,9 +129,9 @@ router.get('/feed', (req: Request, res: Response) => {
       conditionsSql.push('1 = 0')
     }
     if (category && category !== 'recommend') {
-      // 简化映射：category 作为 topic_tag 过滤（真实项目应建专门的 category 表）
+      // 简化映射：category 落到 topic_tag 上过滤（真实项目应建专门的 category 表）
       conditionsSql.push('p.topic_tag = ?')
-      conditionParams.push(category)
+      conditionParams.push(CATEGORY_LABEL[category] || category)
     }
     const whereClause = conditionsSql.length ? `WHERE ${conditionsSql.join(' AND ')}` : ''
 
