@@ -101,6 +101,18 @@ export const postsApi = {
     return request.get<Post>(`/posts/${id}`)
   },
 
+  // 搜索笔记：正文 / 话题标签 / 作者昵称
+  //   q        搜索词（后端做了 LIKE 通配符转义和长度校验）
+  //   sort     latest(最新) / hot(最多点赞) / comment(最多评论)
+  search(params: {
+    q: string
+    page?: number
+    pageSize?: number
+    sort?: 'latest' | 'hot' | 'comment'
+  }): Promise<FeedResponse> {
+    return request.get<FeedResponse>('/posts/search', { params })
+  },
+
   // 获取当前用户的帖子列表（需要 Bearer token）
   getMyPosts(): Promise<UserPostsResponse> {
     return request.get<UserPostsResponse>('/users/me/posts')
