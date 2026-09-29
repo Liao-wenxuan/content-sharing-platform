@@ -44,6 +44,7 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
     ErrorBoundary: typeof import('./components/ErrorBoundary.vue')['default']
+    PostMasonry: typeof import('./components/PostMasonry.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SideNav: typeof import('./components/SideNav.vue')['default']
