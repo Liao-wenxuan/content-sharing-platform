@@ -11,7 +11,7 @@ const API = 'http://localhost:3000'
 const WIDTH = Number(process.argv[2] || 1920)
 
 const PAGES = [
-  { path: '/', block: '.home', container: '.content' },
+  { path: '/', block: '.explore', container: '.content' },
   { path: '/market', block: '.market', container: '.content' },
   { path: '/post/18', block: '.detail', container: '.content' },
   { path: '/profile/me', block: '.profile', container: '.content' },
