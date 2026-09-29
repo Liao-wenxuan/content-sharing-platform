@@ -172,4 +172,20 @@ if (realErrors.length === 0) {
 console.log(`  断言：${fails === 0 ? '全部通过' : fails + ' 项失败'}`)
 
 await browser.close()
+
+// ---------- 收尾：清掉本次注册/发布的临时数据 ----------
+// 不清理的话 data.db 里会攒下一堆「桌面端冒烟测试 1790...」的笔记，
+// 演示用的 feed 就会被这些脏数据污染。
+try {
+  const { execFileSync } = await import('node:child_process')
+  const out = execFileSync('node', ['cleanup-test-data.mjs', '--yes'], {
+    cwd: new URL('../server/', import.meta.url),
+    encoding: 'utf8'
+  })
+  const line = out.trim().split('\n').pop()
+  console.log(`  数据收尾：${line}`)
+} catch (e) {
+  console.log('  数据收尾：跳过（' + (e.message || '').split('\n')[0] + '）')
+}
+
 process.exit(fails === 0 && realErrors.length === 0 ? 0 : 1)
