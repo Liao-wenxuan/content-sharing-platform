@@ -81,7 +81,7 @@ check('发布后回首页', new URL(page.url()).pathname === '/')
 
 // ---------- 5. 详情页点赞 + 评论 ----------
 console.log('\n[5] 详情页（点赞 / 评论）')
-await page.locator('.post-link').first().click()
+await page.locator('.masonry .card').first().click()
 await page.waitForURL('**/post/**')
 await page.locator('.comment-card').waitFor({ state: 'visible' })
 check('详情页作者栏', await page.locator('.author-bar').isVisible())
