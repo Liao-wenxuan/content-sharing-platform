@@ -7,6 +7,9 @@ dist/
 # 数据库文件（SQLite 数据是运行时生成的）
 *.db
 *.db-journal
+*.db.bak
+*.db-shm
+*.db-wal
 # 环境变量
 .env
 .env.local
@@ -35,3 +38,16 @@ shots/
 # 用户上传文件（运行时生成，不入版本库）
 uploads/
 **/uploads/
+# 本地一次性调试脚本（迁移期遗留，选择器多已失效，不入版本库）
+# 注意：正式可复用的脚本请显式添加，不要用 *.mjs / scripts/ 宽泛规则
+scripts/auth-smoke.mjs
+scripts/check-css.mjs
+scripts/check-feed.mjs
+scripts/db-inspect.mjs
+scripts/probe.mjs
+scripts/shot.mjs
+scripts/smoke.mjs
+scripts/fetch-demo-photos2.mjs
+scripts/img-prompts.jsonl
+scripts/commit-atomic.ps1
+server/db-inspect.mjs
