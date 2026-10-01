@@ -30,7 +30,8 @@ const VIEWPORT = { width: 1920, height: 1080 }
 
 const EMAIL = 'docshot@test.local'
 const PASSWORD = 'DocShot12345'
-const NICK = '栗子拿铁'
+// 昵称别和用户本地常用的演示账号重名，否则建议下拉里会出现两条一模一样的用户
+const NICK = '拾光旅人'
 
 mkdirSync(OUT, { recursive: true })
 
