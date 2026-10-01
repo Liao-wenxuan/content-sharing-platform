@@ -7,9 +7,19 @@ on:
     branches: [main]
 
 jobs:
+  # ===== Node 版本必须 >= 22，别改回 20 =====
+  # server 依赖 vitest@5（engines: ^22.12.0 || ^24.0.0 || >=26.0.0）
+  # 和 better-sqlite3@13（engines: >=22），两边都不支持 Node 20。
+  #
+  # 这里原来写的是 '20'，踩过一个坑：`npm ci` 遇到 engines 不匹配只发
+  # warning、不会失败，所以「Install deps」那一步显示绿灯，很有迷惑性；
+  # 但紧接着的 `vitest run` 会真的挂掉，只留下一个没有上下文的
+  # "Process completed with exit code 1"。本地是 Node 24 所以完全复现不出来。
+  # 现在统一用 24，和本地开发环境保持一致。
+  #
   # ===== 后端测试 + 类型检查 =====
   server:
-    name: Server (Node 20)
+    name: Server (Node 24)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -19,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: server/package-lock.json
 
@@ -34,7 +44,7 @@ jobs:
 
   # ===== 前端类型检查 + 编译 =====
   client:
-    name: Client (Node 20)
+    name: Client (Node 24)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,7 +54,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
 
@@ -69,7 +79,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
