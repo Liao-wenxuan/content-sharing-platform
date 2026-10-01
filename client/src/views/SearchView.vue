@@ -6,7 +6,8 @@
  * - 独立路由 `/search?q=xxx` 而不是顶栏下拉：结果可分享、可刷新、能翻页
  * - 搜索词进 URL，浏览器前进后退天然可用，也不用自己管状态同步
  * - 命中关键词在标题里高亮（PostMasonry 的 highlight prop）
- * - 搜索历史存 localStorage，只留最近 10 条，可单条删除 / 清空
+ * - 搜索历史只留最近 10 条，可单条删除 / 清空；读写走共享的 useSearchHistory，
+ *   所以顶栏下拉里删掉一条，这里也会同步少一条
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -14,12 +15,16 @@ import { Delete, Clock } from '@element-plus/icons-vue'
 import { postsApi, type Post } from '@/api/posts'
 import PostMasonry from '@/components/PostMasonry.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { useSearchHistory } from '@/composables/useSearchHistory'
 
 const route = useRoute()
 const router = useRouter()
-
-const HISTORY_KEY = 'sg:search-history'
-const MAX_HISTORY = 10
+const {
+  history,
+  save: saveHistory,
+  remove: removeHistory,
+  clear: clearHistory
+} = useSearchHistory()
 
 const posts = ref<Post[]>([])
 const loading = ref(false)
@@ -29,7 +34,6 @@ const total = ref(0)
 const page = ref(1)
 const hasMore = ref(false)
 const sort = ref<'latest' | 'hot' | 'comment'>('latest')
-const history = ref<string[]>([])
 
 const SORTS = [
   { key: 'latest', label: '最新' },
@@ -38,30 +42,7 @@ const SORTS = [
 ] as const
 
 // ===== 搜索历史 =====
-function loadHistory() {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY)
-    history.value = raw ? (JSON.parse(raw) as string[]) : []
-  } catch {
-    history.value = []
-  }
-}
-
-function saveHistory(kw: string) {
-  const next = [kw, ...history.value.filter((h) => h !== kw)].slice(0, MAX_HISTORY)
-  history.value = next
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
-}
-
-function removeHistory(kw: string) {
-  history.value = history.value.filter((h) => h !== kw)
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
-}
-
-function clearHistory() {
-  history.value = []
-  localStorage.removeItem(HISTORY_KEY)
-}
+// 具体读写在 useSearchHistory 里，这里只留「点某条历史词 → 重新搜」这一个动作
 
 function useHistory(kw: string) {
   router.push({ name: 'search', query: { q: kw } })
@@ -133,7 +114,6 @@ watch(sort, () => {
 })
 
 onMounted(() => {
-  loadHistory()
   if (query.value) {
     saveHistory(query.value)
     runSearch(true)
