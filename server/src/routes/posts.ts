@@ -287,6 +287,88 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
   }
 })
 
+// ===== GET /search/suggest 搜索框即时建议 =====
+// 顶栏搜索框输入时下拉展示：笔记 / 话题 / 用户三类候选。
+// 单独开一个接口而不是复用 /search：结果页要「按排序分页的完整列表」，
+// 建议框要「少量、去重、按相关度稳定的短列表」，语义和排序都不同。
+// 注意：必须注册在 /:id 之前！
+router.get('/search/suggest', optionalAuth, (req: Request, res: Response) => {
+  try {
+    const raw = String(req.query.q ?? '').trim()
+
+    // 未输入时给热门话题当占位，避免下拉空空如也
+    const hotTopics = db
+      .prepare(
+        `SELECT topic_tag AS tag, COUNT(*) AS count
+         FROM posts
+         WHERE topic_tag IS NOT NULL AND topic_tag <> ''
+         GROUP BY topic_tag
+         ORDER BY count DESC, topic_tag ASC
+         LIMIT 8`
+      )
+      .all()
+
+    if (!raw) {
+      return res.json({ query: '', hotTopics, posts: [], topics: [], users: [] })
+    }
+    if (raw.length > 50) {
+      return res.status(400).json({ message: '搜索词过长' })
+    }
+
+    // 通配符转义：和 /search 同一套，否则搜 "100%" 会退化成全表匹配
+    const pattern = `%${raw.replace(/[\\%_]/g, (m) => `\\${m}`)}%`
+
+    const posts = db
+      .prepare(
+        `SELECT p.id, p.content, p.image_urls
+         FROM posts p
+         WHERE p.content LIKE ? ESCAPE '\\'
+         ORDER BY (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) DESC, p.id DESC
+         LIMIT 5`
+      )
+      .all(pattern) as any[]
+
+    // DISTINCT 保证同一个话题不重复出现
+    const topics = (
+      db
+        .prepare(
+          `SELECT DISTINCT topic_tag AS tag
+           FROM posts
+           WHERE topic_tag IS NOT NULL AND topic_tag LIKE ? ESCAPE '\\'
+           ORDER BY topic_tag
+           LIMIT 5`
+        )
+        .all(pattern) as any[]
+    ).map((r) => r.tag)
+
+    const users = db
+      .prepare(
+        `SELECT id, nickname, avatar
+         FROM users
+         WHERE nickname LIKE ? ESCAPE '\\'
+         ORDER BY id ASC
+         LIMIT 5`
+      )
+      .all(pattern) as any[]
+
+    res.json({
+      query: raw,
+      hotTopics,
+      posts: posts.map((row) => ({
+        id: row.id,
+        // 建议框只显示一行，完整正文在结果页看
+        content: row.content.length > 40 ? `${row.content.slice(0, 40)}…` : row.content,
+        cover: row.image_urls ? (JSON.parse(row.image_urls)[0] ?? null) : null
+      })),
+      topics,
+      users: users.map((u) => ({ id: u.id, nickname: u.nickname, avatar: u.avatar }))
+    })
+  } catch (err: any) {
+    console.error('[Suggest Posts Error]', err)
+    res.status(500).json({ message: err.message || '获取建议失败' })
+  }
+})
+
 // ===== GET /:id 单篇笔记详情 =====
 // 注意：必须注册在 /feed 后面！Express 按顺序匹配，否则 /feed 会被当成 :id="feed"
 router.get('/:id', optionalAuth, (req: Request, res: Response) => {
