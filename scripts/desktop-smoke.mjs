@@ -22,7 +22,8 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const errors = []
 page.on('console', (m) => m.type() === 'error' && errors.push(`console: ${m.text().slice(0, 200)}`))
 page.on('response', (r) => {
-  if (r.status() >= 400) errors.push(`HTTP ${r.status()} ${r.url().replace(API, '').replace(BASE, '')}`)
+  if (r.status() >= 400)
+    errors.push(`HTTP ${r.status()} ${r.url().replace(API, '').replace(BASE, '')}`)
 })
 
 let fails = 0
@@ -58,10 +59,51 @@ check('顶栏 TopBar 存在', await page.locator('header.top-bar').isVisible())
 check('Element Plus 样式已加载', await page.locator('.el-menu').isVisible())
 
 const navText = await page.locator('.nav-menu').innerText()
-for (const label of ['发现', '发布', '消息', '市集', '我的', '设置']) {
+for (const label of ['发现', '发布', '市集', '我的', '设置']) {
   check(`侧栏含「${label}」`, navText.includes(label))
 }
-check('顶栏显示昵称（已登录）', (await page.locator('.user-trigger .user-name').innerText()) === NICK)
+// 搜索入口在顶栏下拉、消息改成顶栏铃铛，都不再占侧栏位置
+check('侧栏不再含「搜索」', !navText.includes('搜索'))
+check('侧栏不再含「消息」', !navText.includes('消息'))
+check(
+  '顶栏显示昵称（已登录）',
+  (await page.locator('.user-trigger .user-name').innerText()) === NICK
+)
+check(
+  '顶栏有消息铃铛（登录态）',
+  await page.locator('.top-bar button[aria-label="消息"]').isVisible()
+)
+
+// ---------- 3.5 搜索建议下拉 ----------
+console.log('\n[3.5] 搜索建议下拉')
+const searchInput = page.locator('.top-bar .search-input input')
+await searchInput.click()
+await page.locator('.suggest-panel').waitFor({ state: 'visible', timeout: 5000 })
+check('聚焦即出下拉（热门话题占位）', (await page.locator('.suggest-row').count()) > 0)
+
+await searchInput.fill('美')
+await page
+  .locator('.suggest-row', { hasText: '美食' })
+  .first()
+  .waitFor({ state: 'visible', timeout: 5000 })
+const suggestText = await page.locator('.suggest-panel').innerText()
+check('输入「美」出现话题候选「美食」', suggestText.includes('美食'))
+check('建议面板分了三组标题', (await page.locator('.group-title').count()) >= 1)
+
+await page.keyboard.press('Escape')
+await page.waitForTimeout(250)
+check('Esc 关闭下拉', (await page.locator('.suggest-panel').count()) === 0)
+
+await searchInput.press('Enter')
+await page.waitForURL('**/search?q=**', { timeout: 10000 })
+check('回车跳搜索结果页', new URL(page.url()).pathname === '/search')
+check('搜索词进 URL', new URL(page.url()).searchParams.get('q') === '美')
+const afterSearch = await page.locator('.top-bar .search-input input').inputValue()
+check('结果页输入框回填关键词', afterSearch === '美')
+// 搜完返回发现页，继续后面的流程
+await page.locator('.nav-menu .el-menu-item', { hasText: '发现' }).click()
+await page.waitForURL((u) => u.pathname === '/', { timeout: 10000 })
+await page.locator('.masonry .card').first().waitFor({ state: 'visible' })
 
 // ---------- 4. 发布页 ----------
 console.log('\n[4] 发布页（ElForm + ElUpload）')
@@ -119,9 +161,9 @@ await page.locator('.el-dialog .el-button--primary').click()
 await page.waitForTimeout(800)
 check('昵称已更新', (await page.locator('.nickname').innerText()) === newNick)
 
-// ---------- 7. 消息页 ----------
-console.log('\n[7] 消息页（ElTabs）')
-await page.locator('.nav-menu .el-menu-item', { hasText: '消息' }).click()
+// ---------- 7. 消息页（从顶栏铃铛进，侧栏已无入口）----------
+console.log('\n[7] 消息页（ElTabs，入口=顶栏铃铛）')
+await page.locator('.top-bar button[aria-label="消息"]').click()
 await page.waitForURL('**/messages')
 check('消息页标题', (await page.locator('.page-title').innerText()) === '消息')
 const msgTabs = await page.locator('.msg-tabs').innerText()
@@ -158,7 +200,11 @@ await page.locator('.danger-card .el-button').click()
 await page.waitForTimeout(800)
 check('退出后回首页', new URL(page.url()).pathname === '/')
 const navAfter = await page.locator('.nav-menu').innerText()
-check('侧栏恢复游客项（无发布/消息/设置）', !navAfter.includes('发布') && !navAfter.includes('设置'))
+check('侧栏恢复游客项（无发布/设置）', !navAfter.includes('发布') && !navAfter.includes('设置'))
+check(
+  '退出后顶栏铃铛消失',
+  (await page.locator('.top-bar button[aria-label="消息"]').count()) === 0
+)
 
 // ---------- 汇总 ----------
 console.log('\n──────── 结果 ────────')

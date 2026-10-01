@@ -26,7 +26,11 @@ await p.locator('.top-bar input').fill('美食')
 await p.locator('.top-bar input').press('Enter')
 await p.waitForURL('**/search?q=*')
 await p.waitForTimeout(900)
-check('跳到 /search?q=美食', p.url().includes('q=%E7%BE%8E%E9%A3%9F') || p.url().includes('q=美食'), p.url())
+check(
+  '跳到 /search?q=美食',
+  p.url().includes('q=%E7%BE%8E%E9%A3%9F') || p.url().includes('q=美食'),
+  p.url()
+)
 check('结果计数显示', (await p.locator('.result-meta').innerText()).includes('找到'))
 const cards = await p.locator('.masonry .card').count()
 check('有结果卡片', cards > 0, cards + ' 张')
@@ -48,7 +52,11 @@ await p.goto(`${BASE}/search`, { waitUntil: 'networkidle' })
 await p.waitForTimeout(800)
 check('历史卡出现', await p.locator('.history-card').isVisible())
 const tags = await p.locator('.history-tag').allInnerTexts()
-check('历史含「咖啡」', tags.some((t) => t.includes('咖啡')), tags.join(' / '))
+check(
+  '历史含「咖啡」',
+  tags.some((t) => t.includes('咖啡')),
+  tags.join(' / ')
+)
 check('历史去重且有序', new Set(tags).size === tags.length)
 
 console.log('\n[5] 点历史标签再次搜索')
@@ -74,15 +82,35 @@ await p.goto(`${BASE}/search?q=zzzznotexist`, { waitUntil: 'networkidle' })
 await p.waitForTimeout(900)
 check('空结果提示', (await p.locator('.el-empty').innerText()).includes('没有找到'))
 
-console.log('\n[8] 侧栏「搜索」入口')
+console.log('\n[8] 顶栏搜索框（侧栏已无搜索入口）')
 await p.goto(`${BASE}/`, { waitUntil: 'networkidle' })
 await p.waitForTimeout(600)
 const navText = await p.locator('.nav-menu').innerText()
-check('侧栏含「搜索」', navText.includes('搜索'))
-await p.locator('.nav-menu .el-menu-item', { hasText: '搜索' }).click()
-await p.waitForTimeout(800)
-check('点搜索进 /search', p.url().includes('/search'))
-check('搜索项高亮', (await p.locator('.el-menu-item.is-active').innerText()).includes('搜索'))
+check('侧栏不再含「搜索」', !navText.includes('搜索'))
+check('搜索框在顶栏', await p.locator('.top-bar .search-input input').isVisible())
+
+// 聚焦即出建议下拉
+await p.locator('.top-bar .search-input input').click()
+await p.locator('.suggest-panel').waitFor({ state: 'visible', timeout: 5000 })
+check('聚焦弹出建议面板', await p.locator('.suggest-panel').isVisible())
+check('面板里有分组标题', (await p.locator('.group-title').count()) >= 1)
+
+// 输入即出候选
+await p.locator('.top-bar .search-input input').fill('美食')
+await p
+  .locator('.suggest-row', { hasText: '美食' })
+  .first()
+  .waitFor({ state: 'visible', timeout: 5000 })
+check('输入后出现候选', (await p.locator('.suggest-row').count()) > 0)
+
+// 回车进结果页，且侧栏回落高亮「发现」
+await p.locator('.top-bar .search-input input').press('Enter')
+await p.waitForTimeout(900)
+check('回车进 /search', p.url().includes('/search'))
+check(
+  '搜索页侧栏回落高亮「发现」',
+  (await p.locator('.el-menu-item.is-active').innerText()).includes('发现')
+)
 
 console.log('\n[9] 顶栏清空 → 回空态')
 await p.locator('.top-bar input').fill('美食')
