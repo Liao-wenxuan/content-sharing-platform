@@ -183,6 +183,16 @@ await shot('09-messages', '消息中心 · 三个分类 + 推荐关注')
 await goto('/settings', '.settings')
 await shot('10-settings', '设置 · 深浅色切换 + 账号管理')
 
+// 搜索建议下拉：聚焦即出热门话题，输入后出三类候选
+await goto('/', '.masonry .card')
+const searchBox = page.locator('.top-bar .search-input input')
+await searchBox.click()
+await page.locator('.suggest-panel').waitFor({ state: 'visible', timeout: 10000 })
+await searchBox.fill('拿铁')
+await page.locator('.suggest-row').first().waitFor({ state: 'visible', timeout: 10000 })
+await page.waitForTimeout(600)
+await shot('12-search-suggest', '搜索建议下拉 · 笔记 / 话题 / 用户三类候选', 'jpeg')
+
 await browser.close()
 
 console.log(`\n输出目录：${OUT}`)
