@@ -70,6 +70,21 @@ export interface LikeResponse {
   likeCount: number
 }
 
+export interface HotTopic {
+  tag: string
+  count: number
+}
+
+/** 搜索框即时建议：笔记 / 话题 / 用户三类候选 */
+export interface SuggestResponse {
+  query: string
+  /** q 为空时给的热门话题，用来填充下拉，避免空着 */
+  hotTopics: HotTopic[]
+  posts: { id: number; content: string; cover: string | null }[]
+  topics: string[]
+  users: { id: number; nickname: string; avatar: string | null }[]
+}
+
 // ===== API 方法 =====
 // request 实例在类型上已经剥掉了 AxiosResponse 包装（见 request.ts），
 // 所以这里直接 return 即可，不需要再写 `as unknown as Post` 之类的断言。
@@ -111,6 +126,12 @@ export const postsApi = {
     sort?: 'latest' | 'hot' | 'comment'
   }): Promise<FeedResponse> {
     return request.get<FeedResponse>('/posts/search', { params })
+  },
+
+  // 搜索框即时建议（下拉用）
+  //   q 传空串时后端返回热门话题，用来在用户还没输入时填充下拉
+  suggest(params: { q: string }): Promise<SuggestResponse> {
+    return request.get<SuggestResponse>('/posts/search/suggest', { params })
   },
 
   // 获取当前用户的帖子列表（需要 Bearer token）
