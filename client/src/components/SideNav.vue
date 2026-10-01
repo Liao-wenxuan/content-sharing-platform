@@ -8,18 +8,13 @@
  * 选中态：ElMenu 的 router 模式 + :default-active 绑 route.path。
  * 个人主页 /profile/me 在访客态也可能命中（见 ProfileView 的占位态），
  * 这里统一回落到「我的」这一项。
+ *
+ * 只放「需要反复切换」的主干入口：搜索在顶栏（带即时建议下拉），
+ * 消息做成顶栏铃铛，侧栏留给频道级浏览，避免导航项越堆越多。
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  Compass,
-  Search,
-  EditPen,
-  ChatDotRound,
-  Shop,
-  User,
-  Setting
-} from '@element-plus/icons-vue'
+import { Compass, EditPen, Shop, User, Setting } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -38,9 +33,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { path: '/', label: '发现', icon: Compass },
-  { path: '/search', label: '搜索', icon: Search },
   { path: '/publish', label: '发布', icon: EditPen, requiresAuth: true },
-  { path: '/messages', label: '消息', icon: ChatDotRound, requiresAuth: true },
   { path: '/market', label: '市集', icon: Shop },
   { path: '/profile/me', label: '我的', icon: User },
   { path: '/settings', label: '设置', icon: Setting, requiresAuth: true }
@@ -54,6 +47,8 @@ const visibleItems = computed(() =>
 const activeMenu = computed(() => {
   const path = route.path
   if (path.startsWith('/profile')) return '/profile/me'
+  // 搜索的入口在顶栏，侧栏不再单列一项，搜索页回落高亮「发现」保持连贯
+  if (path.startsWith('/search')) return '/'
   return path
 })
 
