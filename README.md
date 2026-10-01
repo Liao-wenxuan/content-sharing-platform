@@ -2,6 +2,8 @@
 
 一个仿小红书 UI/UX 的全栈内容社区前端 + 后端项目。**PC 桌面端**布局，组件层使用 Element Plus（完全接管其主题变量），后端零外部框架、本地 SQLite 存储、ORM 层手写 SQL。目标是展示一个完整的前后端分离项目的工程能力。
 
+![发现页](docs/screenshots/01-home.jpeg)
+
 ## ✨ 已实现功能
 
 | 模块     | 功能                                                                                                |
@@ -18,6 +20,22 @@
 | 主题     | 暗色 / 亮色切换（`html.dark` 驱动，Element Plus 变量同步切换 + localStorage 持久化）                |
 
 > 路线图见 [docs/architecture.md](docs/architecture.md#路线图)
+
+## 📸 界面预览
+
+首页见上方。全部为 1920×1080 真实运行截图，由 `node scripts/screenshot-docs.mjs` 生成（脚本会自建临时账号造数据，跑完可一键清理）。
+
+### 笔记详情 / 搜索 / 发布
+
+| 笔记详情                                     | 搜索页                                     | 发布页                                     |
+| -------------------------------------------- | ------------------------------------------ | ------------------------------------------ |
+| ![笔记详情](docs/screenshots/03-detail.jpeg) | ![搜索页](docs/screenshots/02-search.jpeg) | ![发布页](docs/screenshots/07-publish.png) |
+
+### 个人主页 / 消息 / 设置
+
+| 个人主页                                      | 消息中心                                      | 设置                                      |
+| --------------------------------------------- | --------------------------------------------- | ----------------------------------------- |
+| ![个人主页](docs/screenshots/08-profile.jpeg) | ![消息中心](docs/screenshots/09-messages.png) | ![设置](docs/screenshots/10-settings.png) |
 
 ## 🛠 技术栈
 
@@ -61,8 +79,8 @@ npm run dev          # vite
 content-sharing-platform/
 ├─ client/                     # Vue 3 + Vite 前端
 │  ├─ src/
-│  │  ├─ views/                # 9 个路由级页面（Home / PostDetail / Publish / Profile / Messages / Market / Settings / Login / NotFound）
-│  │  ├─ components/           # SideNav（左侧导航）/ TopBar（顶部栏）/ EmptyState / ErrorBoundary
+│  │  ├─ views/                # 10 个路由级页面（Home / PostDetail / Publish / Profile / Messages / Market / Search / Settings / Login / NotFound）
+│  │  ├─ components/           # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ EmptyState / ErrorBoundary
 │  │  ├─ assets/styles/        # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）
 │  │  ├─ composables/          # useRelativeTime（相对时间） / useTheme（主题共享状态）
 │  │  ├─ api/                  # request.ts (axios 实例 + 拦截器) / auth.ts / posts.ts
@@ -81,8 +99,16 @@ content-sharing-platform/
 │  │  └─ constants.ts          # 服务端常量（与 client mirror）
 │  └─ uploads/                 # multer 落地目录（.gitignore）
 │
+├─ scripts/                    # Playwright 自动化 + 文档配图生成
+│  ├─ desktop-smoke.mjs        # 桌面端登录态全流程回归（40+ 断言，含零 console error 断言）
+│  ├─ search-smoke.mjs         # 搜索功能回归（24 断言）
+│  ├─ center-audit.mjs         # 1920 宽屏下逐页量左右留白，防止"看起来居中其实没居中"
+│  ├─ check-search.mjs         # 搜索 API 注入检查（% / _ / ' OR 1=1-- 必须返回 0 条）
+│  └─ screenshot-docs.mjs      # 生成 docs/screenshots/ 下的 README 配图
+│
 └─ docs/
-   └─ architecture.md          # 架构图 / 数据模型 / 关键流程
+   ├─ architecture.md          # 架构图 / 数据模型 / 关键流程 / 踩坑记录
+   └─ screenshots/             # README 配图（1920×1080，由 screenshot-docs.mjs 生成）
 ```
 
 ## 🎯 设计决策（简历可以聊的点）
@@ -129,16 +155,16 @@ content-sharing-platform/
 
 ### 工程化
 
-| 亮点                             | 实现                                                                                                                                                                                                                               |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                          |
-| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                   |
-| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对 |
-| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 20；本地能过的命令 CI 也必须能过                                                                    |
-| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                  |
-| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                              |
-| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                            |
-| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                           |
+| 亮点                             | 实现                                                                                                                                                                                                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                       |
+| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                |
+| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                              |
+| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22，Node 20 会让"Install deps"假绿然后在 `vitest run` 挂掉）；本地能过的命令 CI 也必须能过 |
+| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                               |
+| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                                                                           |
+| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                         |
+| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                                                                        |
 
 ## 📚 文档
 
@@ -157,4 +183,4 @@ content-sharing-platform/
 
 ## 📄 License
 
-MIT — 仅用于学习与作品投递。
+MIT — 仅用于学习与作品投递。见 [LICENSE](LICENSE)。
