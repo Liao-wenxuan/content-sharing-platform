@@ -85,6 +85,48 @@ router.put('/me', requireAuth, (req: Request, res: Response) => {
   }
 })
 
+// ===== GET /chat-suggestions 可能想和你聊的人 =====
+// 聊天空状态专用：一列表全是「还没有会话」等于让用户自己找路，
+// 给出几个「点头像就能开聊」的人才是有产品感的空状态。
+// 必须注册在 /:id/posts 前面（虽然段数不同不会撞，但保持字面量优先的惯例）
+router.get('/chat-suggestions', requireAuth, (req: Request, res: Response) => {
+  try {
+    const me = req.userId
+    if (typeof me !== 'number') return res.status(401).json({ message: '未登录' })
+
+    const limit = Math.min(12, Math.max(1, Number(req.query.limit) || 6))
+
+    // 排除自己、排除已经聊过的人；有笔记的排前面（同话题的人更有得聊）
+    const rows = db
+      .prepare(
+        `SELECT u.id, u.nickname, u.avatar,
+                (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count
+         FROM users u
+         WHERE u.id <> @me
+           AND NOT EXISTS (
+             SELECT 1 FROM conversations c
+             WHERE (c.user_a_id = @me AND c.user_b_id = u.id)
+                OR (c.user_b_id = @me AND c.user_a_id = u.id)
+           )
+         ORDER BY post_count DESC, u.id ASC
+         LIMIT @limit`
+      )
+      .all({ me, limit }) as any[]
+
+    res.json({
+      list: rows.map((r) => ({
+        id: r.id,
+        nickname: r.nickname,
+        avatar: r.avatar,
+        postCount: r.post_count
+      }))
+    })
+  } catch (err: any) {
+    console.error('[Chat Suggestions Error]', err)
+    res.status(500).json({ message: err.message || '获取推荐用户失败' })
+  }
+})
+
 // ===== GET /me/posts 当前用户的帖子列表 =====
 // 必须注册在 /:id/posts 前面！Express 按顺序匹配，"me" 是字面量优先于 :id 参数
 router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
