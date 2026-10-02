@@ -9,6 +9,7 @@ import likesRouter from './routes/likes'
 import commentsRouter from './routes/comments'
 import conversationsRouter from './routes/conversations'
 import uploadsRouter from './routes/uploads'
+import { attachWebSocketServer } from './ws/server'
 import { notFoundHandler, errorHandler } from './middleware/error'
 
 const app = express()
@@ -45,7 +46,23 @@ app.use(notFoundHandler)
 app.use(errorHandler)
 
 // ===== 启动 =====
-app.listen(env.PORT, () => {
+const httpServer = app.listen(env.PORT, () => {
   console.log(`✅ Server running on http://localhost:${env.PORT}`)
   console.log(`   Test: http://localhost:${env.PORT}/api/health`)
+  console.log(`   WS:   ws://localhost:${env.PORT}/ws?token=<JWT>`)
 })
+
+// WebSocket 挂在同一个 http server 上（复用端口，不另开服务）。
+// ws 会自己监听 upgrade 事件并只处理 path === '/ws' 的，其余放行给 HTTP。
+const wsHandle = attachWebSocketServer(httpServer)
+
+// 优雅退出：先踢连接再关 server，否则挂着的 WS 连接会让进程关不掉
+const shutdown = async (signal: string) => {
+  console.log(`\n[Server] ${signal} 收到，正在关闭…`)
+  await wsHandle.close()
+  httpServer.close(() => process.exit(0))
+  // 兜底：3 秒还没关干净就强退，避免 CI / 脚本挂住
+  setTimeout(() => process.exit(0), 3000).unref()
+}
+process.on('SIGINT', () => void shutdown('SIGINT'))
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
