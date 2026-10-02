@@ -1,6 +1,18 @@
-import { ref, computed } from 'vue'
+﻿import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import type { ClientMessage, ServerMessage } from '@/api/wsProtocol'
+
+/**
+ * readyState 的字面量：0=CONNECTING 1=OPEN 2=CLOSING 3=CLOSED
+ *
+ * 这里不用 WebSocket.OPEN 常量而是写字面量：任何替换 window.WebSocket 的代码
+ * （测试 hook、polyfill、埋点）都可能只挂 prototype 不挂静态常量，一旦常量丢了
+ * `socket.readyState !== WebSocket.OPEN` 会恒为 true，
+ * 结果就是「明明连上了却永远发不出去」，非常难查。
+ * （声明放在文件头：const 有暂时性死区，必须在使用之前）
+ */
+const SOCKET_CONNECTING = 0
+const SOCKET_OPEN = 1
 
 /**
  * 全局单例 WebSocket 连接
@@ -95,7 +107,7 @@ function emit(type: string, payload: unknown) {
 function startHeartbeat() {
   stopHeartbeat()
   heartbeatTimer = setInterval(() => {
-    if (socket?.readyState !== WebSocket.OPEN) return
+    if (socket?.readyState !== SOCKET_OPEN) return
     socket.send(JSON.stringify({ type: 'ping', payload: { ts: Date.now() } }))
 
     // 没等到 pong 就说明连接已经僵死（网线拔了但 TCP 没报错那种）
@@ -177,10 +189,7 @@ function open() {
     state.value = 'idle'
     return
   }
-  if (
-    socket &&
-    (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)
-  ) {
+  if (socket && (socket.readyState === SOCKET_OPEN || socket.readyState === SOCKET_CONNECTING)) {
     return
   }
 
@@ -254,7 +263,7 @@ export function disconnectWs() {
 
 /** 发送；没连上直接返回 false，调用方自己决定要不要提示用户 */
 export function sendWs(message: ClientMessage): boolean {
-  if (socket?.readyState !== WebSocket.OPEN) return false
+  if (socket?.readyState !== SOCKET_OPEN) return false
   socket.send(JSON.stringify(message))
   return true
 }
