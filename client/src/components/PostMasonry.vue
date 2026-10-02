@@ -152,6 +152,14 @@ function segments(text: string) {
 .card {
   display: block;
   color: inherit;
+  border-radius: 10px;
+  /* 键盘用户也要看到「这里能点进去」的邀请，和 hover 同一套反馈 */
+  transition: background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 /* 封面：圆角、无边框，卡片本身没有背景和描边 */
@@ -169,10 +177,13 @@ function segments(text: string) {
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.35s ease;
+  /* ease（默认贝塞尔）是最平庸的曲线：出刀不快、收尾不净。
+     换成 ease-out-expo —— 起步快、落点稳，看得出「被拿起来」而不是「在滑动」。 */
+  transition: transform var(--dur-standard) var(--ease-out-expo);
 }
 
-.card:hover .cover img {
+.card:hover .cover img,
+.card:focus-visible .cover img {
   transform: scale(1.04);
 }
 
@@ -257,6 +268,14 @@ function segments(text: string) {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+  /* 跟着卡片一起亮：给出「这条被选中了」的第二个通道。
+     对纯图片网格来说，多一层文字反馈比只动图片更好辨认。 */
+  transition: color var(--dur-fast) var(--ease-out-expo);
+}
+
+.card:hover .title,
+.card:focus-visible .title {
+  color: var(--accent-foreground);
 }
 
 .title .hit {
