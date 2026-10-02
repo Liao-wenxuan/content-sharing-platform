@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * 桌面端顶部栏
  *
@@ -33,6 +33,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useTheme } from '@/composables/useTheme'
 import { useSearchHistory } from '@/composables/useSearchHistory'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const route = useRoute()
 const router = useRouter()
@@ -45,6 +46,7 @@ const {
   remove: removeHistory,
   clear: clearHistory
 } = useSearchHistory()
+const { unreadTotal } = useWebSocket()
 
 const keyword = ref('')
 const focused = ref(false)
@@ -365,7 +367,9 @@ function onOutsideClick(e: MouseEvent) {
 
       <!-- 消息：侧栏不再放这一项，改成顶栏铃铛（仅登录态） -->
       <el-tooltip v-if="auth.isLoggedIn" content="消息" placement="bottom">
-        <el-button class="icon-btn" circle :icon="Bell" aria-label="消息" @click="goMessages" />
+        <el-badge :value="unreadTotal" :hidden="unreadTotal === 0" :max="99" class="bell-badge">
+          <el-button class="icon-btn" circle :icon="Bell" aria-label="消息" @click="goMessages" />
+        </el-badge>
       </el-tooltip>
 
       <!-- 已登录：头像下拉 -->
@@ -543,6 +547,11 @@ function onOutsideClick(e: MouseEvent) {
 
 .icon-btn {
   flex-shrink: 0;
+}
+
+.bell-badge :deep(.el-badge__content) {
+  transform: translate(50%, -50%);
+  font-size: 11px;
 }
 
 .user-trigger {
