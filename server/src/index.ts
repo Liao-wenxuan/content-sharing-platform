@@ -7,6 +7,7 @@ import postsRouter from './routes/posts'
 import usersRouter from './routes/users'
 import likesRouter from './routes/likes'
 import commentsRouter from './routes/comments'
+import conversationsRouter from './routes/conversations'
 import uploadsRouter from './routes/uploads'
 import { notFoundHandler, errorHandler } from './middleware/error'
 
@@ -24,6 +25,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/posts', postsRouter)
 app.use('/api/posts', likesRouter) // 共享 /api/posts 前缀
 app.use('/api/posts', commentsRouter) // 同上
+app.use('/api/conversations', conversationsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/uploads', uploadsRouter)
 

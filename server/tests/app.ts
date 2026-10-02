@@ -19,6 +19,7 @@ import likesRouter from '../src/routes/likes'
 import commentsRouter from '../src/routes/comments'
 import usersRouter from '../src/routes/users'
 import uploadsRouter from '../src/routes/uploads'
+import conversationsRouter from '../src/routes/conversations'
 import { notFoundHandler, errorHandler } from '../src/middleware/error'
 
 export function createTestApp(): { app: express.Express; db: Database.Database } {
@@ -34,6 +35,7 @@ export function createTestApp(): { app: express.Express; db: Database.Database }
   app.use('/api/posts', commentsRouter)
   app.use('/api/users', usersRouter)
   app.use('/api/uploads', uploadsRouter)
+  app.use('/api/conversations', conversationsRouter)
   app.use(notFoundHandler)
   app.use(errorHandler)
 
