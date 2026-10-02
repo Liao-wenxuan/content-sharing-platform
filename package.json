@@ -17,7 +17,8 @@
     "seed:photos": "node scripts/fetch-demo-photos.mjs",
     "prepare": "husky",
     "test:client": "npm --prefix client test",
-    "test:chat": "node scripts/chat-smoke.mjs"
+    "test:chat": "node scripts/chat-smoke.mjs",
+    "test:motion": "node scripts/motion-check.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
