@@ -1,0 +1,26 @@
+import { defineConfig } from 'vitest/config'
+import vue from '@vitejs/plugin-vue'
+import { fileURLToPath, URL } from 'node:url'
+
+/**
+ * 前端单测配置
+ *
+ * 和 vite.config.ts 分开而不是合并：生产构建不需要 test 字段，
+ * 而且 vitest 需要 jsdom 环境和 @ 别名，分开更清楚。
+ */
+export default defineConfig({
+  plugins: [vue()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  },
+  test: {
+    globals: false,
+    // 组件测试要挂载 DOM（mount），纯函数测试也统一放 jsdom，省得分环境
+    environment: 'jsdom',
+    include: ['tests/**/*.test.ts'],
+    // 串行：部分用例会写 localStorage，串行避免相互影响
+    fileParallelism: false
+  }
+})
