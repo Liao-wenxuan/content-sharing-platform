@@ -18,10 +18,24 @@ export interface MessagePage {
   pagination: { hasMore: boolean; nextBefore: number | null }
 }
 
+export interface ChatSuggestion {
+  id: number
+  nickname: string
+  avatar: string | null
+  postCount: number
+}
+
 export const conversationsApi = {
   /** 会话列表（含最后一条消息摘要和未读数） */
   list(): Promise<{ list: Conversation[] }> {
     return request.get<{ list: Conversation[] }>('/conversations')
+  },
+
+  /** 可能想和你聊的人（已排除聊过的人），聊天空状态用 */
+  chatSuggestions(limit = 6): Promise<{ list: ChatSuggestion[] }> {
+    return request.get<{ list: ChatSuggestion[] }>('/users/chat-suggestions', {
+      params: { limit }
+    })
   },
 
   /** 打开和某个用户的会话；已存在则复用（幂等） */

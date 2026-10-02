@@ -1,5 +1,10 @@
 ﻿import { ref, computed, onUnmounted } from 'vue'
-import { conversationsApi, type Conversation, type ChatMessage } from '@/api/conversations'
+import {
+  conversationsApi,
+  type Conversation,
+  type ChatMessage,
+  type ChatSuggestion
+} from '@/api/conversations'
 import { useWebSocket, onWsMessage } from '@/composables/useWebSocket'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -24,6 +29,7 @@ const TEMP_ID_BASE = -1
 const tempIdToLocalId = new Map<string, number>()
 
 const conversations = ref<Conversation[]>([])
+const suggestions = ref<ChatSuggestion[]>([])
 const messagesByConv = ref<Record<number, ChatMessage[]>>({})
 const activeId = ref<number | null>(null)
 const loadingList = ref(false)
@@ -125,10 +131,23 @@ async function loadConversations() {
   try {
     const { list } = await conversationsApi.list()
     conversations.value = list
+    // 聊过的人变多了，推荐名单要跟着变（否则会出现「推荐了一个已经在会话里的人」）
+    if (list.length > 0) suggestions.value = []
   } catch {
     toast.show('会话列表加载失败', 'error')
   } finally {
     loadingList.value = false
+  }
+}
+
+/** 聊天空状态的推荐名单：点头像直接开聊，不用自己去个人主页找 */
+async function loadSuggestions() {
+  if (suggestions.value.length) return
+  try {
+    const { list } = await conversationsApi.chatSuggestions(6)
+    suggestions.value = list
+  } catch {
+    // 拉不到就让空状态退回纯文案，不报错
   }
 }
 
@@ -312,6 +331,7 @@ export function useChat() {
   return {
     // 状态
     conversations,
+    suggestions,
     activeId,
     activeConversation,
     activeMessages,
@@ -327,6 +347,7 @@ export function useChat() {
     isPeerOnline,
     // 动作
     loadConversations,
+    loadSuggestions,
     openConversation,
     loadMoreHistory,
     markRead,
