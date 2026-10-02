@@ -79,6 +79,20 @@ npm run dev          # vite
 
 打开 http://localhost:5173/ 注册账号即可使用。图片会上传到 `server/uploads/`，前端 `/uploads/*` 通过 `server.proxy` 反代到 3000（生产 nginx 同源直出）。
 
+### 测试
+
+```bash
+npm run test:client          # 前端单测（vitest + @vue/test-utils，48 条）
+cd server && npm test        # 后端单测（vitest + supertest，63 条）
+
+npm run test:e2e             # Playwright 桌面端全流程回归（登录态）
+npm run test:search          # 搜索功能 + 注入防护
+npm run test:center          # 1920 宽屏下逐页检查左右留白是否居中
+npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
+```
+
+> Playwright 脚本依赖 dev server 在跑；**刚重启 vite 时第一次跑会因为 Element Plus 依赖预构建未完成而假失败**（`el-*` 判不可见但零 console error），先 `curl localhost:5173` 触发预构建、等十几秒再跑即可。
+
 ## 📁 项目结构
 
 ```
@@ -88,13 +102,16 @@ content-sharing-platform/
 │  │  ├─ views/                # 10 个路由级页面（Home / PostDetail / Publish / Profile / Messages / Market / Search / Settings / Login / NotFound）
 │  │  ├─ components/           # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ EmptyState / ErrorBoundary
 │  │  ├─ assets/styles/        # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）
-│  │  ├─ composables/          # useRelativeTime（相对时间） / useTheme（主题共享状态）
+│  │  ├─ composables/          # useRelativeTime（相对时间） / useTheme（主题共享状态） / useSearchHistory（顶栏与结果页共用的搜索历史）
 │  │  ├─ api/                  # request.ts (axios 实例 + 拦截器) / auth.ts / posts.ts
+│  │  ├─ utils/masonry.ts      # 瀑布流纯函数：列数换算 / 高度估算 / 最短列优先分列 / 关键词切分
 │  │  ├─ stores/               # Pinia: auth / toast / homeTabs
 │  │  ├─ router/               # Vue Router 配置（含 requiresAuth / guestOnly 守卫）
 │  │  └─ constants.ts          # 客户端常量（与 server mirror）
+│  ├─ tests/                    # vitest + @vue/test-utils（jsdom）：masonry 纯函数 / 搜索历史 / PostMasonry 渲染与转义
 │  ├─ components.d.ts          # unplugin-vue-components 生成的组件声明
-│  └─ vite.config.ts           # 按需引入插件 + /uploads 反代
+│  ├─ vite.config.ts           # 按需引入插件 + /uploads 反代
+│  └─ vitest.config.ts         # 前端单测配置（jsdom + @ 别名，与生产构建配置分开）
 │
 ├─ server/                     # Express + SQLite 后端
 │  ├─ src/
@@ -161,17 +178,18 @@ content-sharing-platform/
 
 ### 工程化
 
-| 亮点                             | 实现                                                                                                                                                                                                                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                       |
-| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                |
-| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                              |
-| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22，Node 20 会让"Install deps"假绿然后在 `vitest run` 挂掉）；本地能过的命令 CI 也必须能过 |
-| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                               |
-| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                                                                           |
-| **搜索建议独立接口**             | `GET /api/posts/search/suggest` 单独开而不复用 `/search`：结果页要「按排序分页的完整列表」，建议框要「少量、去重、按相关度稳定的短列表」，语义和排序都不同。`q` 为空时返回按笔记数排序的热门话题填充下拉；前端 250ms 防抖 + 请求序号丢弃过期响应，避免快速连打时被旧响应覆盖    |
-| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                         |
-| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                                                                        |
+| 亮点                             | 实现                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                 |
+| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                          |
+| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                        |
+| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + vitest + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22，Node 20 会让"Install deps"假绿然后在 `vitest run` 挂掉）；本地能过的命令 CI 也必须能过                                                                  |
+| **前端单测不是摆设**             | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言。48 条用例覆盖：分列均衡性（含与"轮流分"的定量对比）、ratio 按全局下标循环、脏 `localStorage` 容错、以及**高亮渲染后 HTML 被转义**（`find('script')` 必须为 false）。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见 |
+| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                         |
+| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                                                                                                                                                     |
+| **搜索建议独立接口**             | `GET /api/posts/search/suggest` 单独开而不复用 `/search`：结果页要「按排序分页的完整列表」，建议框要「少量、去重、按相关度稳定的短列表」，语义和排序都不同。`q` 为空时返回按笔记数排序的热门话题填充下拉；前端 250ms 防抖 + 请求序号丢弃过期响应，避免快速连打时被旧响应覆盖                                                                              |
+| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                                                                                                   |
+| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                                                                                                                                                  |
 
 ## 📚 文档
 
