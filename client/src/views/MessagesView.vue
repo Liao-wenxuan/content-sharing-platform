@@ -1,24 +1,28 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * 消息页（桌面端）
  *
- * 布局改造：
- * - 移动端的「顶部 pill 分类」换成 ElTabs（放在内容区正常流里）
- * - 活动消息列表 → ElCard + ElTimeline 的纵向条目
- * - 推荐关注、通知开关 → ElSwitch + ElCard
- * - 利用桌面横向空间，右侧放「推荐关注」栏
- *
- * 数据仍是 mock：后端目前没有 notification 表 / API。
+ * 两个顶层 Tab：
+ * - 通知：点赞 / 关注 / 评论@ 的活动流（数据仍是 mock，后端没有 notification 表）
+ * - 聊天：WebSocket 实时 1v1 聊天，真实后端，见 ChatView / useChat
  */
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Star, User, ChatDotRound } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useWebSocket } from '@/composables/useWebSocket'
 import EmptyState from '@/components/EmptyState.vue'
+import ChatView from '@/views/ChatView.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+// 只取未读数；连接生命周期由 App.vue 统一管，这里不重复 connect/disconnect
+const { unreadTotal } = useWebSocket()
+
+/** 顶层 tab：通知 / 聊天 */
+const activeSection = ref<'notifications' | 'chat'>('notifications')
+const totalUnread = computed(() => unreadTotal.value)
 
 type CategoryId = 'likes' | 'follows' | 'mentions'
 
@@ -147,83 +151,107 @@ onMounted(() => {
       <p class="page-subtitle">点赞、关注和评论都会出现在这里</p>
     </header>
 
-    <el-tabs v-model="activeCategory" class="msg-tabs">
-      <el-tab-pane v-for="cat in categories" :key="cat.id" :label="cat.label" :name="cat.id" />
+    <!-- 顶层两个 Tab：通知（静态活动流）/ 聊天（WebSocket 实时） -->
+    <el-tabs v-model="activeSection" class="top-tabs">
+      <el-tab-pane label="通知" name="notifications" />
+      <el-tab-pane name="chat">
+        <template #label>
+          <span class="tab-label">
+            聊天
+            <el-badge
+              v-if="totalUnread > 0"
+              :value="totalUnread"
+              :max="99"
+              type="danger"
+              class="tab-badge"
+            />
+          </span>
+        </template>
+      </el-tab-pane>
     </el-tabs>
 
-    <div class="messages-grid">
-      <!-- ================= 左栏：活动消息 ================= -->
-      <el-card shadow="never" class="activity-card">
-        <template #header>
-          <span class="card-title">
-            <el-icon
-              ><component :is="categories.find((c) => c.id === activeCategory)!.icon"
-            /></el-icon>
-            {{ categories.find((c) => c.id === activeCategory)!.label }}
-          </span>
-          <span class="card-sub">{{ filteredActivities.length }} 条</span>
-        </template>
+    <template v-if="activeSection === 'notifications'">
+      <el-tabs v-model="activeCategory" class="msg-tabs">
+        <el-tab-pane v-for="cat in categories" :key="cat.id" :label="cat.label" :name="cat.id" />
+      </el-tabs>
 
-        <EmptyState
-          v-if="filteredActivities.length === 0"
-          icon="🔔"
-          title="暂无活动消息"
-          hint="有人赞你、评论你时会出现在这里"
-          compact
-        />
+      <div class="messages-grid">
+        <!-- ================= 左栏：活动消息 ================= -->
+        <el-card shadow="never" class="activity-card">
+          <template #header>
+            <span class="card-title">
+              <el-icon
+                ><component :is="categories.find((c) => c.id === activeCategory)!.icon"
+              /></el-icon>
+              {{ categories.find((c) => c.id === activeCategory)!.label }}
+            </span>
+            <span class="card-sub">{{ filteredActivities.length }} 条</span>
+          </template>
 
-        <ul v-else class="activity-list">
-          <li v-for="item in filteredActivities" :key="item.id" class="activity-item">
-            <span class="unread-dot" :class="{ on: item.unread }" aria-hidden="true" />
-            <el-avatar :size="38" class="avatar">{{ avatarText(item.nickname) }}</el-avatar>
-            <div class="activity-main">
-              <div class="activity-text">
-                <span class="activity-nick">{{ item.nickname }}</span>
-                {{ item.text }}
-              </div>
-            </div>
-            <span class="activity-date">{{ item.date }}</span>
-          </li>
-        </ul>
-      </el-card>
-
-      <!-- ================= 右栏 ================= -->
-      <aside class="side-col">
-        <el-card shadow="never" class="side-card">
-          <template #header><span class="card-title">通知设置</span></template>
-          <div class="switch-row">
-            <span class="switch-label">接收点赞和评论提醒</span>
-            <el-switch v-model="notificationEnabled" />
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="side-card">
-          <template #header><span class="card-title">推荐关注</span></template>
-
-          <el-empty
-            v-if="visibleSuggestions.length === 0"
-            description="暂无推荐"
-            :image-size="60"
+          <EmptyState
+            v-if="filteredActivities.length === 0"
+            icon="🔔"
+            title="暂无活动消息"
+            hint="有人赞你、评论你时会出现在这里"
+            compact
           />
 
-          <ul v-else class="suggest-list">
-            <li v-for="u in visibleSuggestions" :key="u.id" class="suggest-item">
-              <el-avatar :size="36" class="avatar">{{ avatarText(u.nickname) }}</el-avatar>
-              <div class="suggest-info">
-                <div class="suggest-name">{{ u.nickname }}</div>
-                <div v-if="u.hint" class="suggest-hint">{{ u.hint }}</div>
+          <ul v-else class="activity-list">
+            <li v-for="item in filteredActivities" :key="item.id" class="activity-item">
+              <span class="unread-dot" :class="{ on: item.unread }" aria-hidden="true" />
+              <el-avatar :size="38" class="avatar">{{ avatarText(item.nickname) }}</el-avatar>
+              <div class="activity-main">
+                <div class="activity-text">
+                  <span class="activity-nick">{{ item.nickname }}</span>
+                  {{ item.text }}
+                </div>
               </div>
-              <el-button size="small" type="primary" plain round @click="onFollowClick">
-                关注
-              </el-button>
-              <el-button size="small" text class="dismiss-btn" @click="dismiss(u.id)">
-                不感兴趣
-              </el-button>
+              <span class="activity-date">{{ item.date }}</span>
             </li>
           </ul>
         </el-card>
-      </aside>
-    </div>
+
+        <!-- ================= 右栏 ================= -->
+        <aside class="side-col">
+          <el-card shadow="never" class="side-card">
+            <template #header><span class="card-title">通知设置</span></template>
+            <div class="switch-row">
+              <span class="switch-label">接收点赞和评论提醒</span>
+              <el-switch v-model="notificationEnabled" />
+            </div>
+          </el-card>
+
+          <el-card shadow="never" class="side-card">
+            <template #header><span class="card-title">推荐关注</span></template>
+
+            <el-empty
+              v-if="visibleSuggestions.length === 0"
+              description="暂无推荐"
+              :image-size="60"
+            />
+
+            <ul v-else class="suggest-list">
+              <li v-for="u in visibleSuggestions" :key="u.id" class="suggest-item">
+                <el-avatar :size="36" class="avatar">{{ avatarText(u.nickname) }}</el-avatar>
+                <div class="suggest-info">
+                  <div class="suggest-name">{{ u.nickname }}</div>
+                  <div v-if="u.hint" class="suggest-hint">{{ u.hint }}</div>
+                </div>
+                <el-button size="small" type="primary" plain round @click="onFollowClick">
+                  关注
+                </el-button>
+                <el-button size="small" text class="dismiss-btn" @click="dismiss(u.id)">
+                  不感兴趣
+                </el-button>
+              </li>
+            </ul>
+          </el-card>
+        </aside>
+      </div>
+    </template>
+
+    <!-- 聊天：WebSocket 实时消息，组件自己管连接和状态 -->
+    <ChatView v-else class="chat-panel" />
   </div>
 </template>
 
@@ -413,5 +441,35 @@ onMounted(() => {
   padding: 0;
   height: auto;
   font-size: 12px;
+}
+
+/* ===== 顶层 Tab（通知 / 聊天）===== */
+.top-tabs {
+  margin-bottom: 4px;
+}
+
+.top-tabs :deep(.el-tabs__item) {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-badge :deep(.el-badge__content) {
+  transform: none;
+  position: static;
+}
+
+/* 聊天面板：撑满 Tab 下方的剩余高度 */
+.chat-panel {
+  height: calc(100vh - var(--top-bar-height) - 190px);
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
 }
 </style>
