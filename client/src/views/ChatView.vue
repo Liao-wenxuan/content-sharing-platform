@@ -27,6 +27,7 @@ function formatClock(input: string | number | Date): string {
 }
 const {
   conversations,
+  suggestions,
   activeId,
   activeConversation,
   activeMessages,
@@ -40,6 +41,7 @@ const {
   connected,
   isPeerOnline,
   loadConversations,
+  loadSuggestions,
   openConversation,
   loadMoreHistory,
   sendText,
@@ -89,12 +91,17 @@ function isFailed(m: { id: number }) {
 onMounted(async () => {
   await loadConversations()
 
+  // 没有会话时整屏显示「找人聊聊」；有会话就进第一个
+  if (!conversations.value.length) {
+    await loadSuggestions()
+  } else {
+    await openConversation(conversations.value[0].id)
+  }
+
   // 从个人主页「发消息」带过来：?peer=<userId>
   const peer = Number(route.query.peer)
   if (Number.isInteger(peer) && peer > 0) {
     await startWithPeer(peer)
-  } else if (conversations.value.length) {
-    await openConversation(conversations.value[0].id)
   }
 })
 
@@ -106,11 +113,41 @@ watch(activeId, () => {
 </script>
 
 <template>
-  <div class="chat">
+  <!--
+    没有会话时**不显示空的双栏**：1920 宽下一片空灰是这张图最丑的地方，
+    右边 1000px 什么都没有，重心全塌在左边。
+    改成整屏「找人聊聊」——点头像直接开聊，空状态本身就是内容。
+  -->
+  <div v-if="!conversations.length && !loadingList" class="chat-discover">
+    <div class="discover-head">
+      <h2>找人聊聊</h2>
+      <p>点一个人就能开始对话，不用先去个人主页找</p>
+    </div>
+
+    <ul v-if="suggestions.length" class="discover-grid">
+      <li
+        v-for="s in suggestions"
+        :key="s.id"
+        class="discover-item"
+        role="button"
+        tabindex="0"
+        @click="startWithPeer(s.id)"
+        @keydown.enter="startWithPeer(s.id)"
+      >
+        <el-avatar :size="52" :src="s.avatar || undefined">{{ s.nickname.slice(0, 1) }}</el-avatar>
+        <span class="discover-name">{{ s.nickname }}</span>
+        <span class="discover-hint">{{ s.postCount }} 篇笔记</span>
+      </li>
+    </ul>
+
+    <p v-else class="discover-empty">还没有其他人注册</p>
+  </div>
+
+  <div v-else class="chat">
     <!-- 左：会话列表 -->
     <aside class="conv-list">
       <div class="list-head">
-        <span class="list-title">消息</span>
+        <span class="list-title">会话</span>
         <el-tag v-if="totalUnread > 0" type="danger" size="small" effect="dark" round>
           {{ totalUnread }}
         </el-tag>
@@ -124,11 +161,6 @@ watch(activeId, () => {
       </div>
 
       <div v-if="loadingList" class="list-hint">加载中…</div>
-
-      <div v-else-if="!conversations.length" class="list-hint">
-        <p>还没有会话</p>
-        <p class="sub">去个人主页点「发消息」试试</p>
-      </div>
 
       <ul v-else class="conv-items">
         <li
@@ -244,6 +276,99 @@ watch(activeId, () => {
 </template>
 
 <style scoped>
+/* ============================================================
+   空状态：整屏「找人聊聊」
+   没有会话时不画那个空的双栏 —— 大面积空灰是这个页面最难看的部分，
+   而「点谁都能聊」本身就是内容，不需要用户先去别处找路。
+   ============================================================ */
+.chat-discover {
+  height: 100%;
+  overflow-y: auto;
+  padding: 48px 32px;
+}
+
+.discover-head {
+  max-width: 1080px;
+  margin: 0 auto 28px;
+}
+
+.discover-head h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.discover-head p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+.discover-grid {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  /* 固定 3 列：推荐是 6 个人，3×2 排得整整齐齐。
+     用 auto-fill 会在某些宽度下算出 5 列，剩一个孤零零掉到第二行。 */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .discover-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.discover-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 22px 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.discover-item:hover,
+.discover-item:focus-visible {
+  border-color: var(--accent);
+  background: var(--muted);
+}
+
+.discover-name {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.discover-hint {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.discover-empty {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 0;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
 .chat {
   display: flex;
   /* 高度交给父容器决定：单独作为路由页时父级给 calc 值，
@@ -404,7 +529,9 @@ watch(activeId, () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--muted);
+  /* 比列表略亮一点点就够分层。之前用 --muted 在 1920 宽下是一整块
+     1000px 的深灰，和左侧黑底割裂成两块颜色；现在靠 1px 描边 + 微弱色差分层。 */
+  background: color-mix(in srgb, var(--muted) 45%, var(--background));
 }
 
 .chat-head {
@@ -440,6 +567,21 @@ watch(activeId, () => {
   flex: 1;
   overflow-y: auto;
   padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * 消息从底部往上堆：只发了一两条时贴在底部，而不是吊在顶上留一大片空白。
+ *
+ * 用一个空的 ::before + margin-top:auto 来顶，而不是 justify-content:flex-end ——
+ * 后者在「内容超过一屏」时会把顶部溢出部分裁掉且滚不回去（flexbox 的经典陷阱）。
+ * min-height: min-content 是同一个思路的另一种写法。
+ */
+.msg-list::before {
+  content: '';
+  display: block;
+  margin-top: auto;
 }
 
 .history-top {

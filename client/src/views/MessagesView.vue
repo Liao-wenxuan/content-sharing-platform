@@ -464,12 +464,14 @@ onMounted(() => {
   position: static;
 }
 
-/* 聊天面板：撑满 Tab 下方的剩余高度 */
+/* 聊天面板：撑满 Tab 下方的剩余空间。
+   刻意不加 border / border-radius —— 页面内容区本身已经和外层有分隔，
+   再套一圈框会变成「框里还有个框」，是这页最突兀的一层。 */
 .chat-panel {
   height: calc(100vh - var(--top-bar-height) - 190px);
   min-height: 420px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
 }
 </style>
