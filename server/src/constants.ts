@@ -5,6 +5,12 @@ export const POST_CONTENT_MAX_LENGTH = 500
 export const COMMENT_MAX_LENGTH = 500
 export const NICKNAME_MAX_LENGTH = 20
 
+// 即时通讯
+export const MESSAGE_MAX_LENGTH = 500
+/** 单页历史消息条数上限：翻页再往上就没必要了，避免一次拉爆内存 */
+export const MESSAGE_PAGE_MAX = 50
+export const MESSAGE_PAGE_DEFAULT = 30
+
 // 上传图片限制（与 multer 配置一致）
 export const UPLOAD_MAX_FILES = 9
 export const UPLOAD_MAX_SIZE_MB = 10
