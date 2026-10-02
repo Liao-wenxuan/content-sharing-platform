@@ -19,6 +19,11 @@ import './assets/styles/element-theme.css'
 // 设计系统 token —— 纯色 + 描边（Flat + Outline）
 import './assets/styles/theme.css'
 
+// Motion 层 —— 时长/缓动 token、键盘焦点、reduced-motion 兜底。
+// 必须排在 theme.css 之后：它要读上面的 --accent / --interactive-border，
+// 且 reduced-motion 的兜底规则优先级最高，放前面会被组件样式盖掉。
+import './assets/styles/motion.css'
+
 // 主题初始化：在 app.mount 之前同步落到 <html> 上，避免首屏主题闪烁。
 // 默认深色已由 index.html 的 class="dark" 兜底，这里只处理用户改过的偏好。
 const savedTheme = localStorage.getItem('theme')

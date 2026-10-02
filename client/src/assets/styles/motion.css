@@ -1,0 +1,197 @@
+/**
+ * Motion 层 —— 时长 / 缓动 token、键盘焦点、通用交互状态、reduced-motion 兜底
+ *
+ * 为什么单独一个文件：
+ * - design token（颜色/圆角）和 motion token（时长/缓动）是两套东西，混在一起
+ *   会出现「改了个圆角顺手把时长也改了」的耦合
+ * - reduced-motion 必须永远在最后（见文件末尾），放这里而不是散进各组件，
+ *   才不会出现某个组件漏写了降级
+ *
+ * 阶梯选择：全部用 rung 1（纯 CSS transition/animation），不引 GSAP / Framer。
+ * 理由：这是个桌面端产品应用，动效是「状态反馈」不是「叙事编排」，
+ * CSS 足够；引库会让 bundle 涨 40KB+ 却换不来任何当前用得上的能力。
+ *
+ * 性能纪律：动画只碰 transform / opacity / color / border-color。
+ * width/height/top/left/box-shadow 会触发 layout 或 paint，不进动画。
+ */
+
+:root {
+  /* ===== 时长：五档，按意图用，不要随手写 0.3s ===== */
+  /* 90ms 光标级反馈：tooltip 显隐、小红点 */
+  --dur-instant: 90ms;
+  /* 160ms 状态切换：hover、按下、focus */
+  --dur-fast: 160ms;
+  /* 280ms 容器进出：面板展开、消息气泡入场 */
+  --dur-standard: 280ms;
+  /* 420ms 内容换场：路由切换、图片加载完成 */
+  --dur-medium: 420ms;
+  /* 640ms 大件入场：登录页 */
+  --dur-slow: 640ms;
+
+  /* ===== 缓动字典 ===== */
+  /* 快进慢停：绝大多数入场用它，收尾干净不拖泥带水 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 对称平滑：可循环的自动播放动画 */
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  /* 轻微回弹：按压反馈、确认类反馈 */
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Material 默认：不确定该用哪个时选它 */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  /* 极快减速：利落的机械感 */
+  --ease-out-circ: cubic-bezier(0, 0.55, 0.45, 1);
+
+  /* ===== CSS 原生弹簧（rung 1.5）=====
+     cubic-bezier() 表达不了「冲过头再回落」，linear() 逐点采样可以。
+     数值由 stiffness≈350 / damping≈28 的 spring 采样而来，
+     效果接近 spring-snappy，但不需要为一个小按钮引入动画库。 */
+  --spring-snappy: linear(0, 0.2 12%, 1.1 32%, 0.9 48%, 1 68%, 1);
+
+  /* 交互态的强调色（Flat + Outline 设计语言下，hover 靠描边说话而不是阴影） */
+  --interactive-border: #3a3a3a;
+  --interactive-border-hover: var(--accent);
+}
+
+/* ============================================================
+   1. 键盘焦点 —— 可访问性底线
+   之前项目里 0 处 focus-visible，键盘用户完全看不到焦点落在哪。
+   用 :focus-visible 而非 :focus，鼠标点击不会留下焦点框。
+   ============================================================ */
+:where(a, button, summary, [role='button'], [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* 输入类控件自己画 focus 框（Element Plus 的 .el-input__wrapper 已经接管了内阴影） */
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus-visible {
+  outline: none;
+}
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--accent) inset !important;
+}
+
+/* 跳到主内容：给键盘用户一个跳过侧栏的入口 */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: 0 0 8px 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top var(--dur-fast) var(--ease-out-expo);
+}
+.skip-link:focus-visible {
+  top: 0;
+}
+
+/* ============================================================
+   2. 通用交互状态
+   Flat + Outline：--shadow 全是 none，所以 hover 靠「描边亮起 + 轻微位移」，
+   不用阴影抬升（那既违反本项目设计语言，也正是「统一 hover lift」那种 AI 味）。
+   ============================================================ */
+
+/* 按压：给一个 3% 的按下去的感觉，比 hover 更有信息量 */
+:where(button, .el-button, [role='button']).not(:disabled):active {
+  transform: scale(0.97);
+  transition: transform var(--dur-instant) var(--ease-out-back);
+}
+
+:where(button, .el-button, [role='button']):not(:disabled) {
+  transition-property: background-color, border-color, color, transform, opacity;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out-expo);
+}
+
+/* 列表项（侧栏导航、会话列表）的选中/悬停：用底色 + 左侧红条，不抬升 */
+.pressable {
+  transition: background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+/* 骨架屏：内容加载中的占位，缓慢呼吸而不是闪烁 */
+@keyframes sg-shimmer {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.skeleton-pulse {
+  animation: sg-shimmer 1.6s var(--ease-in-out-quart) infinite;
+}
+
+/* ============================================================
+   2.5 跨组件复用的 keyframes
+   放在这里而不是某个组件的 scoped 里：铃铛和会话列表的红点是同一套反馈，
+   各自复制一份很快就会改得不一致。
+   ============================================================ */
+
+/* 计数从 0 冒出来：一次短促的放大回落，余光就能捕捉到「多了一个」 */
+@keyframes sg-badge-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 来信提醒：铃铛摆一下。只在「刚收到」时触发一次，不是一直循环 */
+@keyframes sg-bell-swing {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  20% {
+    transform: rotate(12deg);
+  }
+  45% {
+    transform: rotate(-9deg);
+  }
+  70% {
+    transform: rotate(5deg);
+  }
+  88% {
+    transform: rotate(-2deg);
+  }
+}
+
+.bell-swing {
+  animation: sg-bell-swing 640ms var(--ease-out-expo);
+  transform-origin: 50% 20%;
+}
+
+/* ============================================================
+   3. Reduced motion —— 永远最后，且是兜底而不是可选
+   B8：动效关掉后页面必须依然完整可用。
+   用 0.01ms 而不是 0：某些浏览器不触发 transitionend（靠它做后续逻辑时会卡住），
+   0.01ms 既保留了终态又几乎不耗时。
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* 下面这些是「靠动画本身传达信息」的，reduced-motion 下换成静态表达 */
+  .skeleton-pulse {
+    opacity: 0.7;
+  }
+}
