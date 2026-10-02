@@ -65,7 +65,11 @@ jobs:
         # 必须显式 -p tsconfig.app.json：
         # tsconfig.json 是 solution-style（files: [] + references），
         # 直接 `vue-tsc --noEmit` 什么都不检查，错误会被静默放过。
+        # tsconfig.app.json 的 include 里带上了 tests/，所以单测的类型错误也一起查。
         run: npx vue-tsc --noEmit -p tsconfig.app.json
+
+      - name: Unit tests (vitest + @vue/test-utils)
+        run: npm test
 
       - name: Build (catches SSR/build-time errors)
         run: npm run build

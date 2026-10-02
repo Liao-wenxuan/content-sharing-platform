@@ -1,6 +1,8 @@
 {
   "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["src/**/*", "src/**/*.vue"],
+  // tests/ 必须一起进类型检查：否则测试文件里的类型错误 vue-tsc 永远看不见，
+  // 等于单测写错了也没人拦
+  "include": ["src/**/*", "src/**/*.vue", "tests/**/*"],
   "exclude": ["src/**/__tests__/*"],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
