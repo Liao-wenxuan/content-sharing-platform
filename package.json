@@ -16,7 +16,8 @@
     "seed:clean": "node server/cleanup-test-data.mjs",
     "seed:photos": "node scripts/fetch-demo-photos.mjs",
     "prepare": "husky",
-    "test:client": "npm --prefix client test"
+    "test:client": "npm --prefix client test",
+    "test:chat": "node scripts/chat-smoke.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
