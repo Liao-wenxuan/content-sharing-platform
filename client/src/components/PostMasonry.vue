@@ -4,16 +4,21 @@
  *
  * 首页和搜索页共用，所以从 HomeView 里抽出来。
  *
- * 为什么不用 CSS grid 做瀑布流：
- * grid 的行高由该行最高的卡片决定，短卡片下面会留出一大片空白。
- * 真瀑布流是「每列独立高度」，所以这里用最短列优先自己分列
- * （不用 CSS columns，因为它是 column-major，阅读顺序会变成竖着读）。
+ * 分列、高度估算、关键词切分都在 utils/masonry.ts 里（纯函数，可单测），
+ * 这个组件只做两件事：ResizeObserver 监听宽度 → 按结果渲染 DOM。
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Star, VideoPlay } from '@element-plus/icons-vue'
 import type { Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
+import {
+  GAP,
+  computeColCount,
+  distributeToColumns,
+  segmentByKeyword,
+  avatarText
+} from '@/utils/masonry'
 
 const props = defineProps<{
   posts: Post[]
@@ -22,19 +27,6 @@ const props = defineProps<{
 }>()
 
 const { formatTime } = useRelativeTime()
-
-// 6 张一循环的封面比例，和 CSS 里的 .ratio-N 一一对应
-const RATIOS = [
-  [1, 1],
-  [3, 4],
-  [4, 5],
-  [3, 5],
-  [2, 3],
-  [5, 6]
-] as const
-
-const MIN_COL_WIDTH = 232
-const GAP = 18
 
 const gridRef = ref<HTMLElement | null>(null)
 const gridWidth = ref(1200)
@@ -47,50 +39,18 @@ onMounted(() => {
   resizeObserver = new ResizeObserver((entries) => {
     const w = entries[0].contentRect.width
     gridWidth.value = w
-    // 内容区能塞几列就塞几列，最少 2 列
-    colCount.value = Math.max(2, Math.floor((w + GAP) / (MIN_COL_WIDTH + GAP)))
+    colCount.value = computeColCount(w)
   })
   resizeObserver.observe(gridRef.value)
 })
 
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
-interface ColumnItem {
-  post: Post
-  ratio: number
-}
-
-/** 估算一张卡片的渲染高度：封面 + 标题两行 + 作者行 */
-function estimateHeight(item: ColumnItem, colWidth: number): number {
-  const [rw, rh] = RATIOS[item.ratio]
-  // 无图笔记也渲染同尺寸占位块，所以封面高度一样
-  const cover = (colWidth * rh) / rw
-  const title = item.post.content.length > 26 ? 40 : 20
-  return cover + 10 + title + 8 + 20 + 18
-}
-
-const columns = computed<ColumnItem[][]>(() => {
+const columns = computed(() => {
   const n = colCount.value
   const colWidth = (gridWidth.value - GAP * (n - 1)) / n
-  const buckets: ColumnItem[][] = Array.from({ length: n }, () => [])
-  const heights = new Array(n).fill(0)
-
-  props.posts.forEach((post, i) => {
-    const item: ColumnItem = { post, ratio: i % 6 }
-    let target = 0
-    for (let c = 1; c < n; c++) {
-      if (heights[c] < heights[target]) target = c
-    }
-    buckets[target].push(item)
-    heights[target] += estimateHeight(item, colWidth)
-  })
-
-  return buckets
+  return distributeToColumns(props.posts, n, colWidth)
 })
-
-function avatarText(nickname?: string): string {
-  return nickname?.[0]?.toUpperCase() || '?'
-}
 
 function onAuthorClick() {
   ElMessage.info('个人主页跳转开发中')
@@ -103,29 +63,8 @@ function tagMatched(post: Post): boolean {
   return post.topicTag.toLowerCase().includes(kw)
 }
 
-/**
- * 把命中关键词切成 <mark> 段。
- * 直接用 v-html 有 XSS 风险，所以这里只用 split 切字符串，
- * 每段都走 Vue 的文本插值转义，不用 innerHTML。
- */
-function segments(text: string): { text: string; hit: boolean }[] {
-  const kw = props.highlight?.trim()
-  if (!kw) return [{ text, hit: false }]
-  const out: { text: string; hit: boolean }[] = []
-  const lower = text.toLowerCase()
-  const target = kw.toLowerCase()
-  let i = 0
-  while (i < text.length) {
-    const idx = lower.indexOf(target, i)
-    if (idx === -1) {
-      out.push({ text: text.slice(i), hit: false })
-      break
-    }
-    if (idx > i) out.push({ text: text.slice(i, idx), hit: false })
-    out.push({ text: text.slice(idx, idx + kw.length), hit: true })
-    i = idx + kw.length
-  }
-  return out
+function segments(text: string) {
+  return segmentByKeyword(text, props.highlight)
 }
 </script>
 
