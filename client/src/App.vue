@@ -18,11 +18,27 @@ import { useRoute } from 'vue-router'
 import SideNav from '@/components/SideNav.vue'
 import TopBar from '@/components/TopBar.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
+import { useAuthStore } from '@/stores/auth'
+import { connectWs, disconnectWs } from '@/composables/useWebSocket'
 
 const route = useRoute()
+const auth = useAuthStore()
 
 /** 登录页不套三栏壳：全屏居中更符合登录表单的阅读节奏 */
 const isAuthPage = computed(() => route.name === 'login')
+
+/**
+ * 登录态变化时开关 WebSocket —— 放在 App 这一层统一管，
+ * 免得每个用到聊天的组件都要自己 connect/disconnect，容易漏。
+ */
+watch(
+  () => auth.token,
+  (token) => {
+    if (token) connectWs()
+    else disconnectWs()
+  },
+  { immediate: true }
+)
 
 // 路由切换时回到顶部（避免从详情页返回时还停在列表中部）
 // 仅在 path 变化时触发；同 path 的 query 变化保留滚动位置
