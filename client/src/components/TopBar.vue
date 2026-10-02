@@ -48,6 +48,25 @@ const {
 } = useSearchHistory()
 const { unreadTotal } = useWebSocket()
 
+/**
+ * 来信时铃铛摆一下。
+ * 只在未读「增长」时触发一次 —— 挂着一个循环动画会变成背景噪声，
+ * 用户真正需要的是「刚刚有动静」这一个瞬间。
+ */
+const bellRinging = ref(false)
+let ringTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(unreadTotal, (next, prev) => {
+  if (!(next > prev)) return
+  // 先摘掉 class 再加，否则连续两次未读增长不会重新触发动画
+  bellRinging.value = false
+  nextTick(() => {
+    bellRinging.value = true
+    clearTimeout(ringTimer)
+    ringTimer = setTimeout(() => (bellRinging.value = false), 700)
+  })
+})
+
 const keyword = ref('')
 const focused = ref(false)
 const wrapRef = ref<HTMLElement | null>(null)
@@ -290,64 +309,68 @@ function onOutsideClick(e: MouseEvent) {
         @clear="onClear"
       />
 
-      <div v-if="panelVisible" class="suggest-panel">
-        <template v-for="g in groups" :key="g.kind">
-          <div class="group-title">{{ g.title }}</div>
-          <button
-            v-for="row in g.items"
-            :key="`${g.kind}-${'id' in row ? row.id : row.value}`"
-            type="button"
-            class="suggest-row"
-            :class="{ active: isRowActive(row) }"
-            @mousedown.prevent="pickRow(row)"
-          >
-            <!-- 笔记：封面缩略图 -->
-            <img
-              v-if="row.kind === 'post'"
-              class="row-cover"
-              :src="row.cover || ''"
-              alt=""
-              @error="($event.target as HTMLImageElement).style.visibility = 'hidden'"
-            />
-            <!-- 用户：头像 -->
-            <el-avatar
-              v-else-if="row.kind === 'user'"
-              class="row-avatar"
-              :size="24"
-              :src="row.avatar || undefined"
+      <!-- Transition 而不是纯 v-if：面板是「出现」和「消失」两件事，
+           离开用更快的曲线（快进快出），不然收起时会有一段拖沓的尾巴 -->
+      <Transition name="panel">
+        <div v-if="panelVisible" class="suggest-panel">
+          <template v-for="g in groups" :key="g.kind">
+            <div class="group-title">{{ g.title }}</div>
+            <button
+              v-for="row in g.items"
+              :key="`${g.kind}-${'id' in row ? row.id : row.value}`"
+              type="button"
+              class="suggest-row"
+              :class="{ active: isRowActive(row) }"
+              @mousedown.prevent="pickRow(row)"
             >
-              {{ row.value.slice(0, 1) }}
-            </el-avatar>
-            <el-icon v-else class="row-icon">
-              <component :is="row.kind === 'history' ? Clock : PriceTag" />
-            </el-icon>
+              <!-- 笔记：封面缩略图 -->
+              <img
+                v-if="row.kind === 'post'"
+                class="row-cover"
+                :src="row.cover || ''"
+                alt=""
+                @error="($event.target as HTMLImageElement).style.visibility = 'hidden'"
+              />
+              <!-- 用户：头像 -->
+              <el-avatar
+                v-else-if="row.kind === 'user'"
+                class="row-avatar"
+                :size="24"
+                :src="row.avatar || undefined"
+              >
+                {{ row.value.slice(0, 1) }}
+              </el-avatar>
+              <el-icon v-else class="row-icon">
+                <component :is="row.kind === 'history' ? Clock : PriceTag" />
+              </el-icon>
 
-            <span class="row-text">{{ row.value }}</span>
+              <span class="row-text">{{ row.value }}</span>
 
-            <span v-if="row.kind === 'topic' && row.count" class="row-count">
-              {{ row.count }} 篇
-            </span>
-            <el-button
-              v-else-if="row.kind === 'history'"
-              link
-              class="row-del"
-              @click.stop="onHistoryRemove(row.value)"
-            >
-              <el-icon><component :is="Delete" /></el-icon>
+              <span v-if="row.kind === 'topic' && row.count" class="row-count">
+                {{ row.count }} 篇
+              </span>
+              <el-button
+                v-else-if="row.kind === 'history'"
+                link
+                class="row-del"
+                @click.stop="onHistoryRemove(row.value)"
+              >
+                <el-icon><component :is="Delete" /></el-icon>
+              </el-button>
+            </button>
+          </template>
+
+          <!-- 只有一个清空按钮时挂在面板底部 -->
+          <div v-if="history.length && !keyword.trim()" class="panel-footer">
+            <el-button link size="small" @click="onHistoryClear">
+              <el-icon><component :is="Delete" /></el-icon> 清空搜索历史
             </el-button>
-          </button>
-        </template>
-
-        <!-- 只有一个清空按钮时挂在面板底部 -->
-        <div v-if="history.length && !keyword.trim()" class="panel-footer">
-          <el-button link size="small" @click="onHistoryClear">
-            <el-icon><component :is="Delete" /></el-icon> 清空搜索历史
-          </el-button>
-          <span class="panel-hint">
-            <el-icon><component :is="TrendCharts" /></el-icon> ↑↓ 选择 · Enter 打开 · Esc 关闭
-          </span>
+            <span class="panel-hint">
+              <el-icon><component :is="TrendCharts" /></el-icon> ↑↓ 选择 · Enter 打开 · Esc 关闭
+            </span>
+          </div>
         </div>
-      </div>
+      </Transition>
     </div>
 
     <div class="bar-actions">
@@ -368,7 +391,13 @@ function onOutsideClick(e: MouseEvent) {
       <!-- 消息：侧栏不再放这一项，改成顶栏铃铛（仅登录态） -->
       <el-tooltip v-if="auth.isLoggedIn" content="消息" placement="bottom">
         <el-badge :value="unreadTotal" :hidden="unreadTotal === 0" :max="99" class="bell-badge">
-          <el-button class="icon-btn" circle :icon="Bell" aria-label="消息" @click="goMessages" />
+          <el-button
+            :class="['icon-btn', { 'bell-swing': bellRinging }]"
+            circle
+            :icon="Bell"
+            aria-label="消息"
+            @click="goMessages"
+          />
         </el-badge>
       </el-tooltip>
 
@@ -441,6 +470,26 @@ function onOutsideClick(e: MouseEvent) {
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
+}
+
+/* 进场慢收、离场快走：出现时给一段「展开」的阅读时间，
+   消失时别让人等 —— 快进慢停用在离场会显得拖沓 */
+.panel-enter-active {
+  transition:
+    opacity var(--dur-standard) var(--ease-out-expo),
+    transform var(--dur-standard) var(--ease-out-expo);
+}
+
+.panel-leave-active {
+  transition:
+    opacity var(--dur-fast) var(--ease-in-out-quart),
+    transform var(--dur-fast) var(--ease-in-out-quart);
+}
+
+.panel-enter-from,
+.panel-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
 }
 
 .group-title {
@@ -552,6 +601,8 @@ function onOutsideClick(e: MouseEvent) {
 .bell-badge :deep(.el-badge__content) {
   transform: translate(50%, -50%);
   font-size: 11px;
+  /* keyframes 在全局 motion.css（会话列表的红点共用同一套反馈） */
+  animation: sg-badge-pop var(--dur-standard) var(--spring-snappy);
 }
 
 .user-trigger {

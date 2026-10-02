@@ -516,6 +516,83 @@ watch(activeId, () => {
   padding-left: 4px;
 }
 
+/* ============================================================
+   入场动效
+   刻意不给「所有元素统一 fade-up」—— 那样读到第三条就开始无视入场。
+   这里按消息的**来源**给不同入场：自己发的从右下弹出，对方发的从左滑入，
+   方向本身就在说「这是谁说的」。
+   用 CSS animation 而非 <Transition>：元素插入即播放，不需要 JS 触发。
+   ============================================================ */
+@keyframes sg-msg-in-mine {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sg-msg-in-theirs {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.msg-row.mine {
+  animation: sg-msg-in-mine var(--dur-standard) var(--spring-snappy);
+}
+
+.msg-row.theirs {
+  animation: sg-msg-in-theirs var(--dur-standard) var(--ease-out-expo);
+}
+
+/* 对方正在输入：轻微呼吸。它在反复出现，用 ease-in-out 而不是快进慢停，
+   否则每次循环都会有一个「重启动作」的顿挫感 */
+@keyframes sg-typing-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.typing-row {
+  animation: sg-typing-breathe 1.4s var(--ease-in-out-quart) infinite;
+}
+
+/* 未读数的 pop keyframes 定义在全局 motion.css（顶栏铃铛共用同一套） */
+.avatar-badge :deep(.el-badge__content) {
+  animation: sg-badge-pop var(--dur-standard) var(--spring-snappy);
+}
+
+/* 连接状态掉线时轻微摇一下：断线是用户最需要立刻知道的状态 */
+@keyframes sg-conn-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+.conn-state.reconnecting,
+.conn-state.closed {
+  animation: sg-conn-nudge 320ms var(--ease-out-expo);
+}
+
 /* ===== 输入区 ===== */
 .composer {
   display: flex;
