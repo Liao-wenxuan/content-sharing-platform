@@ -104,6 +104,37 @@ for (const nick of NICKNAMES) {
 }
 console.log(`演示用户就绪：${userIds.length} 个`)
 
+// ---------- 3.5 关注关系 ----------
+// 没有关注图的话，关注流 / 粉丝列表 / 推荐关注全是空的，演示时看不出效果。
+// 这里手工编一张：0 号（一只柚子）是「主视角」，他关注了大部分人，
+// 另外几个人之间也互相关注，好让粉丝数不是清一色的 0。
+// （0 自己不关注任何人，这样「我的关注」和「我的粉丝」是两个不同的数）
+const FOLLOWS = [
+  [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
+  [1, 0], [1, 2], [1, 4],
+  [2, 0], [2, 3],
+  [3, 1], [3, 5],
+  [4, 0], [4, 3],
+  [5, 0], [5, 2], [5, 4]
+]
+// 先清掉演示用户之间的旧关注，保证重复执行幂等
+db.prepare(
+  `DELETE FROM follows
+    WHERE follower_id IN (${userIds.map(() => '?').join(',')})
+      AND followee_id IN (${userIds.map(() => '?').join(',')})`
+).run(...userIds, ...userIds)
+
+const insertFollow = db.prepare(
+  `INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`
+)
+let followCount = 0
+for (const [a, b] of FOLLOWS) {
+  if (a === b) continue
+  insertFollow.run(userIds[a], userIds[b])
+  followCount++
+}
+console.log(`关注关系就绪：${followCount} 条`)
+
 // ---------- 4. 笔记：图片与频道严格对应 ----------
 const POSTS = [
   // 穿搭
