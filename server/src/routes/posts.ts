@@ -65,12 +65,13 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
 // ===== GET /feed 笔记列表（分页 + 频道/分类过滤）=====
 // query 参数：
 //   page / pageSize  分页
-//   channel          频道 filter（discover / follow / ya / ...）
-//   category         分类 filter（recommend / video / hot / live / drama / exp）
+//   channel          频道 filter（discover / follow / ya）
+//   category         内容频道 filter（recommend / outfit / food / ...）
 //
-// 设计：当前后端还没建完整的 follow/分类关系，频道和分类只在 SQL 上做基础过滤
-// （比如 channel=follow 暂返回空），但接口签名先稳定，前端可立即对接
-router.get('/feed', (req: Request, res: Response) => {
+// 关注流（channel=follow）走 follows 图：只返回「我关注的人」发的笔记，
+// 按时间倒序。关注流和推荐流刻意不做混排 —— 小红书这两条流是分开的
+// 入口，用户点「关注」就是要看订阅内容，掺进推荐反而是噪声。
+router.get('/feed', optionalAuth, (req: Request, res: Response) => {
   try {
     // 1. 解析分页参数
     const page = Math.max(1, parseInt(req.query.page as string) || 1)
@@ -120,13 +121,20 @@ router.get('/feed', (req: Request, res: Response) => {
       video: '视频'
     }
 
-    // 3. 拼 WHERE：channel=follow 当前不返回数据；其他都按全量 + category 模糊匹配
-    //    后续接入关注关系时改这里即可，前端 API 不用变
+    // 3. 拼 WHERE
     const conditionsSql: string[] = []
     const conditionParams: any[] = []
+
     if (channel === 'follow') {
-      // 未登录用户请求"关注"频道：返回空（前端按 auth 状态决定要不要跳 login）
-      conditionsSql.push('1 = 0')
+      // 未登录没有关注图可查，直接空结果（前端按登录态决定跳 login 还是提示）
+      if (typeof req.userId !== 'number') {
+        conditionsSql.push('1 = 0')
+      } else {
+        // 子查询而不是 JOIN：走 idx_follows_follower(主键最左前缀)，
+        // 关注几百个人的时候这个 IN 列表很短，比 JOIN 再去重更省事
+        conditionsSql.push(`p.user_id IN (SELECT followee_id FROM follows WHERE follower_id = ?)`)
+        conditionParams.push(req.userId)
+      }
     }
     if (category && category !== 'recommend') {
       // 简化映射：category 落到 topic_tag 上过滤（真实项目应建专门的 category 表）
