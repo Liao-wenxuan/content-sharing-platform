@@ -68,8 +68,12 @@ jobs:
         # tsconfig.app.json 的 include 里带上了 tests/，所以单测的类型错误也一起查。
         run: npx vue-tsc --noEmit -p tsconfig.app.json
 
-      - name: Unit tests (vitest + @vue/test-utils)
-        run: npm test
+      - name: Unit tests (vitest + @vue/test-utils) with coverage
+        # 跑覆盖率而不是裸 `npm test`：vitest.config.ts 里配了 thresholds，
+        # 跌破 60% 会直接让这一步失败，等于把「覆盖率」变成 CI 门禁而不只是一个报告。
+        # 统计范围只含 utils / composables / components（见 vitest.config.ts），
+        # main.ts 和样式进覆盖率只会把数字做低，没有任何信息量。
+        run: npm run test:coverage
 
       - name: Build (catches SSR/build-time errors)
         run: npm run build
