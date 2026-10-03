@@ -140,6 +140,17 @@ router.get('/follow-suggestions', requireAuth, (req: Request, res: Response) => 
 
     const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 6))
 
+    // exclude：前端「换一批」时把已经推过的 id 传回来，避免每次都推同一批人。
+    // 白名单化处理成占位符，不拼字符串 —— 逗号分隔的数字仍然要逐个 parseInt 校验，
+    // 校验不过的直接丢掉，宁可少几个也不能让脏值进 SQL。
+    const exclude = String(req.query.exclude ?? '')
+      .split(',')
+      .map((s) => parseInt(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0)
+
+    const excludePlaceholders = exclude.map(() => '?').join(',')
+    const excludeSql = exclude.length ? `AND u.id NOT IN (${excludePlaceholders})` : ''
+
     const rows = db
       .prepare(
         `SELECT u.id, u.nickname, u.avatar,
@@ -151,10 +162,11 @@ router.get('/follow-suggestions', requireAuth, (req: Request, res: Response) => 
              SELECT 1 FROM follows f
              WHERE f.follower_id = @me AND f.followee_id = u.id
            )
+           ${excludeSql}
          ORDER BY follower_count DESC, post_count DESC, u.id ASC
          LIMIT @limit`
       )
-      .all({ me, limit }) as any[]
+      .all({ me, limit, ...exclude }) as any[]
 
     res.json({
       list: rows.map((r) => ({
