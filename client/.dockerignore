@@ -1,0 +1,11 @@
+# 依赖与构建产物不进上下文
+node_modules
+dist
+coverage
+
+# 环境变量：镜像里不能带任何密钥
+.env
+.env.*
+!.env.example
+
+*.md
