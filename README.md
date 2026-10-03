@@ -72,12 +72,44 @@
 - jsonwebtoken (JWT 鉴权)
 - multer (multipart/form-data 上传，diskStorage)
 
-## 🚀 本地开发
+## 🚀 快速开始（Docker）
+
+```bash
+docker compose up --build -d                       # 起前后端，浏览器开 http://localhost:8080
+docker compose --profile seed run --rm seed        # 可选：灌 39 条中文演示笔记 + 6 个用户
+docker compose logs -f server                      # 看日志
+docker compose down                                 # 停掉（数据留在 .docker-data/，不会被删）
+```
+
+结构刻意和真实部署一致：
+
+```
+浏览器 ──8080──▶ web（nginx）
+                  ├── /            → 静态产物（SPA fallback）
+                  ├── /assets/     → 带 hash，长缓存
+                  ├── /api/*       → 反代 server:3000
+                  ├── /uploads/*   → 反代 server:3000（图片存在后端）
+                  └── /ws          → 反代 + Upgrade 头（WebSocket）
+                                    后端只 expose 在容器网络内，不对宿主机开端口
+```
+
+几个值得一看的细节：
+
+- **多阶段构建**：后端镜像只在构建阶段装 `python3/make/g++`（`better-sqlite3` 编译原生模块用），运行时阶段 `npm prune --omit=dev` 删掉 devDeps，工具链不进最终镜像
+- **`CMD ["node", "dist/index.js"]` 而不是 `npm start`**：npm 会多起一层进程转发信号，结果后端的优雅退出钩子（先关 WS 连接再关 HTTP）收不到 `SIGTERM`，只能等超时被强杀
+- **SQLite 挂载**：`better-sqlite3` 存的是单个文件，而 Docker 的 named volume 只能挂目录，所以 `DB_PATH` 单独暴露成一个环境变量，compose 里挂目录再指进去（默认路径不变，本地开发无感）
+- **`VITE_API_BASE` 在构建期注入**：vite 会把 `import.meta.env.VITE_*` 静态替换进 bundle，运行时再设环境变量没用。容器里前后端同源，用相对路径 `/api`，产物里不含任何 `localhost:3000` 硬编码
+- **健康检查 + `depends_on: service_healthy`**：等后端真的能连上 SQLite 再起 nginx，否则首页首屏会是空的，看着像 bug
+
+> 需要 Docker Desktop（Windows 上依赖 WSL2）。想手动换端口：`WEB_PORT=9090 docker compose up`。
+
+## 🛠 本地开发
 
 ```bash
 # 1. 启动后端（:3000）
 cd server
 npm install
+cp .env.example .env
 npm run dev          # tsx watch src/index.ts
 
 # 2. 启动前端（:5173）
@@ -87,6 +119,8 @@ npm run dev          # vite
 ```
 
 打开 http://localhost:5173/ 注册账号即可使用。图片会上传到 `server/uploads/`，前端 `/uploads/*` 通过 `server.proxy` 反代到 3000（生产 nginx 同源直出）。
+
+想在本地灌演示数据：`npm run seed`（根目录执行）。配图需要先 `npm run seed:photos` 下载。
 
 ### 测试
 
@@ -113,41 +147,53 @@ npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配�
 
 ```
 content-sharing-platform/
-├─ client/                     # Vue 3 + Vite 前端
+├─ docker-compose.yml            # 一键起全栈：web(nginx) + server(+ seed profile)
+├─ client/                       # Vue 3 + Vite 前端
 │  ├─ src/
-│  │  ├─ views/                # 10 个路由级页面（Home / PostDetail / Publish / Profile / Messages / Market / Search / Settings / Login / NotFound）
-│  │  ├─ components/           # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ EmptyState / ErrorBoundary
-│  │  ├─ assets/styles/        # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）
-│  │  ├─ composables/          # useRelativeTime（相对时间） / useTheme（主题共享状态） / useSearchHistory（顶栏与结果页共用的搜索历史）
-│  │  ├─ api/                  # request.ts (axios 实例 + 拦截器) / auth.ts / posts.ts
-│  │  ├─ utils/masonry.ts      # 瀑布流纯函数：列数换算 / 高度估算 / 最短列优先分列 / 关键词切分
-│  │  ├─ stores/               # Pinia: auth / toast / homeTabs
-│  │  ├─ router/               # Vue Router 配置（含 requiresAuth / guestOnly 守卫）
-│  │  └─ constants.ts          # 客户端常量（与 server mirror）
-│  ├─ tests/                    # vitest + @vue/test-utils（jsdom）：masonry 纯函数 / 搜索历史 / PostMasonry 渲染与转义
-│  ├─ components.d.ts          # unplugin-vue-components 生成的组件声明
-│  ├─ vite.config.ts           # 按需引入插件 + /uploads 反代
-│  └─ vitest.config.ts         # 前端单测配置（jsdom + @ 别名，与生产构建配置分开）
+│  │  ├─ views/                  # 10 个路由级页面（Home / PostDetail / Publish / Profile / Messages / Market / Search / Settings / Login / NotFound）
+│  │  ├─ components/             # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ EmptyState / ErrorBoundary
+│  │  ├─ assets/styles/          # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）+ motion.css（五档时长 / 缓动字典 / reduced-motion 兜底）
+│  │  ├─ composables/            # useWebSocket（连接状态机 / 退避重连 / 心跳）/ useChat（乐观发送 + ack 收敛）/ useTheme / useSearchHistory / useRelativeTime
+│  │  ├─ api/                    # request.ts (axios 实例 + 拦截器) / auth.ts / posts.ts / conversations.ts / wsProtocol.ts（WS 协议的前端镜像）
+│  │  ├─ utils/masonry.ts        # 瀑布流纯函数：列数换算 / 高度估算 / 最短列优先分列 / 关键词切分
+│  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
+│  │  ├─ router/                 # Vue Router 配置（含 requiresAuth / guestOnly 守卫 + 路由懒加载）
+│  │  └─ constants.ts            # 客户端常量（与 server mirror）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，115 条）
+│  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
+│  │  ├─ websocket-machine.test.ts  # 握手语义 / 退避重连 / 4401 / 心跳保活
+│  │  ├─ use-chat.test.ts        # 乐观发送 / 乱序 ack 收敛 / 已读回执 / 游标分页
+│  │  ├─ top-bar.test.ts         # 未读红点 + 建议下拉键盘导航
+│  │  └─ masonry / post-masonry / search-history / websocket（纯函数层）
+│  ├─ Dockerfile / nginx.conf    # 多阶段构建 + 静态托管与反代
+│  ├─ components.d.ts            # unplugin-vue-components 生成的组件声明
+│  ├─ vite.config.ts             # 按需引入插件 + /uploads 反代
+│  └─ vitest.config.ts           # 前端单测配置（jsdom + @ 别名 + 覆盖率门槛，与生产构建配置分开）
 │
-├─ server/                     # Express + SQLite 后端
+├─ server/                       # Express + SQLite 后端
 │  ├─ src/
-│  │  ├─ index.ts              # 入口，挂载中间件 + 路由
-│  │  ├─ lib/db.ts             # better-sqlite3 连接 + 建表
-│  │  ├─ middleware/auth.ts    # JWT 校验 (requireAuth / optionalAuth)
-│  │  ├─ routes/               # auth / users / posts / comments / likes / uploads
-│  │  └─ constants.ts          # 服务端常量（与 client mirror）
-│  └─ uploads/                 # multer 落地目录（.gitignore）
+│  │  ├─ index.ts                # 入口，挂载中间件 + 路由 + WS + 优雅退出
+│  │  ├─ ws/                     # protocol（帧类型）/ hub（Map<userId, Set<WebSocket>>）/ server（握手鉴权 / 心跳 / 路由）
+│  │  ├─ lib/db.ts               # better-sqlite3 连接 + 建表 + 迁移（DB_PATH 可配）
+│  │  ├─ middleware/auth.ts      # JWT 校验 (requireAuth / optionalAuth)
+│  │  ├─ routes/                 # auth / users / posts / comments / likes / uploads / conversations
+│  │  └─ constants.ts            # 服务端常量（与 client mirror）
+│  ├─ Dockerfile                 # 多阶段：构建期装原生模块工具链，运行时 prune 掉 devDeps
+│  ├─ seed.mjs                   # 演示数据种子（幂等，DB_PATH 与后端一致）
+│  └─ uploads/                   # multer 落地目录（.gitignore）
 │
-├─ scripts/                    # Playwright 自动化 + 文档配图生成
-│  ├─ desktop-smoke.mjs        # 桌面端登录态全流程回归（40+ 断言，含零 console error 断言）
-│  ├─ search-smoke.mjs         # 搜索功能回归（24 断言）
-│  ├─ center-audit.mjs         # 1920 宽屏下逐页量左右留白，防止"看起来居中其实没居中"
-│  ├─ check-search.mjs         # 搜索 API 注入检查（% / _ / ' OR 1=1-- 必须返回 0 条）
-│  └─ screenshot-docs.mjs      # 生成 docs/screenshots/ 下的 README 配图
+├─ scripts/                      # Playwright 自动化 + 文档配图生成
+│  ├─ desktop-smoke.mjs          # 桌面端登录态全流程回归（40+ 断言，含零 console error 断言）
+│  ├─ search-smoke.mjs           # 搜索功能回归（24 断言）
+│  ├─ chat-smoke.mjs             # 即时通信回归（20 断言，多端同步 / 断线重连补发）
+│  ├─ motion-check.mjs           # 逐帧采样证明动效真的在推进，且 reduced-motion 下真的停
+│  ├─ center-audit.mjs           # 1920 宽屏下逐页量左右留白，防止"看起来居中其实没居中"
+│  └─ screenshot-docs.mjs        # 生成 docs/screenshots/ 下的 README 配图
 │
 └─ docs/
-   ├─ architecture.md          # 架构图 / 数据模型 / 关键流程 / 踩坑记录
-   └─ screenshots/             # README 配图（1920×1080，由 screenshot-docs.mjs 生成）
+   ├─ architecture.md            # 架构图 / 数据模型 / 关键流程 / 踩坑记录
+   ├─ interview.md               # 面试问答稿：每个技术点的「为什么这么做」和踩过的坑
+   └─ screenshots/               # README 配图（1920×1080，由 screenshot-docs.mjs 生成）
 ```
 
 ## 🎯 设计决策（简历可以聊的点）
@@ -194,25 +240,27 @@ content-sharing-platform/
 
 ### 工程化
 
-| 亮点                             | 实现                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                       |
-| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                     |
-| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + vitest + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22，Node 20 会让"Install deps"假绿然后在 `vitest run` 挂掉）；本地能过的命令 CI 也必须能过                                                                                                                                                                                                                                                                                               |
-| **前端单测不是摆设**             | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件和 composable 也有测**：115 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；顶栏覆盖未读红点与建议下拉的 ↑↓/Enter/Esc。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
-| **多端实时同步（IM）**           | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                        |
-| **IM 的三个易漏点**              | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                             |
-| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                                                                                                                                                                                                                                                      |
-| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                                                                                                                                                                                                                                                                                                                                                                                  |
-| **搜索建议独立接口**             | `GET /api/posts/search/suggest` 单独开而不复用 `/search`：结果页要「按排序分页的完整列表」，建议框要「少量、去重、按相关度稳定的短列表」，语义和排序都不同。`q` 为空时返回按笔记数排序的热门话题填充下拉；前端 250ms 防抖 + 请求序号丢弃过期响应，避免快速连打时被旧响应覆盖                                                                                                                                                                                                                                                                                                           |
-| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                                                                                                                                                                                                                                                                                                                                |
-| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 亮点                             | 实现                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ESLint + Prettier + Husky**    | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **ESLint / Prettier 规则解冲突** | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **CI 类型检查曾经是假的**        | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **GitHub Actions CI**            | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + vitest + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22，Node 20 会让"Install deps"假绿然后在 `vitest run` 挂掉）；本地能过的命令 CI 也必须能过                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **前端单测不是摆设**             | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件和 composable 也有测**：115 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；顶栏覆盖未读红点与建议下拉的 ↑↓/Enter/Esc。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红                                                                                                                                                                                                                                 |
+| **多端实时同步（IM）**           | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **IM 的三个易漏点**              | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **端到端冒烟**                   | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **搜索三路匹配 + 注入防护**      | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **搜索建议独立接口**             | `GET /api/posts/search/suggest` 单独开而不复用 `/search`：结果页要「按排序分页的完整列表」，建议框要「少量、去重、按相关度稳定的短列表」，语义和排序都不同。`q` 为空时返回按笔记数排序的热门话题填充下拉；前端 250ms 防抖 + 请求序号丢弃过期响应，避免快速连打时被旧响应覆盖                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **真瀑布流分列**                 | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **零 console 残留**              | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **容器化一键起全栈**             | `docker compose up --build`：`web`(nginx 托管静态产物并反代 `/api`、`/uploads`、`/ws`) + `server`(只在容器网络内 expose，单一 origin 无跨域)。四个值得讲的点：① 后端镜像只在**构建阶段**装 `python3/make/g++`(`better-sqlite3` 编译原生模块用)，运行时 `npm prune --omit=dev` 删掉 devDeps，工具链不进最终镜像；② `CMD ["node", "dist/index.js"]` 而不是 `npm start` —— npm 多起一层进程转发信号，后端的优雅退出钩子(先关 WS 再关 HTTP)会收不到 `SIGTERM`，只能等超时被强杀；③ SQLite 是**单个文件**而 Docker 的 named volume 只能挂目录挂不了文件，所以把 `DB_PATH` 暴露成环境变量、compose 里挂目录再指进去(默认路径不变，本地开发无感)；④ `VITE_API_BASE` 必须在**构建期**注入，vite 会把 `import.meta.env.VITE_*` 静态替换进 bundle，运行时再设环境变量没用(产物里已不含任何 `localhost:3000` 硬编码，grep 验证过) |
 
 ## 📚 文档
 
 - [架构图 / 数据模型 / 关键流程 / 踩坑记录](docs/architecture.md)
-- 路线图：发布笔记 → 点赞 / 评论 → 个人主页重构 → 图片上传 → 移动端对齐 → **当前**（PC 桌面端 + Element Plus 重构）
+- [面试问答稿](docs/interview.md) —— 每个技术点的「为什么这么做」、面试官可能的追问、踩过的坑，面试前 30 分钟过一遍
+- 路线图：发布笔记 → 点赞 / 评论 → 个人主页重构 → 图片上传 → 移动端对齐 → **当前**（PC 桌面端 + Element Plus 重构 + IM + 容器化）
 
 ## 🔐 安全性
 
