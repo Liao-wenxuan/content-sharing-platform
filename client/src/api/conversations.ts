@@ -7,7 +7,7 @@ import type { WsConversation, WsMessage } from './wsProtocol'
  * 类型直接从 wsProtocol 复用 —— 实时推送和历史拉取返回的是同一批数据结构，
  * 各写一份的话，字段名迟早会对不上（REST 少个字段、WS 少个字段都很难发现）。
  *
- * 职责：只管「可重试的读写」。实时到达走 WebSocket，两条链路互为补���。
+ * 职责：只管「可重试的读写」。实时到达走 WebSocket，两条链路互为补充。
  */
 
 export type Conversation = WsConversation
