@@ -14,7 +14,7 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, EditPen, Shop, User, Setting } from '@element-plus/icons-vue'
+import { Compass, EditPen, Shop, User, Setting, Star } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -29,10 +29,23 @@ interface NavItem {
   icon: unknown
   /** 需要登录才显示（未登录点进去也只会被路由守卫弹回登录页） */
   requiresAuth?: boolean
+  /**
+   * 选中态匹配的额外条件。
+   * 「关注」和「发现」共用 `/` 这一个 path（只是一个 query 的差别），
+   * 只靠 path 判断的话切到关注流时侧栏会同时高亮两项。
+   */
+  match?: () => boolean
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: '发现', icon: Compass },
+  { path: '/', label: '发现', icon: Compass, match: () => !isFollowRoute.value },
+  {
+    path: '/?channel=follow',
+    label: '关注',
+    icon: Star,
+    requiresAuth: true,
+    match: () => isFollowRoute.value
+  },
   { path: '/publish', label: '发布', icon: EditPen, requiresAuth: true },
   { path: '/market', label: '市集', icon: Shop },
   { path: '/profile/me', label: '我的', icon: User },
@@ -43,8 +56,14 @@ const visibleItems = computed(() =>
   navItems.filter((item) => !item.requiresAuth || auth.isLoggedIn)
 )
 
+/** 是否停在关注流（发现页的 channel=follow 视图） */
+const isFollowRoute = computed(() => route.path === '/' && route.query.channel === 'follow')
+
 /** 当前高亮的菜单项 */
 const activeMenu = computed(() => {
+  // 关注流和发现页同 path，先按 match 判一次
+  const matched = navItems.find((item) => item.match?.())
+  if (matched) return matched.path
   const path = route.path
   if (path.startsWith('/profile')) return '/profile/me'
   // 搜索的入口在顶栏，侧栏不再单列一项，搜索页回落高亮「发现」保持连贯

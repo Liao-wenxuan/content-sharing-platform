@@ -9,14 +9,24 @@
  * - 卡片改成「图优先」：封面图（圆角、无边框）+ 两行标题 + 作者/点赞行
  * - 无图笔记也保留等高占位块，栅格不再参差不齐
  * - 瀑布流抽成 PostMasonry 组件，和搜索页共用
+ * - 关注流：同一个页面切成 ?channel=follow（侧栏「关注」入口）
+ *   关注流不显示内容频道栏 —— 订阅流按时间排，再按话题筛一遍没有意义
  */
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { postsApi, type Post } from '@/api/posts'
 import { useHomeTabsStore } from '@/stores/homeTabs'
+import { useAuthStore } from '@/stores/auth'
 import PostMasonry from '@/components/PostMasonry.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
+const route = useRoute()
+const router = useRouter()
 const homeTabs = useHomeTabsStore()
+const auth = useAuthStore()
+
+/** 关注流 = 发现页的 channel=follow 视图 */
+const isFollowFeed = computed(() => route.query.channel === 'follow')
 
 const posts = ref<Post[]>([])
 const loading = ref(false)
@@ -55,7 +65,8 @@ async function loadFeed(reset: boolean) {
     const data = await postsApi.getFeed({
       page: page.value,
       pageSize: 12,
-      category: homeTabs.category
+      // 关注流只传 channel，不传 category：订阅流按时间排，再按话题筛没有意义
+      ...(isFollowFeed.value ? { channel: 'follow' } : { category: homeTabs.category })
     })
     posts.value.push(...data.list)
     hasMore.value = data.pagination.hasMore
@@ -79,18 +90,29 @@ async function loadMore() {
 
 onMounted(() => loadFeed(true))
 
+// 频道切换：只影响发现流，关注流下频道栏根本不渲染
 watch(
   () => homeTabs.category,
-  () => loadFeed(true)
+  () => {
+    if (!isFollowFeed.value) loadFeed(true)
+  }
 )
+
+// 发现 ⇄ 关注 切换：两边是独立的数据源，必须整页重载
+watch(isFollowFeed, () => loadFeed(true))
 </script>
 
 <template>
   <div class="explore">
-    <!-- 频道栏：居中 + 红色短下划线 -->
-    <el-tabs v-model="homeTabs.category" class="channel-tabs">
+    <!-- 频道栏：居中 + 红色短下划线。关注流不显示（订阅流按时间排，不按话题筛） -->
+    <el-tabs v-if="!isFollowFeed" v-model="homeTabs.category" class="channel-tabs">
       <el-tab-pane v-for="ch in channels" :key="ch.key" :label="ch.label" :name="ch.key" />
     </el-tabs>
+
+    <div v-else class="follow-head">
+      <h1 class="follow-title">关注</h1>
+      <p class="follow-sub">你关注的人发布的新笔记</p>
+    </div>
 
     <EmptyState v-if="loading && posts.length === 0" variant="loading" title="正在加载笔记..." />
 
@@ -103,8 +125,28 @@ watch(
     />
 
     <template v-else>
-      <el-empty v-if="posts.length === 0" description="这个频道还没有内容">
-        <el-button type="primary" @click="$router.push('/publish')">去发第一篇</el-button>
+      <!-- 关注流空态要给出下一步：没登录就登录，已登录就去发现页找人关注 -->
+      <el-empty
+        v-if="posts.length === 0"
+        :description="
+          isFollowFeed
+            ? auth.isLoggedIn
+              ? '你关注的人还没有发过笔记'
+              : '登录后查看你关注的人的更新'
+            : '这个频道还没有内容'
+        "
+      >
+        <el-button v-if="!isFollowFeed" type="primary" @click="router.push('/publish')">
+          去发第一篇
+        </el-button>
+        <el-button
+          v-else-if="!auth.isLoggedIn"
+          type="primary"
+          @click="router.push({ name: 'login', query: { redirect: route.fullPath } })"
+        >
+          立即登录
+        </el-button>
+        <el-button v-else type="primary" plain @click="router.push('/')"> 去发现页看看 </el-button>
       </el-empty>
 
       <PostMasonry v-else :posts="posts" />
@@ -176,6 +218,25 @@ watch(
   height: 3px;
   border-radius: 2px;
   background: var(--el-color-primary);
+}
+
+/* ===== 关注流标题 ===== */
+.follow-head {
+  padding: 4px 0 22px;
+  text-align: center;
+}
+
+.follow-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.follow-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
 }
 
 /* ===== 分页 ===== */
