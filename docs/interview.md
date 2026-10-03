@@ -209,6 +209,100 @@ conversations / messages）关系简单，手写 SQL 反而更直观，面试时
 
 ---
 
+### Q：关注关系怎么存的？为什么不用自增 id + UNIQUE？
+
+**我做的**（`server/src/lib/schema.ts`）：
+
+```sql
+CREATE TABLE follows (
+  follower_id INTEGER NOT NULL,
+  followee_id INTEGER NOT NULL,
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (follower_id, followee_id),
+  CHECK (follower_id <> followee_id),
+  FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (followee_id) REFERENCES users(id) ON DELETE CASCADE
+)
+```
+
+**为什么用复合主键而不是「自增 id + UNIQUE」**：主键本身就带唯一性，
+`INSERT OR IGNORE` 直接拿到幂等语义，还少一列少一个索引。
+主键的最左前缀 `(follower_id)` 正好服务「我关注了谁」，
+另建 `(followee_id)` 索引服务「谁关注了我」—— 两个查询方向各走各的索引。
+
+**追问**：表上有 `CHECK (follower_id <> followee_id)` 看着能挡住自关注，
+为什么路由层还要再判一次？
+→ 因为 **`INSERT OR IGNORE` 会把违反 CHECK 的行也当成「忽略」静默跳过**。
+只靠数据库约束的话，用户点「关注自己」会拿到一个 200 成功响应但什么都没发生，
+前端按钮也不会变 —— 这是最难查的那类 bug（没有报错、没有 500、就是没反应）。
+所以路由层先显式判掉并返回 400，`server/tests/follows.test.ts` 有一条专门盯这个。
+
+**为什么不做冗余计数字段**（`followers_count` / `following_count`）：
+和 likes 的 `likeCount`、messages 的未读数保持一致 —— 计数一律走 `COUNT(*)` 查索引。
+手工维护计数器一旦某条路径漏更新就会**永久漂移**，而且这种不一致极难发现。
+真正需要冗余是到「单表上千万行 + 粉丝列表要翻几十页」的量级，
+那时再上计数列 + 定时对账也不迟。SQLite 走索引的 `COUNT(*)` 是微秒级。
+
+---
+
+### Q：关注按钮怎么做到点了立刻变，又不出错？
+
+**我做的**（`client/src/composables/useFollow.ts`）乐观更新三步：
+
+```
+1. 先按预期翻转按钮状态（等网络往返能明显感觉到卡）
+2. 请求回来后用【服务端的权威计数】覆盖本地 +1/-1
+3. 失败整体回滚，并给一次明确提示
+```
+
+**第 2 步为什么不能省**：本地 `+1` 是猜的。用户点下去到请求返回这段时间里，
+对方可能已经取关过一次，或者别人也关注了 ta。不对齐的话，
+主页上的数字会和数据库**永久对不上**，而且没有任何报警。
+
+**追问**：为什么不用一个 `POST /toggle` 接口？
+→ 调用方得能区分「本来就没关注」和「刚取关」，否则翻转按钮时不知道该设成什么状态。
+拆成 `POST /:id/follow` 和 `DELETE /:id/follow` 后语义是确定的，
+而且**两个方向天然都幂等**：重复关注不新增、重复取关不报错。
+
+**测试**：`client/tests/use-follow.test.ts` 里有一条专门模拟**竞态** ——
+本地乐观算出 13、服务端返回 11，断言最终显示 11；
+另有一条断言失败回滚后状态和计数都要回到点之前的样子。
+
+---
+
+### Q：粉丝列表里每一行都要显示「关注 / 已关注」，怎么不变成 N+1 请求？
+
+**我做的**：列表接口直接在 SQL 里批量算好。
+
+```sql
+EXISTS(SELECT 1 FROM follows mine
+       WHERE mine.follower_id = @me AND mine.followee_id = u.id) AS is_following
+```
+
+20 行的列表是 1 个请求而不是 20 个，首屏不会卡。
+未登录时 `me` 传 `-1`，`EXISTS` 恒为假，正好等于「不显示关注按钮」。
+
+**顺带一个产品细节**：粉丝列表里**自己那一行没有关注按钮**
+（`v-if="u.id !== auth.user?.id"`），因为不能关注自己。
+这条是被 e2e 脚本断言出来的 —— 最初的实现给每一行都渲染了按钮。
+
+---
+
+### Q：推荐关注怎么推荐的？
+
+**我做的**：排除自己和已关注的人，按 `follower_count DESC, post_count DESC, id ASC` 排。
+**影响力优先于笔记数** —— 100 篇笔记但没人关注的账号，
+不如 5 篇笔记但 2000 粉丝的账号值得订阅。笔记数只当同分时的 tie-break。
+
+**追问**：这个排序是不是太简单了？真上量怎么做？
+→ 简单版是为了让「推荐卡不再是前端写死的 mock」这件事被看见。
+真正上量会换成多路召回（粉丝的好友 / 同话题的作者 / 内容标签相似）再统一排序。
+接口层不用动，替换的只是那个 `ORDER BY`。
+
+**「换一批」怎么做**：把已经推过的 id 通过 `exclude` 参数传回后端排除。
+`exclude` 会先逐个 `parseInt` 校验，再转成等量的 `?` 占位符 ——
+**绝不把字符串直接拼进 SQL**。
+
 ## 3. 前端
 
 ### Q：瀑布流怎么实现的？
