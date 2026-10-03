@@ -13,6 +13,8 @@ coverage/
 *.db.bak
 *.db-shm
 *.db-wal
+# docker compose 挂给容器当数据目录的宿主机路径
+.docker-data/
 # 环境变量
 .env
 .env.local
