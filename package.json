@@ -18,6 +18,7 @@
     "prepare": "husky",
     "test:client": "npm --prefix client test",
     "test:chat": "node scripts/chat-smoke.mjs",
+    "test:follow": "node scripts/follow-smoke.mjs",
     "test:motion": "node scripts/motion-check.mjs"
   },
   "devDependencies": {
