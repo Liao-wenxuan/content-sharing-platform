@@ -7,6 +7,7 @@
  * - 顶栏 / 关注按钮 → ElButton；编辑弹窗 → ElDialog + ElForm
  * - 笔记 / 评论 / 收藏 / 赞过 → ElTabs；公开 / 私密 / 合集 → ElRadioGroup
  * - 右侧新增「你可能感兴趣的人」栏，利用桌面端的横向空间
+ * - 关注按钮 / 粉丝数 / 推荐关注全部接真接口（此前是本地 ref + 写死 mock）
  */
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,6 +16,8 @@ import { Star, ChatDotRound, Edit, Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post } from '@/api/posts'
+import { followsApi, type FollowSuggestion } from '@/api/follows'
+import { useFollow } from '@/composables/useFollow'
 import { NICKNAME_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
@@ -34,13 +37,6 @@ const posts = ref<Post[]>([])
 const loading = ref(false)
 const errorMsg = ref('')
 const total = ref(0)
-
-// ===== 三栏统计（暂无 follow API，固定 0）=====
-const stats = ref({
-  following: 2, // 占位：以后接 follow 表
-  followers: 0,
-  likes: 0
-})
 
 // ===== TAB：笔记 / 评论 / 收藏 / 赞过 =====
 type TabKey = 'posts' | 'comments' | 'favorites' | 'likes'
@@ -84,26 +80,79 @@ const isOwner = computed(
   () => auth.user !== null && profileUser.value !== null && auth.user.id === profileUser.value.id
 )
 
+// ===== 关注关系（真数据）=====
+// 状态和副作用全在 useFollow 里：乐观更新 → 服务端权威计数回填 → 失败回滚
+const {
+  isFollowing,
+  isFollowedBy,
+  followerCount,
+  followingCount,
+  loading: followLoading,
+  load: loadRelation,
+  toggle: toggleFollow
+} = useFollow(targetId)
+
+/** 本人主页不显示关注按钮，所以「互相关注」标签只在他人主页有意义 */
+const showMutual = computed(() => !isOwner.value && isFollowing.value && isFollowedBy.value)
+
+/** 获赞与收藏：目前只累计获赞，收藏数等收藏模块落地后并进来 */
+const likeCountTotal = computed(() => posts.value.reduce((sum, p) => sum + (p.likeCount ?? 0), 0))
+
 /** 本人主页展示「编辑」，他人主页展示「关注」 */
-const following = ref(false)
-function toggleFollow() {
-  following.value = !following.value
+
+// ===== 你可能感兴趣的人（真数据，替换掉原来的写死 mock）=====
+const suggested = ref<FollowSuggestion[]>([])
+/** 已经推给用户看过的人，换一批时要排除掉 */
+const seenSuggestionIds = ref<number[]>([])
+const loadingSuggestions = ref(false)
+const suggestBusy = ref<number | null>(null)
+
+async function loadSuggestions(exclude: number[] = []) {
+  if (!auth.isLoggedIn) return
+  loadingSuggestions.value = true
+  try {
+    const { list } = await followsApi.suggestions(3, exclude)
+    // 排除后一个人都不剩（关注的人已经比候选还多）→ 整块收起来，
+    // 留一个空卡片只会让人以为是加载失败
+    if (list.length === 0) {
+      suggested.value = []
+      return
+    }
+    suggested.value = list
+    seenSuggestionIds.value = [...new Set([...exclude, ...list.map((u) => u.id)])]
+  } catch {
+    // 拉不到就整块不显示，空着比报错体面
+    suggested.value = []
+  } finally {
+    loadingSuggestions.value = false
+  }
 }
 
-// ===== 你可能感兴趣的人（暂无推荐 API，先 mock）=====
-interface SuggestedUser {
-  id: number
-  nickname: string
-  avatar: string | null
-  postCount: number
+/** 换一批：把看过的 id 传给后端排除掉 */
+function refreshSuggestions() {
+  loadSuggestions(seenSuggestionIds.value)
 }
-const suggested = ref<SuggestedUser[]>([
-  { id: 101, nickname: '小多', avatar: null, postCount: 109 },
-  { id: 102, nickname: '几月几日天气晴', avatar: null, postCount: 12 },
-  { id: 103, nickname: '小丸子的妈妈', avatar: null, postCount: 52 }
-])
-const suggestionDismissed = ref(false)
 
+/** 从推荐卡直接关注：只翻这一行的按钮，不动主页顶部的大按钮（那是另一个人的） */
+async function followSuggested(userId: number) {
+  if (suggestBusy.value !== null) return
+  suggestBusy.value = userId
+  try {
+    await followsApi.follow(userId)
+    // 关注过的人不再出现在推荐里，直接从卡片上摘掉
+    suggested.value = suggested.value.filter((u) => u.id !== userId)
+  } catch {
+    ElMessage.error('关注失败')
+  } finally {
+    suggestBusy.value = null
+  }
+}
+
+function goFollowList(tab: 'followers' | 'following') {
+  const id = profileUser.value?.id
+  if (!id) return
+  router.push({ name: 'follow-list', params: { id: String(id) }, query: { tab } })
+}
 // ===== 小红书号 =====
 const xhsIdCopyState = ref<'idle' | 'copied'>('idle')
 
@@ -173,6 +222,9 @@ async function loadProfile() {
   } finally {
     loading.value = false
   }
+
+  // 关注关系单独拉：即使帖子接口挂了，主页的关注按钮也应该显示正确状态
+  await loadRelation()
 }
 
 // ===== 编辑 dialog =====
@@ -238,7 +290,10 @@ function avatarText(nickname?: string): string {
   return nickname?.[0]?.toUpperCase() || '?'
 }
 
-onMounted(() => loadProfile())
+onMounted(() => {
+  loadProfile()
+  loadSuggestions()
+})
 
 watch(
   () => route.params.id,
@@ -313,9 +368,30 @@ const emptyHint = computed(() => {
                   >
                     编辑资料
                   </el-button>
-                  <el-button v-else type="primary" plain round size="small" @click="toggleFollow">
-                    {{ following ? '已关注' : '关注' }}
+                  <el-button
+                    v-else
+                    type="primary"
+                    plain
+                    round
+                    size="small"
+                    :loading="followLoading"
+                    @click="toggleFollow"
+                  >
+                    {{ isFollowing ? '已关注' : '关注' }}
                   </el-button>
+
+                  <!-- 互相关注：只有「我也关注了对方」且「对方也关注我」才亮，
+                       单独一方关注不显示，否则会误导成双向关系 -->
+                  <el-tag
+                    v-if="showMutual"
+                    size="small"
+                    type="danger"
+                    effect="light"
+                    round
+                    class="mutual-tag"
+                  >
+                    互相关注
+                  </el-tag>
                 </div>
 
                 <div class="xhs-id">
@@ -326,14 +402,14 @@ const emptyHint = computed(() => {
                 </div>
 
                 <div class="stats">
+                  <button type="button" class="stat stat-link" @click="goFollowList('following')">
+                    <b>{{ followingCount }}</b> 关注
+                  </button>
+                  <button type="button" class="stat stat-link" @click="goFollowList('followers')">
+                    <b>{{ followerCount }}</b> 粉丝
+                  </button>
                   <span class="stat"
-                    ><b>{{ stats.following }}</b> 关注</span
-                  >
-                  <span class="stat"
-                    ><b>{{ stats.followers }}</b> 粉丝</span
-                  >
-                  <span class="stat"
-                    ><b>{{ stats.likes }}</b> 获赞与收藏</span
+                    ><b>{{ likeCountTotal }}</b> 获赞与收藏</span
                   >
                 </div>
               </div>
@@ -415,27 +491,35 @@ const emptyHint = computed(() => {
           </el-card>
 
           <el-card
-            v-if="suggested.length > 0 && !suggestionDismissed"
+            v-if="suggested.length > 0"
+            v-loading="loadingSuggestions"
             shadow="never"
             class="side-card"
           >
             <template #header>
               <span class="side-title">你可能感兴趣的人</span>
-              <el-button link size="small" @click="suggestionDismissed = true">换一批</el-button>
+              <el-button link size="small" @click="refreshSuggestions">换一批</el-button>
             </template>
             <ul class="suggest-list">
               <li v-for="u in suggested" :key="u.id" class="suggest-item">
-                <el-avatar :size="36" class="avatar-sm">{{ avatarText(u.nickname) }}</el-avatar>
+                <router-link :to="`/profile/${u.id}`" class="suggest-link">
+                  <el-avatar :size="36" :src="u.avatar || undefined" class="avatar-sm">
+                    {{ avatarText(u.nickname) }}
+                  </el-avatar>
+                </router-link>
                 <div class="suggest-info">
-                  <div class="suggest-name">{{ u.nickname }}</div>
-                  <div class="suggest-count">{{ u.postCount }} 篇笔记</div>
+                  <router-link :to="`/profile/${u.id}`" class="suggest-name">
+                    {{ u.nickname }}
+                  </router-link>
+                  <div class="suggest-count">{{ u.followerCount }} 粉丝 · {{ u.postCount }} 篇</div>
                 </div>
                 <el-button
                   size="small"
                   type="primary"
                   plain
                   round
-                  @click="onPlaceholderClick('关注')"
+                  :loading="suggestBusy === u.id"
+                  @click="followSuggested(u.id)"
                 >
                   关注
                 </el-button>
@@ -587,6 +671,41 @@ const emptyHint = computed(() => {
   font-size: 15px;
   margin-right: 3px;
   font-variant-numeric: tabular-nums;
+}
+
+/* 关注 / 粉丝改成可点的：button 元素天然带键盘可达和 focus-visible，
+   样式抹平成和普通 span 一致，不让交互性体现在视觉上 */
+.stat-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.stat-link:hover {
+  color: var(--foreground);
+}
+
+.mutual-tag {
+  flex-shrink: 0;
+}
+
+.suggest-link {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+/* 昵称是 router-link，但要保持和纯文本一样的默认态（无下划线、无蓝字） */
+.suggest-name {
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.suggest-name:hover {
+  color: var(--accent);
 }
 
 /* ===== 内容区 ===== */
