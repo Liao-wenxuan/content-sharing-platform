@@ -64,6 +64,36 @@ export function initSchema(db: Database.Database): void {
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id)`)
 
+  // ===== 关注关系 =====
+  // 用复合主键 (follower_id, followee_id) 而不是「自增 id + UNIQUE」：
+  // 主键本身就带唯一性，INSERT OR IGNORE 直接拿到幂等语义，
+  // 少一列少一个索引，也让「我关注了谁」这个查询直接吃主键最左前缀。
+  //
+  // CHECK 约束兜住「不能关注自己」，但注意 INSERT OR IGNORE 会把 CHECK 违反
+  // 也当成「忽略」静默跳过 —— 所以路由层必须先显式判掉自关注再插，
+  // 否则用户点了没反应又没有任何报错，是最难查的那种 bug。
+  //
+  // 刻意不做冗余计数字段（followers_count / following_count）：
+  // 和 likes、messages 未读数一致 —— 计数一律走 COUNT(*) 查索引。
+  // 手工维护计数器一旦某条路径漏更新就会永久漂移，而且这种不一致极难发现；
+  // 真正需要冗余是到「单表上千万行 + 粉丝列表要翻几十页」的量级，
+  // 那时再上计数列 + 定时对账也不迟。SQLite 走索引的 COUNT(*) 是微秒级。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id INTEGER NOT NULL,
+      followee_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (follower_id, followee_id),
+      FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (followee_id) REFERENCES users(id) ON DELETE CASCADE,
+      CHECK (follower_id <> followee_id)
+    )
+  `)
+
+  // 复合主键的最左前缀已经能服务「我关注了谁」；
+  // 这个索引专门服务反向的「谁关注了我」——粉丝列表
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id, created_at)`)
+
   // ===== 即时通讯：会话 =====
   // 1v1 会话，不建 members 中间表 —— 两个端点直接存在行里，
   // UNIQUE(user_a_id, user_b_id) 保证同一对用户永远只有一个会话（幂等去重）。
