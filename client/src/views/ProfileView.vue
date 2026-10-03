@@ -89,7 +89,7 @@ const {
   followingCount,
   loading: followLoading,
   load: loadRelation,
-  toggle: toggleFollow
+  toggle: toggleFollowRaw
 } = useFollow(targetId)
 
 /** 本人主页不显示关注按钮，所以「互相关注」标签只在他人主页有意义 */
@@ -98,7 +98,14 @@ const showMutual = computed(() => !isOwner.value && isFollowing.value && isFollo
 /** 获赞与收藏：目前只累计获赞，收藏数等收藏模块落地后并进来 */
 const likeCountTotal = computed(() => posts.value.reduce((sum, p) => sum + (p.likeCount ?? 0), 0))
 
-/** 本人主页展示「编辑」，他人主页展示「关注」 */
+async function toggleFollow() {
+  const changed = await toggleFollowRaw()
+  // 推荐卡是页面加载时拿的快照：刚关注上的人还留在里面会显得很蠢，
+  // 直接从卡片里摘掉，跟推荐卡上的「关注」按钮走同一套处理
+  if (changed && targetId.value) {
+    suggested.value = suggested.value.filter((u) => u.id !== targetId.value)
+  }
+}
 
 // ===== 你可能感兴趣的人（真数据，替换掉原来的写死 mock）=====
 const suggested = ref<FollowSuggestion[]>([])
