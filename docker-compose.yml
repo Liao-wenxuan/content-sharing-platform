@@ -1,0 +1,63 @@
+# 一键跑起整个项目：docker compose up --build
+#
+# 结构刻意做成和真实部署一样：
+#   web   —— nginx 托管前端静态产物，同时反代 /api /uploads /ws 到后端
+#   server —— Express + SQLite，只在容器网络内暴露，不对宿主机开端口
+#
+# 浏览器只需要访问 web（默认 http://localhost:8080），单一 origin，
+# 不存在跨域，也不用配 CORS。
+
+name: content-sharing-platform
+
+services:
+  server:
+    build:
+      context: ./server
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      # 生产环境 env.ts 会强制校验 JWT_SECRET（dev 才有默认值）。
+      # 这里的默认值只为「clone 下来就能跑」，真部署请在项目根目录建 .env
+      # 写 JWT_SECRET=<openssl rand -hex 32 的输出>，compose 会自动读同名变量。
+      JWT_SECRET: ${JWT_SECRET:-docker-demo-secret-change-me}
+      TOKEN_EXPIRES_IN: 7d
+      # 同源部署，浏览器只会看到 nginx 的 origin
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      # SQLite 是个文件，挂不了 named volume，只能挂目录后用 DB_PATH 指进去。
+      # 落在仓库内的 .docker-data/（已 gitignore），方便直接看到/删掉数据。
+      - ./.docker-data:/data
+      # 上传的图片。bind mount 而不是 named volume：这样宿主机的
+      # server/uploads/demo/ 演示配图在容器里也看得见。
+      - ./server/uploads:/app/uploads
+    # 只 expose 不 ports：后端不需要被宿主机直接访问
+    expose:
+      - '3000'
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./client
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      server:
+        # 等后端健康检查通过再起：nginx 起来但后端还在连 SQLite 时，
+        # 首页数据会是空的，看着像 bug
+        condition: service_healthy
+    restart: unless-stopped
+
+  # 演示数据种子。用 profile 隔离，默认不参与 up：
+  #   docker compose --profile seed run --rm seed
+  # 幂等，重复执行会先清掉上一批演示笔记再重灌。
+  seed:
+    build:
+      context: ./server
+    environment:
+      DB_PATH: /data/data.db
+      # 种子里的图片从 /app/uploads/demo/ 找，没有就退化成无图笔记
+    volumes:
+      - ./.docker-data:/data
+      - ./server/uploads:/app/uploads
+    profiles: ['seed']
+    command: ['node', 'seed.mjs']
