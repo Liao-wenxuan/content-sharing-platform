@@ -35,6 +35,14 @@ const router = createRouter({
       component: () => import('@/views/ProfileView.vue')
     },
     {
+      path: '/follows/:id',
+      name: 'follow-list',
+      // 粉丝 / 关注列表合用一页，Tab 走 query.tab
+      component: () => import('@/views/FollowListView.vue'),
+      // 公开可访问：未登录也能看粉丝/关注数（列表里的关注按钮会提示登录）
+      props: true
+    },
+    {
       path: '/messages',
       name: 'messages',
       component: () => import('@/views/MessagesView.vue'),
