@@ -4,6 +4,9 @@ node_modules/
 # 构建产物
 dist/
 **/dist/
+# 测试覆盖率报告（npm run test:coverage 生成，纯产物不入库）
+coverage/
+**/coverage/
 # 数据库文件（SQLite 数据是运行时生成的）
 *.db
 *.db-journal
