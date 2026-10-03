@@ -19,7 +19,8 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
-const DB_PATH = path('./data.db')
+// DB_PATH 和 server/src/lib/db.ts 保持一致，容器里两者必须指向同一个库
+const DB_PATH = process.env.DB_PATH || path('./data.db')
 const UPLOAD_DIR = path('./uploads/')
 const DEMO_DIR = UPLOAD_DIR + 'demo/'
 

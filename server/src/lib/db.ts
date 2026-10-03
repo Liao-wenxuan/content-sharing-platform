@@ -17,7 +17,10 @@ import { initSchema } from './schema'
 let _db: Database.Database | null = null
 
 function createDefaultDb(): Database.Database {
-  const dbPath = path.join(__dirname, '../../data.db')
+  // DB_PATH 可覆盖：容器里数据目录要挂卷，而 SQLite 是个「文件」，
+  // Docker 的 named volume 只能挂目录不能挂文件，所以默认路径原样保留，
+  // 交给部署方用环境变量指到卷上的目录里（见 docker-compose.yml）。
+  const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data.db')
   const db = new Database(dbPath)
   initSchema(db)
 
