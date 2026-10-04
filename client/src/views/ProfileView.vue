@@ -17,6 +17,12 @@ import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post } from '@/api/posts'
 import { followsApi, type FollowSuggestion } from '@/api/follows'
+import {
+  favoritesApi,
+  type FavoriteFolder,
+  type FavoritedPost,
+  type FolderFilter
+} from '@/api/favorites'
 import { useFollow } from '@/composables/useFollow'
 import { NICKNAME_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
@@ -58,6 +64,38 @@ const scopes: { key: Scope; label: string }[] = [
   { key: 'private', label: '私密' },
   { key: 'collections', label: '合集' }
 ]
+
+// ===== 收藏 tab =====
+// 收藏是私密内容：接口只给本人看，所以别人主页这一栏只显示「私密」占位，
+// 不能给一个空列表 —— 那会让人以为对方一条收藏都没有。
+const favPosts = ref<FavoritedPost[]>([])
+const favFolders = ref<FavoriteFolder[]>([])
+const favFilter = ref<FolderFilter>('all')
+const favTotal = ref(0)
+const favLoading = ref(false)
+/** 已经取过一次，才让 tab 标题显示数字，避免未加载时闪一个 0 */
+const favLoaded = ref(false)
+
+async function loadFavorites() {
+  if (!isOwner.value) return
+  favLoading.value = true
+  try {
+    // 夹列表和收藏列表一起拉：收藏数随时会变（刚收藏 / 刚移走），
+    // 少一次往返换来计数永远新鲜，比省一个请求划算
+    const [foldersRes, page] = await Promise.all([
+      favoritesApi.folders(),
+      favoritesApi.list({ folderId: favFilter.value, pageSize: 50 })
+    ])
+    favFolders.value = foldersRes.list
+    favPosts.value = page.list
+    favTotal.value = page.pagination.total
+    favLoaded.value = true
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '加载收藏失败')
+  } finally {
+    favLoading.value = false
+  }
+}
 
 // ===== 编辑 dialog =====
 const showEditModal = ref(false)
@@ -313,10 +351,40 @@ watch(
   () => loadProfile()
 )
 
+// 收藏是懒加载的：只有真的切到那一栏才发请求，
+// 逛别人主页时不会替他把收藏接口也打一遍
+watch(activeTab, (tab) => {
+  if (tab === 'favorites' && isOwner.value && !favLoaded.value) loadFavorites()
+})
+
+// 切走收藏栏时丢弃已加载标记，下次进来重新取（期间可能收藏了新的）
+watch(activeTab, (tab, prev) => {
+  if (prev === 'favorites' && tab !== 'favorites') favLoaded.value = false
+})
+
+// ===== 笔记栏 / 收藏栏共用同一套卡片网格 =====
+// FavoritedPost 继承自 Post，所以同一个 v-for 能渲染两种列表，
+// 不用把网格模板抄两份（抄了就一定会各自漂移）
+const isFavTab = computed(() => activeTab.value === 'favorites')
+const showFavPrivate = computed(() => isFavTab.value && !isOwner.value)
+const showFavLoading = computed(() => isFavTab.value && isOwner.value && favLoading.value)
+const isPlaceholderTab = computed(() => activeTab.value !== 'posts' && !isFavTab.value)
+const gridPosts = computed<Post[]>(() => (isFavTab.value ? favPosts.value : posts.value))
+/** 只有「笔记」和「收藏」两栏有右侧控制条，其余 tab 不用留空行 */
+const showTabsBar = computed(() => activeTab.value === 'posts' || isFavTab.value)
+
+function tabLabel(tab: { key: TabKey; label: string }): string {
+  if (tab.key === 'posts') return `${tab.label} ${total.value}`
+  if (tab.key === 'favorites' && isOwner.value && favLoaded.value) {
+    return `${tab.label} ${favTotal.value}`
+  }
+  return tab.label
+}
+
 // ===== 空状态提示（按 tab/scope 给出差异化描述）=====
 const emptyHint = computed(() => {
   if (activeTab.value === 'comments') return '还没有发过评论'
-  if (activeTab.value === 'favorites') return '收藏功能即将上线 ✨'
+  if (activeTab.value === 'favorites') return '还没有收藏任何笔记'
   if (activeTab.value === 'likes') return '还没有赞过任何笔记'
   if (activeScope.value === 'private') return '私密笔记即将上线'
   if (activeScope.value === 'collections') return '合集功能即将上线'
@@ -424,35 +492,68 @@ const emptyHint = computed(() => {
           </el-card>
 
           <!-- 内容区 -->
+          <!--
+            tab 右侧的控制条。
+            原本这里是 <el-tabs> 的 #extra 插槽，但 Element Plus 2.14.6
+            的 el-tabs 根本没有 extra 插槽（只有 add-icon 和 default），
+            写在那里的东西会被静默丢弃 —— 公开/私密/合集 切换器因此一直没显示过。
+            改成 tabs 上方自己一行，右对齐，不依赖任何插槽。
+          -->
+          <div v-if="showTabsBar" class="tabs-bar">
+            <el-radio-group v-if="activeTab === 'posts'" v-model="activeScope" size="small">
+              <el-radio-button v-for="s in scopes" :key="s.key" :value="s.key">
+                {{ s.label }}
+              </el-radio-button>
+            </el-radio-group>
+
+            <!-- 收藏夹筛选只在本人主页出现：别人的收藏本来就看不到 -->
+            <div v-else-if="isFavTab && isOwner" class="fav-filter">
+              <el-select v-model="favFilter" size="small" @change="loadFavorites">
+                <el-option label="全部收藏" value="all" />
+                <el-option label="未分类" value="unclassified" />
+                <el-option
+                  v-for="f in favFolders"
+                  :key="f.id"
+                  :label="`${f.name}（${f.postCount}）`"
+                  :value="f.id"
+                />
+              </el-select>
+              <el-button size="small" text @click="router.push('/favorites')">
+                管理收藏夹
+              </el-button>
+            </div>
+          </div>
+
           <el-tabs v-model="activeTab" class="content-tabs">
             <el-tab-pane
               v-for="tab in tabs"
               :key="tab.key"
-              :label="tab.key === 'posts' ? `${tab.label} ${total}` : tab.label"
+              :label="tabLabel(tab)"
               :name="tab.key"
             />
-
-            <template #extra>
-              <el-radio-group v-if="activeTab === 'posts'" v-model="activeScope" size="small">
-                <el-radio-button v-for="s in scopes" :key="s.key" :value="s.key">
-                  {{ s.label }}
-                </el-radio-button>
-              </el-radio-group>
-            </template>
           </el-tabs>
 
           <EmptyState
-            v-if="activeTab !== 'posts'"
+            v-if="showFavPrivate"
+            icon="🔒"
+            title="TA 的收藏是私密的"
+            hint="收藏只有本人可见"
+          />
+
+          <EmptyState v-else-if="showFavLoading" variant="loading" title="加载收藏..." />
+
+          <EmptyState
+            v-else-if="isPlaceholderTab"
             icon="🚧"
             :title="emptyHint"
             hint="该功能正在开发中"
           />
 
-          <el-empty v-else-if="posts.length === 0" :description="emptyHint" />
+          <el-empty v-else-if="gridPosts.length === 0" :description="emptyHint" />
 
           <div v-else class="post-grid">
             <router-link
-              v-for="(post, index) in posts"
+              v-for="(post, index) in gridPosts"
               :key="post.id"
               :to="`/post/${post.id}`"
               class="post-link"
@@ -718,6 +819,30 @@ const emptyHint = computed(() => {
 /* ===== 内容区 ===== */
 .content-tabs {
   margin-top: 24px;
+}
+
+/* tab 右侧的控制条：Element Plus 2.14 的 el-tabs 没有 extra 插槽，只能自己占一行 */
+.tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+/* 有了控制条，tabs 自身的上边距让出来，否则两者贴太近 */
+.tabs-bar + .content-tabs {
+  margin-top: 12px;
+}
+
+.fav-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fav-filter :deep(.el-select) {
+  width: 180px;
 }
 
 .content-tabs :deep(.el-tabs__header) {
