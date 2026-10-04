@@ -16,5 +16,10 @@ export const UPLOAD_MAX_FILES = 9
 export const UPLOAD_MAX_SIZE_MB = 10
 export const UPLOAD_MAX_SIZE_BYTES = UPLOAD_MAX_SIZE_MB * 1024 * 1024
 
+// 收藏夹（专辑）
+export const FOLDER_NAME_MAX_LENGTH = 20
+/** 单用户收藏夹上限：再多就只是「分类过细」，不是「整理」 */
+export const FOLDER_MAX_COUNT = 50
+
 // 默认端口
 export const DEFAULT_PORT = 3000
