@@ -2,13 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import path from 'path'
 import { env } from './lib/env' // 必须在最前，加载 .env + 校验
-import authRouter from './routes/auth'
-import postsRouter from './routes/posts'
-import usersRouter from './routes/users'
-import likesRouter from './routes/likes'
-import commentsRouter from './routes/comments'
-import conversationsRouter from './routes/conversations'
-import uploadsRouter from './routes/uploads'
+import { mountApiRouters } from './lib/mount-routes'
 import { attachWebSocketServer } from './ws/server'
 import { notFoundHandler, errorHandler } from './middleware/error'
 
@@ -22,13 +16,8 @@ app.use(cors({ origin: corsOrigins, credentials: true }))
 app.use(express.json()) // 自动解析 application/json 请求体
 // 静态资源：/uploads/* 由 uploadsRouter 上传后的图片可被浏览器直接访问
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
-app.use('/api/auth', authRouter)
-app.use('/api/posts', postsRouter)
-app.use('/api/posts', likesRouter) // 共享 /api/posts 前缀
-app.use('/api/posts', commentsRouter) // 同上
-app.use('/api/conversations', conversationsRouter)
-app.use('/api/users', usersRouter)
-app.use('/api/uploads', uploadsRouter)
+// 所有 API 路由（顺序要求见 lib/mount-routes.ts）
+mountApiRouters(app)
 
 // ===== 测试路由 =====
 app.get('/api/health', (_req, res) => {

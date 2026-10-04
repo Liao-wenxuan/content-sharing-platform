@@ -13,13 +13,7 @@ import express from 'express'
 import Database from 'better-sqlite3'
 import { setTestDb, resetDb } from '../src/lib/db'
 import { initSchema } from '../src/lib/schema'
-import authRouter from '../src/routes/auth'
-import postsRouter from '../src/routes/posts'
-import likesRouter from '../src/routes/likes'
-import commentsRouter from '../src/routes/comments'
-import usersRouter from '../src/routes/users'
-import uploadsRouter from '../src/routes/uploads'
-import conversationsRouter from '../src/routes/conversations'
+import { mountApiRouters } from '../src/lib/mount-routes'
 import { notFoundHandler, errorHandler } from '../src/middleware/error'
 
 export function createTestApp(): { app: express.Express; db: Database.Database } {
@@ -29,13 +23,8 @@ export function createTestApp(): { app: express.Express; db: Database.Database }
 
   const app = express()
   app.use(express.json())
-  app.use('/api/auth', authRouter)
-  app.use('/api/posts', postsRouter)
-  app.use('/api/posts', likesRouter)
-  app.use('/api/posts', commentsRouter)
-  app.use('/api/users', usersRouter)
-  app.use('/api/uploads', uploadsRouter)
-  app.use('/api/conversations', conversationsRouter)
+  // 和生产入口共用同一份挂载：加路由不可能只改一边
+  mountApiRouters(app)
   app.use(notFoundHandler)
   app.use(errorHandler)
 
