@@ -94,6 +94,47 @@ export function initSchema(db: Database.Database): void {
   // 这个索引专门服务反向的「谁关注了我」——粉丝列表
   db.exec(`CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id, created_at)`)
 
+  // ===== 收藏 / 收藏夹（专辑）=====
+  // 收藏夹是「分类」而不是「容器」：一条收藏最多归属一个夹，
+  // 归不了（NULL）就是未分类。查「全部收藏」时不看 folder_id。
+  //
+  // 为什么不设计成「一篇笔记能同时进多个夹」（那样需要中间表）：
+  // 那个模型更贴近某些产品，但收藏夹的价值在于「分开看」而不是「交叉检索」，
+  // 中间表带来的重复行、移动语义的歧义（加还是移？移还是复制？）
+  // 换来的能力在真实使用里很少被用到，收益不抵复杂度。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS favorite_folders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  // 同一个用户下收藏夹不能重名（否则列表里两个「旅行」分不清）
+  db.exec(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_user_name ON favorite_folders(user_id, name)`
+  )
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS favorites (
+      user_id INTEGER NOT NULL,
+      post_id INTEGER NOT NULL,
+      folder_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, post_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (folder_id) REFERENCES favorite_folders(id) ON DELETE SET NULL
+    )
+  `)
+
+  // 「我的收藏（可按夹筛）」走 user_id + created_at DESC
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id, created_at)`)
+  // 笔记详情页的「收藏数」走这个
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_favorites_post ON favorites(post_id)`)
+
   // ===== 即时通讯：会话 =====
   // 1v1 会话，不建 members 中间表 —— 两个端点直接存在行里，
   // UNIQUE(user_a_id, user_b_id) 保证同一对用户永远只有一个会话（幂等去重）。
