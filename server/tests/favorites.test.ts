@@ -202,6 +202,20 @@ describe('GET /api/posts/me/favorites', () => {
     expect(res.body.pagination.total).toBe(2)
   })
 
+  it('folderId=unclassified 只返回没归夹的', async () => {
+    // 这一档必须服务端筛：前端「拉全部再本地过滤」在收藏很多的人身上
+    // 会让第一页全是已归夹的，打开收藏页看到空白，只会觉得收藏丢了
+    const res = await request(app)
+      .get('/api/posts/me/favorites?folderId=unclassified')
+      .set('Authorization', `Bearer ${meToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.list.every((p: any) => p.folderId === null)).toBe(true)
+    const ids = res.body.list.map((p: any) => p.id)
+    expect(ids).toContain(otherPostId)
+    expect(ids).not.toContain(myPostId)
+    expect(res.body.pagination.total).toBe(1)
+  })
+
   it('分页正确', async () => {
     const res = await request(app)
       .get('/api/posts/me/favorites?page=1&pageSize=1')
