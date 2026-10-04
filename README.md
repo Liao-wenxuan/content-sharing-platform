@@ -20,6 +20,7 @@
 | 内容     | 发布笔记 (文本 + 1~9 张图，带逐图上传进度条) / 真瀑布流 feed / 笔记详情 / 图片灯箱预览                                                                                                                                  |
 | 搜索     | 顶栏输入即出「笔记 / 话题 / 用户」三类候选 + 热门话题占位 + ↑↓/Enter/Esc 键盘导航；结果页支持三路匹配、<br>最新·最多点赞·最多评论排序、命中高亮、搜索历史（去重置顶 / 单删 / 清空）                                     |
 | 关注     | 关注 / 取关（幂等）+ 粉丝与关注列表（分页，每行自带 isFollowing）+ 互相关注标记 + 推荐关注（按影响力排序，可换一批）+ 关注流（只含订阅内容，与推荐流分入口）; 建议注意图不重复                                          |
+| 收藏     | 收藏 / 取消收藏（幂等）+ **多收藏夹**（建 / 改名 / 删；删夹不删内容，只退回未分类）+ 未分类显式可见 + 批量移入夹（整批一个事务）+ 主页「收藏」tab 按夹筛选；收藏是私密的，他人主页只显示私密占位                        |
 | 互动     | 点赞 (可选登录态) / 评论 (登录态) / 评论列表                                                                                                                                                                            |
 | 个人主页 | 封面 banner / 头像 / 三栏统计 / 4 个 tab + 公开/私密/合集筛选 / ElDialog 编辑资料 / 推荐关注                                                                                                                            |
 | 消息     | 两个顶层 Tab：通知（赞和收藏 / 新增关注 / 评论和@，数据仍是 mock）+ **实时聊天**（WebSocket 1v1：会话列表 / 历史分页 / 未读红点 / 已读回执 / 正在输入 / 多端同步 / 断线重连补发）；顶栏铃铛显示总未读                   |
@@ -126,15 +127,16 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，115 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，140 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，107 条）
+cd server && npm test        # 后端单测（vitest + supertest，161 条）
 
 npm run test:e2e             # Playwright 桌面端全流程回归（登录态）
 npm run test:search          # 搜索功能 + 注入防护
 npm run test:center          # 1920 宽屏下逐页检查左右留白是否居中
 npm run test:chat            # 即时通信：多端同步 / 已读回执 / 断线重连补发（开两个浏览器上下文）
 npm run test:follow          # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮（27 断言）
+npm run test:favorite        # 收藏与收藏夹：建夹 / 批量移入 / 删夹退回未分类 / 他人主页私密（32 断言）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
 npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
 ```

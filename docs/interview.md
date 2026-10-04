@@ -303,6 +303,97 @@ EXISTS(SELECT 1 FROM follows mine
 `exclude` 会先逐个 `parseInt` 校验，再转成等量的 `?` 占位符 ——
 **绝不把字符串直接拼进 SQL**。
 
+---
+
+### Q：收藏夹怎么建模？为什么不是「一篇笔记进多个夹」的中间表？
+
+**我做的**（`server/src/lib/schema.ts`）：
+
+```sql
+CREATE TABLE favorite_folders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX idx_folders_user_name ON favorite_folders(user_id, name);
+
+CREATE TABLE favorites (
+  user_id  INTEGER NOT NULL,
+  post_id  INTEGER NOT NULL,
+  folder_id INTEGER,                 -- 可空 = 未分类
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, post_id),
+  FOREIGN KEY (folder_id) REFERENCES favorite_folders(id) ON DELETE SET NULL
+);
+```
+
+**收藏夹是「分类」不是「容器」**：一条收藏最多归一个夹，归不了就是未分类。
+所以主键是 `(user_id, post_id)` 而不是 `id`，也不需要中间表。
+
+**追问**：中间表模型（笔记↔夹 多对多）不是更灵活吗？
+→ 更贴近某些产品，但收藏夹的价值在**「分开看」**而不是「交叉检索」。
+中间表要额外回答一堆语义问题：往里加是「加」还是「移」？
+笔记从 A 夹删掉时要不要级联删中间表行？这些歧义换来的能力在真实使用里
+很少被用到，收益不抵复杂度。
+
+**同名的处理**：唯一索引会直接报 `SQLITE_CONSTRAINT`，
+但前端需要区分「重名」和「服务器炸了」，所以路由层先查一次，
+重名返回 **409**，不重名才 INSERT。
+
+---
+
+### Q：删收藏夹为什么不连带删掉里面的笔记？
+
+外键是 `ON DELETE SET NULL`：删夹之后里面的收藏退回**未分类**，
+不是被删掉。
+
+**为什么这么设计**：用户整理收藏夹时最怕的是「整理动作本身弄丢东西」。
+如果删夹会连带删内容，就必须在每次删除前弹一个吓人的二次确认；
+而退回未分类是无损的，所以 UI 上不做二次确认弹窗，
+只在确认框里把后果写清楚：「删除『旅行灵感』不会删掉里面的 12 篇笔记，
+它们会退回未分类」。
+
+**这不只是技术选择，是产品选择** —— 少一个吓人的弹窗，
+换来的是用户敢整理。
+
+---
+
+### Q：未分类为什么必须显式可见？
+
+这是收藏功能最常见的投诉来源：**用户点完收藏，打开收藏页看到空的，
+以为自己收藏失败了。**
+
+因为「落在未分类」是点收藏的**默认行为**，不是一次分类结果。
+如果不把它列出来，用户的 mental model 是「我收藏了 → 去收藏页找 → 没有」。
+
+**技术上的坑更隐蔽**：如果前端图省事，拉全部收藏再本地过滤出未分类，
+在收藏多的人身上会直接翻车 —— 第一页 20 条全是已归夹的，
+本地过滤完一条不剩，看起来还是「空的」。
+所以 `folderId=unclassified` 是**服务端真支持的一档筛选**，
+`folder_id IS NULL` 直接走索引，分页不会把未分类挤到第二页之后。
+
+---
+
+### Q：收藏按钮怎么做到点了立刻变，又不出错？
+
+和关注是同一套三步（`client/src/composables/useFavorite.ts`）：
+**乐观翻转 → 用服务端权威计数覆盖 → 失败整体回滚**。
+
+**收藏比关注多一个状态 `folderId`（归在哪个夹）**，回滚时它也得回去。
+这是最容易漏的一处：请求失败后按钮正确地变回「未收藏」，
+计数也退回去了，但界面上还显示在「旅行」夹里 —— 数据已经在骗人了。
+
+**测试**：`client/tests/use-favorite.test.ts` 13 条，和 use-follow 的一一对应，
+其中一条专门钉死「失败时 folderId 要回到原值」。
+`scripts/favorite-smoke.mjs` 32 条浏览器断言走完整链路，
+包括「删夹之后笔记退回未分类而不是消失」。
+
+**追问**：为什么详情页不直接做个「收藏到XX夹」的下拉？
+→ 一次点击只应该对应一个明确的动作。「归到某个夹」是**整理**动作，
+发生在收藏页的批量整理里。按钮上挂选择器会把两个心智模型糊在一起。
+
 ## 3. 前端
 
 ### Q：瀑布流怎么实现的？
@@ -355,6 +446,35 @@ EXISTS(SELECT 1 FROM follows mine
 - 建议接口 `/search/suggest` 和结果接口 `/search` **刻意分开**：
   一个要「少量、去重、按相关度稳定的短列表」，一个要「按排序分页的完整列表」，
   语义和排序都不同，复用会让两边都不对。
+
+---
+
+### Q：踩过什么「代码写了但根本没生效」的坑？
+
+**个人主页的「公开 / 私密 / 合集」切换器从来没显示过** ——
+但代码里明明写了，模板也没报错，测试也全绿。
+
+**怎么定位的**：写收藏夹筛选时顺手在 tab 右侧加了个下拉，
+结果它也不显示。于是不再猜，直接在浏览器里 dump
+`.el-tabs__header` 的 `innerHTML`，发现里面**根本没有 extra 那块内容**。
+
+**根因**：Element Plus 2.14.6 的 `el-tabs` **没有 `extra` 插槽**
+（只有 `add-icon` 和 `default`）。写进 `<template #extra>` 的东西
+不会报错，只是被静默丢弃 —— Vue 对未知插槽就是这么宽容。
+
+**修法**：把控制条移到 tabs 上方自己占一行、右对齐，不依赖任何插槽。
+
+**这个坑的教训**（比 bug 本身更值钱）：
+「模板里写了 → 编译通过 → 测试全绿」这三件事**都不能证明它渲染了**。
+所以这类「组件有没有把内容吐出来」的断言，只能靠 e2e 在真实 DOM 上验。
+`scripts/favorite-smoke.mjs` 里现在有一条
+`check('出现收藏夹筛选器', ...)`，就是这次 bug 留下的回归钉子。
+
+**另一个同类的坑**：侧栏高亮原本靠 `navItems.find(item => item.match?.())` ——
+「发现」那一项的 match 在**所有**非关注路由上都返回 true，
+`find` 第一个就命中，于是 `/favorites`、`/settings`、`/market`
+全被高亮成「发现」。**靠「第一个 true」决定结果的写法太容易误伤**，
+改成按 path 穷举，每个分支都能一眼看出该高亮谁。
 
 ---
 
@@ -504,7 +624,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 6. 一分钟自检清单
 
-面试前确认这 12 条能不看文档说出来：
+面试前确认这 15 条能不看文档说出来：
 
 - [ ] 前端为什么用 Element Plus 却要重写全部样式
 - [ ] `Map<userId, Set<WebSocket>>` 为什么不能是一对一
@@ -516,6 +636,9 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 搜索为什么 `LIKE` 要转义、`ORDER BY` 为什么走白名单
 - [ ] 建议下拉为什么要把 rows 展平
 - [ ] 瀑布流为什么是最短列优先而不是轮流分
+- [ ] 收藏夹为什么不做「一篇笔记进多个夹」的中间表
+- [ ] 未分类为什么必须在服务端显式支持，而不能前端本地过滤
+- [ ] 删收藏夹为什么退回未分类而不是删内容
 - [ ] `vi.resetModules()` + `vi.spyOn` 为什么会静默失效
 - [ ] CI 里 Node 版本那个「假绿」的坑
 
@@ -523,15 +646,19 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 附：关键文件索引
 
-| 想讲什么                      | 去哪看                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------- |
-| WS 帧协议                     | `server/src/ws/protocol.ts` + `client/src/api/wsProtocol.ts`                           |
-| 多端同步                      | `server/src/ws/hub.ts`                                                                 |
-| 握手 / 心跳 / 重连 / 离线补偿 | `server/src/ws/server.ts` + `client/src/composables/useWebSocket.ts`                   |
-| 乐观发送 + ack 收敛           | `client/src/composables/useChat.ts`                                                    |
-| 搜索注入防护                  | `server/src/routes/posts.ts`（`/search` 与 `/search/suggest`）                         |
-| 瀑布流算法                    | `client/src/utils/masonry.ts`                                                          |
-| 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                     |
-| 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf` |
-| CI 配置                       | `.github/workflows/ci.yml`                                                             |
-| 更多踩坑记录                  | `docs/architecture.md`                                                                 |
+| 想讲什么                      | 去哪看                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| WS 帧协议                     | `server/src/ws/protocol.ts` + `client/src/api/wsProtocol.ts`                                     |
+| 多端同步                      | `server/src/ws/hub.ts`                                                                           |
+| 握手 / 心跳 / 重连 / 离线补偿 | `server/src/ws/server.ts` + `client/src/composables/useWebSocket.ts`                             |
+| 乐观发送 + ack 收敛           | `client/src/composables/useChat.ts`                                                              |
+| 搜索注入防护                  | `server/src/routes/posts.ts`（`/search` 与 `/search/suggest`）                                   |
+| 关注关系建模                  | `server/src/lib/schema.ts`（`follows`）+ `server/src/routes/users.ts`                            |
+| 关注按钮的乐观更新            | `client/src/composables/useFollow.ts` + `client/tests/use-follow.test.ts`                        |
+| 收藏夹建模                    | `server/src/lib/schema.ts`（`favorites` / `favorite_folders`）+ `server/src/routes/favorites.ts` |
+| 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                    |
+| 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                    |
+| 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                               |
+| 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`           |
+| CI 配置                       | `.github/workflows/ci.yml`                                                                       |
+| 更多踩坑记录                  | `docs/architecture.md`                                                                           |
