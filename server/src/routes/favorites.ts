@@ -116,14 +116,23 @@ router.get('/me/favorites', requireAuth, (req: Request, res: Response) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
     const offset = (page - 1) * pageSize
 
-    // folderId=all → 全部收藏（不过滤）；给了数字 → 只看那个夹
+    // folderId 三态：
+    //   缺省 / all         → 全部收藏
+    //   unclassified       → 只看没归夹的
+    //   数字               → 只看那个夹
+    // 「未分类」必须能在服务端筛，因为它是分页列表的一段：
+    // 前端拉全部再本地过滤的话，收藏多的人第一页可能一条未分类都没有，
+    // 打开收藏页看到空白，只会以为收藏丢了。
     const rawFolder = String(req.query.folderId ?? '')
-    const filterFolder = rawFolder !== '' && rawFolder !== 'all' ? parseInt(rawFolder) : null
-
-    const where =
-      filterFolder === null ? 'f.user_id = @me' : 'f.user_id = @me AND f.folder_id = @folder'
     const params: any = { me: userId, pageSize, offset }
-    if (filterFolder !== null) {
+    let where: string
+
+    if (rawFolder === '' || rawFolder === 'all') {
+      where = 'f.user_id = @me'
+    } else if (rawFolder === 'unclassified') {
+      where = 'f.user_id = @me AND f.folder_id IS NULL'
+    } else {
+      const filterFolder = parseInt(rawFolder)
       if (Number.isNaN(filterFolder) || filterFolder <= 0) {
         return res.status(400).json({ message: '收藏夹 id 不合法' })
       }
@@ -132,6 +141,7 @@ router.get('/me/favorites', requireAuth, (req: Request, res: Response) => {
         .prepare('SELECT id FROM favorite_folders WHERE id = ? AND user_id = ?')
         .get(filterFolder, userId)
       if (!owned) return res.status(400).json({ message: '收藏夹不存在' })
+      where = 'f.user_id = @me AND f.folder_id = @folder'
       params.folder = filterFolder
     }
 
