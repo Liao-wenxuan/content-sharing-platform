@@ -10,11 +10,13 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Star, ChatDotRound, Collection, ArrowLeft } from '@element-plus/icons-vue'
+import { Star, ChatDotRound, Collection, ArrowLeft, Plus } from '@element-plus/icons-vue'
 import { postsApi, type Post, type Comment } from '@/api/posts'
 import { useAuthStore } from '@/stores/auth'
 import { COMMENT_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
+import { useFavorite } from '@/composables/useFavorite'
+import { useFollow } from '@/composables/useFollow'
 import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
@@ -31,14 +33,45 @@ const liked = ref(false)
 const likeCount = ref(0)
 const liking = ref(false)
 
-// 收藏（local-only state，无后端收藏 API）
-const favorited = ref(false)
+const currentPostId = computed(() => Number(route.params.id))
 
-// 关注状态（local-only，无后端 follow API）
-const following = ref(false)
+// ===== 收藏 / 关注：接真接口 =====
+// 这两个按钮以前是 localStorage + 本地 ref，点完刷新就没、换设备也没有 ——
+// 现在都走真实关系，和主页 / 列表页共用同一套 composable。
+const {
+  favorited,
+  favoriteCount,
+  loading: favoriting,
+  load: loadFavorite,
+  toggle: toggleFavoriteRaw
+} = useFavorite(currentPostId)
 
-function toggleFollow() {
-  following.value = !following.value
+const authorId = computed<number | null>(() => post.value?.userId ?? null)
+const {
+  isFollowing,
+  loading: followingLoading,
+  load: loadAuthorRelation,
+  toggle: toggleFollowRaw
+} = useFollow(authorId)
+
+/** 自己的笔记不显示关注按钮 */
+const canFollowAuthor = computed(() => authorId.value !== null && authorId.value !== auth.user?.id)
+
+/** 没登录时点收藏要跳登录页（跟点赞保持一致的处理） */
+async function toggleFavorite() {
+  if (!auth.isLoggedIn) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  await toggleFavoriteRaw()
+}
+
+async function toggleFollow() {
+  if (!auth.isLoggedIn) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  await toggleFollowRaw()
 }
 
 const comments = ref<Comment[]>([])
@@ -46,8 +79,6 @@ const loadingComments = ref(false)
 const newComment = ref('')
 const submittingComment = ref(false)
 const commentError = ref('')
-
-const currentPostId = computed(() => Number(route.params.id))
 
 // ===== 加载流程 =====
 async function loadPost() {
@@ -70,8 +101,6 @@ async function loadPost() {
     likeCount.value = data.likeCount
     // 后端在登录用户请求时返回 liked: true/false；匿名永远是 false
     liked.value = data.liked ?? false
-    // 收藏从 localStorage 读取
-    favorited.value = loadFavorites().has(id)
   } catch (err: any) {
     if (err?.response?.status === 404) {
       errorMsg.value = '笔记不存在或已被删除'
@@ -82,8 +111,10 @@ async function loadPost() {
     loading.value = false
   }
 
-  // 评论列表独立加载（失败不影响主内容）
+  // 评论、收藏、作者关注关系各自独立加载（任何一个失败都不该拖垮主内容）
   await loadComments()
+  await loadFavorite()
+  await loadAuthorRelation()
 }
 
 async function loadComments() {
@@ -129,39 +160,6 @@ async function toggleLike() {
   } finally {
     liking.value = false
   }
-}
-
-// ===== 收藏（local-only） ======
-// 后端暂无收藏接口，本地持久化到 localStorage，按 postId 区分
-const FAV_KEY = 'sg:favorites'
-
-function loadFavorites(): Set<number> {
-  try {
-    const raw = localStorage.getItem(FAV_KEY)
-    if (!raw) return new Set()
-    const arr = JSON.parse(raw)
-    return new Set(Array.isArray(arr) ? arr : [])
-  } catch {
-    return new Set()
-  }
-}
-
-function saveFavorites(set: Set<number>) {
-  localStorage.setItem(FAV_KEY, JSON.stringify([...set]))
-}
-
-function toggleFavorite() {
-  const id = currentPostId.value
-  if (!id) return
-  const set = loadFavorites()
-  if (set.has(id)) {
-    set.delete(id)
-    favorited.value = false
-  } else {
-    set.add(id)
-    favorited.value = true
-  }
-  saveFavorites(set)
 }
 
 // ===== 发评论 =====
@@ -258,8 +256,16 @@ watch(
             <div class="author-nick">{{ post.author?.nickname || '未知用户' }}</div>
             <div class="author-time">{{ formatExactTime(post.createdAt) }}</div>
           </div>
-          <el-button class="follow-btn" type="primary" plain round @click="toggleFollow">
-            {{ following ? '已关注' : '关注' }}
+          <el-button
+            v-if="canFollowAuthor"
+            class="follow-btn"
+            type="primary"
+            plain
+            round
+            :loading="followingLoading"
+            @click="toggleFollow"
+          >
+            {{ isFollowing ? '已关注' : '关注' }}
           </el-button>
         </header>
 
@@ -315,10 +321,24 @@ watch(
               :type="favorited ? 'warning' : 'default'"
               :plain="!favorited"
               round
+              :loading="favoriting"
               @click="toggleFavorite"
             >
               <el-icon><component :is="Collection" /></el-icon>
-              {{ favorited ? '已收藏' : '收藏' }}
+              {{ favorited ? '已收藏' : '收藏' }} {{ favoriteCount }}
+            </el-button>
+
+            <el-button
+              v-if="canFollowAuthor"
+              class="action-btn"
+              :type="isFollowing ? 'info' : 'default'"
+              :plain="!isFollowing"
+              round
+              :loading="followingLoading"
+              @click="toggleFollow"
+            >
+              <el-icon><component :is="Plus" /></el-icon>
+              {{ isFollowing ? '已关注' : '关注作者' }}
             </el-button>
 
             <span class="stat-hint">
