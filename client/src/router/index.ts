@@ -66,6 +66,13 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      // 收藏夹管理（建夹 / 改名 / 删夹 / 批量整理未分类）
+      path: '/favorites',
+      name: 'favorites',
+      component: () => import('@/views/FavoritesView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       // 404 catch-all：未知路径都进 NotFoundView
       // 用 pathMatch 拿到原始 path，便于未来诊断
       path: '/:pathMatch(.*)*',
