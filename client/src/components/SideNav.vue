@@ -14,7 +14,7 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, EditPen, Shop, User, Setting, Star } from '@element-plus/icons-vue'
+import { Compass, EditPen, Shop, User, Setting, Star, Collection } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
@@ -29,25 +29,16 @@ interface NavItem {
   icon: unknown
   /** 需要登录才显示（未登录点进去也只会被路由守卫弹回登录页） */
   requiresAuth?: boolean
-  /**
-   * 选中态匹配的额外条件。
-   * 「关注」和「发现」共用 `/` 这一个 path（只是一个 query 的差别），
-   * 只靠 path 判断的话切到关注流时侧栏会同时高亮两项。
-   */
-  match?: () => boolean
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: '发现', icon: Compass, match: () => !isFollowRoute.value },
-  {
-    path: '/?channel=follow',
-    label: '关注',
-    icon: Star,
-    requiresAuth: true,
-    match: () => isFollowRoute.value
-  },
+  { path: '/', label: '发现', icon: Compass },
+  // 和「发现」共用 `/` 这一个 path（只是 query 的差别），见 activeMenu
+  { path: '/?channel=follow', label: '关注', icon: Star, requiresAuth: true },
   { path: '/publish', label: '发布', icon: EditPen, requiresAuth: true },
   { path: '/market', label: '市集', icon: Shop },
+  // 收藏夹管理页：主页「收藏」tab 只管看，整理归类放这里
+  { path: '/favorites', label: '收藏', icon: Collection, requiresAuth: true },
   { path: '/profile/me', label: '我的', icon: User },
   { path: '/settings', label: '设置', icon: Setting, requiresAuth: true }
 ]
@@ -59,14 +50,24 @@ const visibleItems = computed(() =>
 /** 是否停在关注流（发现页的 channel=follow 视图） */
 const isFollowRoute = computed(() => route.path === '/' && route.query.channel === 'follow')
 
-/** 当前高亮的菜单项 */
+/**
+ * 当前高亮的菜单项。
+ *
+ * 「发现」和「关注」共用 `/` 这一个 path，只按 path 判会同时高亮两项，
+ * 所以 `/` 要单独判 query。
+ *
+ * 早期版本给 NavItem 加了个 match() 让「发现」优先匹配，
+ * 结果发现项的 match 在**所有**非关注路由上都返回 true，
+ * find() 第一个就命中，于是 /favorites、/settings、/market 全被高亮成「发现」。
+ * match() 这种「靠第一个 true 决定结果」的写法太容易误伤，
+ * 改成按 path 穷举，每个分支都能一眼看出该高亮谁。
+ */
 const activeMenu = computed(() => {
-  // 关注流和发现页同 path，先按 match 判一次
-  const matched = navItems.find((item) => item.match?.())
-  if (matched) return matched.path
   const path = route.path
+  if (path === '/') return isFollowRoute.value ? '/?channel=follow' : '/'
   if (path.startsWith('/profile')) return '/profile/me'
-  // 搜索的入口在顶栏，侧栏不再单列一项，搜索页回落高亮「发现」保持连贯
+  // 笔记详情和搜索的入口不在侧栏，回落高亮「发现」保持连贯
+  if (path.startsWith('/post')) return '/'
   if (path.startsWith('/search')) return '/'
   return path
 })
