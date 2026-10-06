@@ -29,8 +29,7 @@ let authorId: number
 /** 另一个互动的人（制造通知的人） */
 let actorToken: string
 let actorId: number
-/** 第三个用户，用来测 @ 提及 */
-let thirdToken: string
+/** 第三个用户，用来测 @ 提及（只用到 id，token 不需要） */
 let thirdId: number
 let postId: number
 
@@ -69,7 +68,6 @@ beforeAll(async () => {
   const c = await request(app)
     .post('/api/auth/register')
     .send({ email: 'notify_third@test.com', password: 'secret123', nickname: '被提及' })
-  thirdToken = c.body.accessToken
   thirdId = c.body.userInfo.id
 
   const p = await request(app)

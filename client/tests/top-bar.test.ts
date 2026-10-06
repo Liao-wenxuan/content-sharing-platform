@@ -38,13 +38,24 @@ vi.mock('@/composables/useWebSocket', async () => {
   const { ref } = await import('vue')
   const unreadTotal = ref(0)
   return {
-    useWebSocket: () => ({ unreadTotal }),
+    useWebSocket: () => ({ unreadTotal, connected: ref(true) }),
+    // 铃铛现在还要读通知未读，useNotifications 挂载时会订阅这个帧
+    onWsMessage: () => () => {},
     __setUnread: (n: number) => {
       unreadTotal.value = n
       wsMock.set(n)
     }
   }
 })
+
+// ===== 桩：通知未读 =====
+vi.mock('@/api/notifications', () => ({
+  notificationsApi: {
+    list: vi.fn(),
+    unreadCount: vi.fn().mockResolvedValue({ unreadCount: 0 }),
+    markRead: vi.fn()
+  }
+}))
 
 // ===== 桩：主题（真实实现会去写 localStorage / document）=====
 vi.mock('@/composables/useTheme', async () => {
@@ -88,6 +99,9 @@ const wsModule = (await import('@/composables/useWebSocket')) as unknown as {
 }
 const historyModule = (await import('@/composables/useSearchHistory')) as unknown as {
   __reset: () => void
+}
+const notifyModule = (await import('@/composables/useNotifications')) as unknown as {
+  __resetNotifications: () => void
 }
 const { useAuthStore } = await import('@/stores/auth')
 
@@ -173,6 +187,9 @@ beforeEach(() => {
   historyMock.items = []
   historyModule.__reset()
   wsModule.__setUnread(0)
+  // useNotifications 是模块级单例：不清的话上一个用例留下的通知未读
+  // 会漏进下一个，铃铛数字就不对了
+  notifyModule.__resetNotifications()
 
   pinia = createPinia()
   setActivePinia(pinia)
