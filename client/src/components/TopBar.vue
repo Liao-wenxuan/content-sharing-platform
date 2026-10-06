@@ -11,7 +11,7 @@
  * 下拉是自己写的面板而不是 el-autocomplete：内容要分三组、每组样式不同，
  * 套组件反而更绕，而且需要完整的 ↑↓ / Enter / Esc 键盘导航。
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Search,
@@ -34,6 +34,7 @@ import { useToastStore } from '@/stores/toast'
 import { useTheme } from '@/composables/useTheme'
 import { useSearchHistory } from '@/composables/useSearchHistory'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useNotifications } from '@/composables/useNotifications'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,7 +47,22 @@ const {
   remove: removeHistory,
   clear: clearHistory
 } = useSearchHistory()
-const { unreadTotal } = useWebSocket()
+const { unreadTotal: chatUnread } = useWebSocket()
+const {
+  unreadCount: notifyUnread,
+  start: startNotifications,
+  stop: stopNotifications
+} = useNotifications()
+
+/**
+ * 铃铛上的数字 = 聊天未读 + 通知未读
+ *
+ * 两路未读的来源不同：聊天靠 WS 的 message 帧 +1，
+ * 通知靠服务端推来的 notification 帧（带的是权威未读数，直接覆盖）。
+ * 合并成一个数字是因为用户点铃铛进的是同一个页面，
+ * 分成「3 · 2」两个数字只会让人以为要点两次。
+ */
+const bellUnread = computed(() => chatUnread.value + notifyUnread.value)
 
 /**
  * 来信时铃铛摆一下。
@@ -56,7 +72,7 @@ const { unreadTotal } = useWebSocket()
 const bellRinging = ref(false)
 let ringTimer: ReturnType<typeof setTimeout> | undefined
 
-watch(unreadTotal, (next, prev) => {
+watch(bellUnread, (next, prev) => {
   if (!(next > prev)) return
   // 先摘掉 class 再加，否则连续两次未读增长不会重新触发动画
   bellRinging.value = false
@@ -66,6 +82,17 @@ watch(unreadTotal, (next, prev) => {
     ringTimer = setTimeout(() => (bellRinging.value = false), 700)
   })
 })
+
+onMounted(() => {
+  // 未登录时铃铛整个不渲染，订阅了也没人看
+  if (auth.isLoggedIn) startNotifications()
+})
+
+// 登录 / 登出（含刷新后恢复登录态）时重新决定要不要订阅
+watch(
+  () => auth.isLoggedIn,
+  (loggedIn) => (loggedIn ? startNotifications() : stopNotifications())
+)
 
 const keyword = ref('')
 const focused = ref(false)
@@ -390,7 +417,7 @@ function onOutsideClick(e: MouseEvent) {
 
       <!-- 消息：侧栏不再放这一项，改成顶栏铃铛（仅登录态） -->
       <el-tooltip v-if="auth.isLoggedIn" content="消息" placement="bottom">
-        <el-badge :value="unreadTotal" :hidden="unreadTotal === 0" :max="99" class="bell-badge">
+        <el-badge :value="bellUnread" :hidden="bellUnread === 0" :max="99" class="bell-badge">
           <el-button
             :class="['icon-btn', { 'bell-swing': bellRinging }]"
             circle
