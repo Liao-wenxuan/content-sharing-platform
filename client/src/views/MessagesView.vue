@@ -3,15 +3,22 @@
  * 消息页（桌面端）
  *
  * 两个顶层 Tab：
- * - 通知：点赞 / 关注 / 评论@ 的活动流（数据仍是 mock，后端没有 notification 表）
+ * - 通知：点赞 / 收藏 / 关注 / 评论@ 的活动流，真实后端（notifications 表）
  * - 聊天：WebSocket 实时 1v1 聊天，真实后端，见 ChatView / useChat
+ *
+ * 通知和聊天是两条独立的链路，但顶栏铃铛把两边的未读合并成一个数字 ——
+ * 因为它们在同一个入口里，分成两个数字只会让人以为要点两次。
  */
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Star, User, ChatDotRound } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useNotifications } from '@/composables/useNotifications'
+import { followsApi, type FollowSuggestion } from '@/api/follows'
+import { NOTIFY_TEXT, type NotifyCategory, type NotificationItem } from '@/api/notifications'
+import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
 import ChatView from '@/views/ChatView.vue'
 
@@ -24,7 +31,7 @@ const { unreadTotal } = useWebSocket()
 const activeSection = ref<'notifications' | 'chat'>('notifications')
 const totalUnread = computed(() => unreadTotal.value)
 
-type CategoryId = 'likes' | 'follows' | 'mentions'
+type CategoryId = NotifyCategory
 
 // ===== 三个大类（赞和收藏 / 新增关注 / 评论和@）=====
 const categories = [
@@ -35,87 +42,83 @@ const categories = [
 
 const activeCategory = ref<CategoryId>('likes')
 
-// ===== 活动消息（暂无 API，mock 占位）=====
-interface ActivityItem {
-  id: number
-  avatar: string | null
-  nickname: string
-  text: string
-  date: string
-  unread?: boolean
-  type: 'like' | 'follow' | 'comment'
+// ===== 通知 =====
+const {
+  list: notifications,
+  unreadCount: notifyUnread,
+  hasMore: hasMoreNotifications,
+  loading: notificationsLoading,
+  loadingMore,
+  errorMsg: notificationsError,
+  load: loadNotifications,
+  loadMore: loadMoreNotifications,
+  markRead: markNotificationsRead,
+  start: startNotifications
+} = useNotifications()
+
+const { formatTime } = useRelativeTime()
+
+/** 三个分类各自的空态文案：笼统的「暂无」会让人以为功能坏了 */
+const EMPTY_HINT: Record<CategoryId, string> = {
+  likes: '有人赞或收藏你的笔记时会出现在这里',
+  follows: '有人关注你时会出现在这里',
+  mentions: '有人评论你的笔记或在评论里 @ 你时会出现在这里'
 }
 
-const activities = ref<ActivityItem[]>([
-  {
-    id: 1,
-    avatar: null,
-    nickname: '活动消息',
-    text: '汽车任务已送达 快来分享自驾游路上的故事 🚗',
-    date: '09-02',
-    unread: true,
-    type: 'comment'
-  },
-  {
-    id: 2,
-    avatar: null,
-    nickname: '点点',
-    text: '如果你感觉眼睛总是痒、干涩，看这条 👀',
-    date: '08-23',
-    type: 'follow'
-  },
-  {
-    id: 3,
-    avatar: null,
-    nickname: '小多',
-    text: '赞了你的笔记《夏日穿搭分享》',
-    date: '09-20',
-    unread: true,
-    type: 'like'
-  },
-  {
-    id: 4,
-    avatar: null,
-    nickname: '几月几日天气晴',
-    text: '评论了你：照片真的好好看！',
-    date: '09-19',
-    type: 'comment'
-  },
-  {
-    id: 5,
-    avatar: null,
-    nickname: '小丸子的妈妈',
-    text: '关注了你',
-    date: '09-18',
-    type: 'follow'
+const currentCategory = computed(() => categories.find((c) => c.id === activeCategory.value)!)
+
+function openItem(item: NotificationItem) {
+  if (item.postId) {
+    router.push(`/post/${item.postId}`)
+    return
   }
-])
-
-// ===== 推荐关注 =====
-interface SuggestUser {
-  id: number
-  nickname: string
-  avatar: string | null
-  hint: string
+  // 没有笔记可跳（关注通知、或笔记已被删）→ 去看 TA 的主页，至少有个去处
+  router.push(`/profile/${item.actor.id}`)
 }
-const suggestions = ref<SuggestUser[]>([
-  { id: 201, nickname: '小多', avatar: null, hint: '关注沪上文娱…的人也关注' },
-  { id: 202, nickname: '几月几日天气晴', avatar: null, hint: '' },
-  { id: 203, nickname: '小丸子的妈妈', avatar: null, hint: '' },
-  { id: 204, nickname: '摄影小K', avatar: null, hint: '关注沪上文娱…的人也关注' }
-])
-const dismissed = ref<Set<number>>(new Set())
 
-const visibleSuggestions = computed(() =>
-  suggestions.value.filter((s) => !dismissed.value.has(s.id))
-)
+// ===== 推荐关注（真数据，替换掉原来的写死 mock）=====
+const suggestions = ref<FollowSuggestion[]>([])
+/** 已经推给用户看过的人，换一批时要排除掉 */
+const seenSuggestionIds = ref<number[]>([])
+const suggestBusy = ref<number | null>(null)
 
+async function loadSuggestions(exclude: number[] = []) {
+  if (!auth.isLoggedIn) return
+  try {
+    const { list } = await followsApi.suggestions(4, exclude)
+    suggestions.value = list
+    seenSuggestionIds.value = [...new Set([...exclude, ...list.map((u) => u.id)])]
+  } catch {
+    // 拉不到就整块不显示，空着比报错体面
+    suggestions.value = []
+  }
+}
+
+/** 换一批 */
+function refreshSuggestions() {
+  loadSuggestions(seenSuggestionIds.value)
+}
+
+/** 关掉一张卡：记进 exclude，下次换一批不会再推他 */
 function dismiss(id: number) {
-  dismissed.value.add(id)
+  if (!seenSuggestionIds.value.includes(id)) {
+    seenSuggestionIds.value = [...seenSuggestionIds.value, id]
+  }
+  suggestions.value = suggestions.value.filter((s) => s.id !== id)
 }
 
-function onFollowClick() {
-  ElMessage.info('关注功能开发中，敬请期待')
+/** 直接关注：关注过的人从卡片上摘掉，和主页那栏行为一致 */
+async function followSuggested(userId: number) {
+  if (suggestBusy.value !== null) return
+  suggestBusy.value = userId
+  try {
+    await followsApi.follow(userId)
+    suggestions.value = suggestions.value.filter((s) => s.id !== userId)
+  } catch {
+    ElMessage.error('关注失败')
+  } finally {
+    suggestBusy.value = null
+  }
 }
 
 // ===== 通知开关 =====
@@ -125,22 +128,21 @@ function avatarText(n?: string) {
   return n?.[0]?.toUpperCase() || '?'
 }
 
-// ===== Tab 切换后过滤活动列表 =====
-// 不同 tab 对应不同活动类型；mock 数据全在一个数组里，按 type 字段过滤
-const activityTypeMap: Record<CategoryId, ActivityItem['type']> = {
-  likes: 'like',
-  follows: 'follow',
-  mentions: 'comment'
-}
-
-const filteredActivities = computed(() =>
-  activities.value.filter((a) => a.type === activityTypeMap[activeCategory.value])
-)
-
 onMounted(() => {
   if (!auth.isLoggedIn) {
     router.push({ path: '/login', query: { redirect: '/messages' } })
+    return
   }
+  // 进页面就把未读数拉一次并订阅 WS 帧：铃铛的初值不能只靠 WS，
+  // 否则刷新页面到 WS 连上之前，铃铛是空的
+  startNotifications()
+  loadNotifications(activeCategory.value)
+  loadSuggestions()
+})
+
+// 切分类就重新拉对应的那一组（后端已经把「评论和@ = comment + mention」合并好了）
+watch(activeCategory, (cat) => {
+  if (auth.isLoggedIn) loadNotifications(cat)
 })
 </script>
 
@@ -153,7 +155,20 @@ onMounted(() => {
 
     <!-- 顶层两个 Tab：通知（静态活动流）/ 聊天（WebSocket 实时） -->
     <el-tabs v-model="activeSection" class="top-tabs">
-      <el-tab-pane label="通知" name="notifications" />
+      <el-tab-pane name="notifications">
+        <template #label>
+          <span class="tab-label">
+            通知
+            <el-badge
+              v-if="notifyUnread > 0"
+              :value="notifyUnread"
+              :max="99"
+              type="danger"
+              class="tab-badge"
+            />
+          </span>
+        </template>
+      </el-tab-pane>
       <el-tab-pane name="chat">
         <template #label>
           <span class="tab-label">
@@ -176,39 +191,82 @@ onMounted(() => {
       </el-tabs>
 
       <div class="messages-grid">
-        <!-- ================= 左栏：活动消息 ================= -->
+        <!-- ================= 左栏：通知流 ================= -->
         <el-card shadow="never" class="activity-card">
           <template #header>
             <span class="card-title">
-              <el-icon
-                ><component :is="categories.find((c) => c.id === activeCategory)!.icon"
-              /></el-icon>
-              {{ categories.find((c) => c.id === activeCategory)!.label }}
+              <el-icon><component :is="currentCategory.icon" /></el-icon>
+              {{ currentCategory.label }}
             </span>
-            <span class="card-sub">{{ filteredActivities.length }} 条</span>
+            <div class="card-actions">
+              <span class="card-sub">{{ notifications.length }} 条</span>
+              <!-- 「全部已读」而不是逐条点开再标：通知的心智是「我扫一遍」，
+                   逐条标会让红点一直挂着，用户永远清不掉 -->
+              <el-button
+                v-if="notifications.some((n) => !n.read)"
+                size="small"
+                text
+                @click="markNotificationsRead()"
+              >
+                全部已读
+              </el-button>
+            </div>
           </template>
 
           <EmptyState
-            v-if="filteredActivities.length === 0"
+            v-if="notificationsError"
+            variant="error"
+            :title="notificationsError"
+            action="重试"
+            compact
+            @action="loadNotifications(activeCategory)"
+          />
+
+          <EmptyState
+            v-else-if="notificationsLoading && notifications.length === 0"
+            variant="loading"
+            title="加载中..."
+            compact
+          />
+
+          <EmptyState
+            v-else-if="notifications.length === 0"
             icon="🔔"
-            title="暂无活动消息"
-            hint="有人赞你、评论你时会出现在这里"
+            :title="`暂无${currentCategory.label}`"
+            :hint="EMPTY_HINT[activeCategory]"
             compact
           />
 
           <ul v-else class="activity-list">
-            <li v-for="item in filteredActivities" :key="item.id" class="activity-item">
-              <span class="unread-dot" :class="{ on: item.unread }" aria-hidden="true" />
-              <el-avatar :size="38" class="avatar">{{ avatarText(item.nickname) }}</el-avatar>
-              <div class="activity-main">
-                <div class="activity-text">
-                  <span class="activity-nick">{{ item.nickname }}</span>
-                  {{ item.text }}
-                </div>
-              </div>
-              <span class="activity-date">{{ item.date }}</span>
+            <li
+              v-for="item in notifications"
+              :key="item.id"
+              class="activity-item"
+              :class="{ unread: !item.read }"
+            >
+              <span class="unread-dot" :class="{ on: !item.read }" aria-hidden="true" />
+              <el-avatar :size="38" :src="item.actor.avatar || undefined" class="avatar">
+                {{ avatarText(item.actor.nickname) }}
+              </el-avatar>
+              <button type="button" class="activity-main activity-open" @click="openItem(item)">
+                <span class="activity-text">
+                  <span class="activity-nick">{{ item.actor.nickname }}</span>
+                  {{ NOTIFY_TEXT[item.type] }}
+                  <span v-if="item.type === 'comment' || item.type === 'mention'" class="mention">
+                    ：{{ item.content }}
+                  </span>
+                  <span v-else-if="!item.post" class="muted">（原笔记已删除）</span>
+                </span>
+              </button>
+              <span class="activity-date">{{ formatTime(item.createdAt) }}</span>
             </li>
           </ul>
+
+          <div v-if="hasMoreNotifications" class="load-more">
+            <el-button size="small" :loading="loadingMore" @click="loadMoreNotifications()">
+              加载更多
+            </el-button>
+          </div>
         </el-card>
 
         <!-- ================= 右栏 ================= -->
@@ -222,22 +280,41 @@ onMounted(() => {
           </el-card>
 
           <el-card shadow="never" class="side-card">
-            <template #header><span class="card-title">推荐关注</span></template>
+            <template #header>
+              <span class="card-title">推荐关注</span>
+              <el-button
+                v-if="suggestions.length > 0"
+                size="small"
+                text
+                @click="refreshSuggestions"
+              >
+                换一批
+              </el-button>
+            </template>
 
-            <el-empty
-              v-if="visibleSuggestions.length === 0"
-              description="暂无推荐"
-              :image-size="60"
-            />
+            <el-empty v-if="suggestions.length === 0" description="暂无推荐" :image-size="60" />
 
             <ul v-else class="suggest-list">
-              <li v-for="u in visibleSuggestions" :key="u.id" class="suggest-item">
-                <el-avatar :size="36" class="avatar">{{ avatarText(u.nickname) }}</el-avatar>
+              <li v-for="u in suggestions" :key="u.id" class="suggest-item">
+                <el-avatar :size="36" :src="u.avatar || undefined" class="avatar">
+                  {{ avatarText(u.nickname) }}
+                </el-avatar>
                 <div class="suggest-info">
                   <div class="suggest-name">{{ u.nickname }}</div>
-                  <div v-if="u.hint" class="suggest-hint">{{ u.hint }}</div>
+                  <!-- 推荐接口给的是影响力数据（粉丝数 / 笔记数），
+                       正好可以当副标题，比原来写死的「XX 也关注」更有信息量 -->
+                  <div class="suggest-hint">
+                    {{ u.followerCount }} 粉丝 · {{ u.postCount }} 篇笔记
+                  </div>
                 </div>
-                <el-button size="small" type="primary" plain round @click="onFollowClick">
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  round
+                  :loading="suggestBusy === u.id"
+                  @click="followSuggested(u.id)"
+                >
                   关注
                 </el-button>
                 <el-button size="small" text class="dismiss-btn" @click="dismiss(u.id)">
@@ -336,6 +413,54 @@ onMounted(() => {
 
 .activity-item + .activity-item {
   border-top: 1px solid var(--border);
+}
+
+/* 整行可点 → 必须有 hover 和 focus-visible，否则没人知道能点 */
+.activity-item:hover {
+  background: var(--muted);
+  border-radius: 8px;
+}
+
+.activity-item.unread {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-radius: 8px;
+}
+
+.activity-open {
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.activity-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.mention {
+  color: var(--foreground);
+}
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
 }
 
 .unread-dot {
