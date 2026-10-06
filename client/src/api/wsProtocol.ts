@@ -72,6 +72,13 @@ export type ServerMessage =
   /** 对方已读 */
   | { type: 'read_receipt'; payload: { conversationId: number; readerId: number; readAt: string } }
   | { type: 'typing'; payload: { conversationId: number; userId: number } }
+  /**
+   * 有新通知（点赞 / 收藏 / 关注 / 评论 / @）。
+   * 只推**未读总数**而不是整条通知：一来铃铛只要数字，
+   * 二来通知列表的分页/筛选/已读都是 HTTP 的职责，
+   * 在 WS 里重做一遍必然和 REST 对不上。
+   */
+  | { type: 'notification'; payload: { unreadCount: number } }
   | { type: 'pong'; payload: { ts: number } }
   | { type: 'error'; payload: { code: string; message: string; tempId?: string } }
 

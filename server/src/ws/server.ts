@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { env } from '../lib/env'
 import { MESSAGE_MAX_LENGTH } from '../constants'
 import { Hub } from './hub'
+import { setHub } from './instance'
 import { WS_ERROR, type ClientMessage, type ServerMessage } from './protocol'
 import {
   assertMember,
@@ -73,6 +74,9 @@ function sendTo(socket: WebSocket, message: ServerMessage): void {
 
 export function attachWebSocketServer(httpServer: HttpServer): WsServerHandle {
   const hub = new Hub()
+  // 登记成单例，好让 HTTP 路由（写通知时）能推帧给用户的所有连接。
+  // 没有这一步，「别人给我点赞 → 我的铃铛 +1」就只能靠轮询。
+  setHub(hub)
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
   /** 上一轮 ping 是否收到了 pong；没收到就说明这条连接已经死了 */
   const alive = new WeakMap<WebSocket, boolean>()
