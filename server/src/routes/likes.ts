@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
 import { writeLimiter } from '../middleware/rateLimit'
+import { createNotification } from '../lib/notify'
 
 // mergeParams: true 让我们在 mount 在 /api/posts 下时能拿到 :postId
 const router = Router({ mergeParams: true })
@@ -16,12 +17,21 @@ router.post('/:postId/like', writeLimiter, requireAuth, (req: Request, res: Resp
       return res.status(400).json({ message: '参数错误' })
     }
 
-    // 检查 post 是否存在
-    const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(postId)
+    // 检查 post 是否存在（顺带拿到作者，通知要用）
+    const post = db.prepare('SELECT id, user_id FROM posts WHERE id = ?').get(postId) as any
     if (!post) return res.status(404).json({ message: '笔记不存在' })
 
     // INSERT OR IGNORE 实现幂等
-    db.prepare(`INSERT OR IGNORE INTO likes (user_id, post_id) VALUES (?, ?)`).run(userId, postId)
+    const info = db
+      .prepare(`INSERT OR IGNORE INTO likes (user_id, post_id) VALUES (?, ?)`)
+      .run(userId, postId)
+
+    // 只有**真的新增了一行**才通知作者。
+    // 重复点赞（changes === 0）如果也发通知，去重逻辑会把那条老通知
+    // 的 read_at 重新置空 —— 用户明明早就看过了，却因为自己反复点而红点长亮。
+    if (info.changes > 0) {
+      createNotification({ userId: post.user_id, actorId: userId, type: 'like', postId })
+    }
 
     const count = (
       db.prepare('SELECT COUNT(*) as c FROM likes WHERE post_id = ?').get(postId) as any

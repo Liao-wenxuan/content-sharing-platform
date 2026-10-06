@@ -4,6 +4,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth'
 import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { NICKNAME_MAX_LENGTH } from '../constants'
+import { createNotification } from '../lib/notify'
 
 const router = Router()
 
@@ -284,10 +285,15 @@ router.post('/:id/follow', writeLimiter, requireAuth, (req: Request, res: Respon
       return res.status(404).json({ message: '用户不存在' })
     }
 
-    db.prepare(`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`).run(
-      me,
-      targetId
-    )
+    const info = db
+      .prepare(`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`)
+      .run(me, targetId)
+
+    // 同 likes：只有真正新增了一条关注边才通知。
+    // 重复关注如果也通知，被关注者的通知会被重新置成未读 —— 红点长亮。
+    if (info.changes > 0) {
+      createNotification({ userId: targetId, actorId: me, type: 'follow' })
+    }
 
     res.json({ following: true, ...getCounts(targetId) })
   } catch (err: any) {

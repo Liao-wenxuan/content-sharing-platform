@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth'
 import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { COMMENT_MAX_LENGTH } from '../constants'
+import { createNotification, parseMentions } from '../lib/notify'
 
 const router = Router({ mergeParams: true })
 
@@ -65,19 +66,42 @@ router.post('/:postId/comments', writeLimiter, requireAuth, (req: Request, res: 
       return res.status(400).json({ message: `评论不能超过 ${COMMENT_MAX_LENGTH} 字` })
     }
 
-    // 检查 post 是否存在
-    const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(postId)
+    // 检查 post 是否存在（顺带拿到作者，通知要用）
+    const post = db.prepare('SELECT id, user_id FROM posts WHERE id = ?').get(postId) as any
     if (!post) return res.status(404).json({ message: '笔记不存在' })
 
+    const body = content.trim()
     const result = db
       .prepare(
         `
       INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)
     `
       )
-      .run(postId, userId, content.trim())
+      .run(postId, userId, body)
 
     const commentId = result.lastInsertRowid as number
+
+    // 两条通知：笔记作者收到「评论了」，被 @ 的人收到「@了你」。
+    // 给自己评论自己的笔记时，createNotification 内部会因 userId === actorId 跳过。
+    createNotification({
+      userId: post.user_id,
+      actorId: userId,
+      type: 'comment',
+      postId,
+      commentId,
+      content: body
+    })
+
+    for (const mentioned of parseMentions(body)) {
+      createNotification({
+        userId: mentioned.id,
+        actorId: userId,
+        type: 'mention',
+        postId,
+        commentId,
+        content: body
+      })
+    }
     const newRow = db
       .prepare(
         `

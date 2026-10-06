@@ -4,6 +4,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth'
 import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { FOLDER_NAME_MAX_LENGTH, FOLDER_MAX_COUNT } from '../constants'
+import { createNotification } from '../lib/notify'
 
 /**
  * 收藏 / 收藏夹
@@ -32,7 +33,13 @@ router.post('/:postId/favorite', writeLimiter, requireAuth, (req: Request, res: 
     const userId = req.userId
     if (!postId || !userId) return res.status(400).json({ message: '参数错误' })
 
-    const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(postId)
+    // 存在时是「再收藏一次」（可能换了夹），不存在才是首次收藏。
+    // 只有首次收藏才通知作者：换夹是整理动作，不该把作者的通知重新点亮。
+    const alreadyFavorited = !!db
+      .prepare('SELECT 1 FROM favorites WHERE user_id = ? AND post_id = ?')
+      .get(userId, postId)
+
+    const post = db.prepare('SELECT id, user_id FROM posts WHERE id = ?').get(postId) as any
     if (!post) return res.status(404).json({ message: '笔记不存在' })
 
     // body.folderId 可选：传了就归进那个夹，不传就是未分类。
@@ -54,6 +61,10 @@ router.post('/:postId/favorite', writeLimiter, requireAuth, (req: Request, res: 
       `INSERT INTO favorites (user_id, post_id, folder_id) VALUES (?, ?, ?)
          ON CONFLICT(user_id, post_id) DO UPDATE SET folder_id = excluded.folder_id`
     ).run(userId, postId, folderId)
+
+    if (!alreadyFavorited) {
+      createNotification({ userId: post.user_id, actorId: userId, type: 'favorite', postId })
+    }
 
     res.json({ favorited: true, favoriteCount: getFavoriteCount(postId) })
   } catch (err: any) {
