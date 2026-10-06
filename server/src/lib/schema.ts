@@ -183,4 +183,55 @@ export function initSchema(db: Database.Database): void {
   // 会话历史按 (conversation_id, id) 翻页，这个复合索引同时服务"取历史"和"取未读"
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(receiver_id, read_at)`)
+
+  // ===== 通知（点赞 / 收藏 / 关注 / 评论 / @）=====
+  // 它是 likes / favorites / follows / comments 四张表的**派生数据**：
+  // 写通知的地方和写业务表的地方在同一个事务里，不做定时聚合。
+  //
+  // 这么设计的理由：聚合任务会带来「用户点了赞，通知晚 30 秒才出现」的问题，
+  // 而通知的整个价值就是即时。现在这张表就是一张可回溯的流水，
+  // 真到了需要聚合的量级再换实现，接口层不用动。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,          -- 接收者
+      actor_id INTEGER NOT NULL,         -- 谁触发的
+      type TEXT NOT NULL,                -- like / favorite / follow / comment / mention
+      post_id INTEGER NOT NULL DEFAULT 0,
+      comment_id INTEGER NOT NULL DEFAULT 0,
+      content TEXT,                      -- 评论/回复正文摘要，点赞关注为空
+      read_at DATETIME,                  -- NULL = 未读
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      CHECK (post_id >= 0),
+      CHECK (comment_id >= 0),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  // ⚠️ post_id / comment_id 用 0 当"不涉及"，**不用 NULL**，这是有意为之：
+  //
+  // SQLite（和标准 SQL 一样）的 UNIQUE 索引认为 NULL 与 NULL **不相等**，
+  // 所以如果这里存 NULL，`UNIQUE(user_id, actor_id, type, post_id, comment_id)`
+  // 对「关注」这类 post_id/comment_id 都为空的行**完全不起作用** ——
+  // 同一个人可以关注你一百次，生成一百条一模一样的通知。
+  // 用 0 哨兵把 NULL 挤掉，去重才真的成立。
+  //
+  // 代价：post_id 不能建外键到 posts（0 这一行不存在），所以删笔记时
+  // 通知里的 post_id 会变成孤儿。查询时用 LEFT JOIN posts 兜住，
+  // 笔记被删的通知返回 postId: null，前端显示「原笔记已删除」而不是跳 404。
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup
+      ON notifications(user_id, actor_id, type, post_id, comment_id)
+  `)
+
+  // 列表按 (user_id, created_at DESC) 翻页；未读数走 (user_id, read_at)
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_notifications_user
+       ON notifications(user_id, created_at DESC, id DESC)`
+  )
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_notifications_unread
+       ON notifications(user_id, read_at)`
+  )
 }
