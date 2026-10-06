@@ -394,6 +394,112 @@ CREATE TABLE favorites (
 → 一次点击只应该对应一个明确的动作。「归到某个夹」是**整理**动作，
 发生在收藏页的批量整理里。按钮上挂选择器会把两个心智模型糊在一起。
 
+---
+
+### Q：通知怎么做才不刷屏？
+
+**先说去重**。同一个人反复点赞同一篇笔记，通知列表里只应该有一条。
+所以 `notifications` 上有一个唯一索引：
+
+```sql
+CREATE UNIQUE INDEX idx_notifications_dedup
+  ON notifications(user_id, actor_id, type, post_id, comment_id);
+```
+
+**这里有个坑，是我写的时候真踩到的**：`post_id` / `comment_id` 一开始存的是
+`NULL`（表示「不涉及」）。但 **SQLite 和标准 SQL 一样，UNIQUE 索引认为
+`NULL` 与 `NULL` 不相等** —— 于是「关注」这种两列都空的行，
+唯一索引对它**完全不起作用**，同一个人可以关注你一百次，
+生成一百条一模一样的通知。
+
+修法是用 **`0` 当哨兵**而不是 `NULL`，把 `NULL` 挤出索引之外。
+代价是 `post_id` 建不了外键（`0` 那一行不存在），所以删笔记之后
+通知里的 `post_id` 会变孤儿；查询时用 `LEFT JOIN posts` 兜住，
+返回 `postId: null`，前端显示「原笔记已删除」而不是跳 404。
+
+**再说重复互动该不该重发**。我的选择是：重复互动**不新增行**，
+而是把老的那条 `created_at` 刷新、浮到最上面，并重新变回未读。
+语义是「最近又赞了一次」，而不是刷屏。
+
+**但去重挡不住另一种刷屏**。如果用户反复点赞也发通知，
+去重逻辑会把那条老通知的 `read_at` 重新置空 —— 用户明明早就看过了，
+却因为自己反复点而红点长亮。所以三个写入点（点赞 / 收藏 / 关注）
+**都必须先判「是不是真新增了」再发通知**：
+点赞看 `INSERT OR IGNORE` 的 `changes`，收藏看之前有没有收藏过。
+去重能挡住「多出一行」，挡不住「已读被重新点亮」，这是两件事。
+
+**最后是不给自己发通知**。这条规则抽成了 `createNotification()` 里的
+第一个判断而不是散在各个路由里 —— 散着写早晚会漏一处，
+漏了就是「你赞了自己的笔记，通知列表里有一条」。
+
+**测试**：`server/tests/notifications.test.ts` 35 条 + e2e 25 条。
+写测试时我自己也踩了一次同样的坑：`beforeEach` 只清了 `notifications`，
+没清 `likes` / `favorites` / `follows`，于是「重复点赞」那条用例里
+`INSERT OR IGNORE` 根本不生效，测到的不是「重复不重复通知」，
+而是「什么都没发生」。这个坑在 e2e 脚本里又踩了一次，
+现在两个地方的注释都写明了。
+
+---
+
+### Q：通知的未读数怎么实时更新？为什么不用轮询？
+
+**不用轮询，复用已有的 WS hub。** 加一种服务端帧：
+
+```ts
+{ type: 'notification', payload: { unreadCount: number } }
+```
+
+**只推数字，不推整条通知**。两个原因：铃铛要的只是数字；
+通知列表的分页 / 筛选 / 已读都是 HTTP 的职责，
+在 WS 里重做一遍必然和 REST 对不上。
+
+**遇到的第一个问题：路由层怎么拿到 hub**。
+写通知的代码在 HTTP 路由里（点赞 / 收藏 / 关注 / 评论），
+而 `Hub` 是 WebSocket 层的对象，两个模块互不相识。
+Express 的路由签名塞不进 hub，全局变量又让测试没法注入一个假的。
+最后加了一层模块级单例（`server/src/ws/instance.ts`），启动时 `setHub` 一次，
+路由里 `getHub()` 拿。**拿不到就安静跳过推送** —— 通知照样落库，
+推送是增强而不是数据一致性的前提，所以单测里不起 WS 也不影响。
+
+**第二个问题：两路未读怎么合流**。聊天未读来自 `message` 帧（本地 +1），
+通知未读来自 `notification` 帧（服务端给的权威值）。
+关键是**后者必须覆盖而不是累加**：本地 +1 只是猜测，
+别人可能同时在另一台设备上已经读过了。
+
+页面的初值靠 REST 拉一次 —— 不能只靠 WS，
+否则从刷新页面到 WS 连上之前，铃铛是空的。
+
+**铃铛最终显示「聊天 + 通知」的合并数字**。两路未读在同一个入口里，
+分成「3 · 2」两个数字只会让人以为要点两次。
+
+**测试**：`scripts/notification-smoke.mjs` 开两个浏览器上下文，
+断言的是「B 点赞的那一刻，停在原地的 A 的页面上铃铛自己 +1」——
+这才是「实时」的可验证形式，断言 DOM 变化不如断言数字变化直接。
+
+### Q：踩过什么「看起来像 bug 其实不是」的坑？
+
+**后端加了新表，e2e 脚本报 `SqliteError: no such table: notifications`。**
+
+第一次遇到时我以为进程持有旧代码，手动建了表。
+第二次换成通知表又撞上一模一样的问题，于是这次没有再猜，
+直接去查：`initSchema()` 在真实 DB 上跑一遍（能建出来），
+再打一个必然碰库的接口，然后查表（也建出来了）。
+
+**根因**：`server/src/lib/db.ts` 的建表是**懒执行**的 ——
+`initSchema()` 在第一次真的碰到数据库时才跑。这样设计是有意的：
+导入 db 模块没有副作用，单测也能用 `setTestDb` 换成 `:memory:`。
+所以后端刚重启、还没处理过任何碰库的请求时，磁盘上就还没有新表。
+
+**但这暴露了一个真实的易用性问题**：e2e 脚本为了绕开登录限流，
+都是**直接连库**建测试用户 —— 于是脚本在还没做任何事之前就炸了，
+报出来的是最底层那句 `no such table`，完全看不出「其实是后端还没初始化」。
+修法是抽了 `scripts/ensure-schema.mjs`：先打一个必然碰库的公开接口
+把 schema 触发出来，再确认需要的表真的在，不在就给人话提示。
+
+**教训**：底层报错信息不会替你说出真正的原因。
+遇到「明明刚加的东西不存在」时，先去验证**那段代码到底有没有被执行过**，
+而不是先怀疑运行环境。
+
 ## 3. 前端
 
 ### Q：瀑布流怎么实现的？
@@ -624,7 +730,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 6. 一分钟自检清单
 
-面试前确认这 15 条能不看文档说出来：
+面试前确认这 18 条能不看文档说出来：
 
 - [ ] 前端为什么用 Element Plus 却要重写全部样式
 - [ ] `Map<userId, Set<WebSocket>>` 为什么不能是一对一
@@ -639,6 +745,9 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 收藏夹为什么不做「一篇笔记进多个夹」的中间表
 - [ ] 未分类为什么必须在服务端显式支持，而不能前端本地过滤
 - [ ] 删收藏夹为什么退回未分类而不是删内容
+- [ ] 通知去重为什么 `post_id` 要用 0 哨兵而不是 NULL
+- [ ] 重复互动为什么「浮到顶部 + 重新变未读」而不是新增一条
+- [ ] 通知未读数为什么走 WS 而不是轮询，为什么是覆盖而不是 +1
 - [ ] `vi.resetModules()` + `vi.spyOn` 为什么会静默失效
 - [ ] CI 里 Node 版本那个「假绿」的坑
 
@@ -657,6 +766,8 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 | 关注按钮的乐观更新            | `client/src/composables/useFollow.ts` + `client/tests/use-follow.test.ts`                        |
 | 收藏夹建模                    | `server/src/lib/schema.ts`（`favorites` / `favorite_folders`）+ `server/src/routes/favorites.ts` |
 | 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                    |
+| 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                  |
+| 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                     |
 | 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                    |
 | 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                               |
 | 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`           |
