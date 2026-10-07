@@ -500,6 +500,66 @@ Express 的路由签名塞不进 hub，全局变量又让测试没法注入一�
 遇到「明明刚加的东西不存在」时，先去验证**那段代码到底有没有被执行过**，
 而不是先怀疑运行环境。
 
+---
+
+### Q：话题为什么没有 topics 表？
+
+**没有**。话题在库里就是 `posts.topic_tag` 这个自由文本，话题页是它的
+**现算聚合视图**（`GROUP BY topic_tag` 算出笔记数和参与人数）。
+
+**为什么不用实体表**：
+
+1. `topic_tag` 是发布时自由输入的。要有 `topics` 表就得加「输入即创建」的
+   同步逻辑，等于把同一份数据存两遍，还得处理「建了话题但一篇笔记都没有」
+   的空壳 —— 而空壳话题页恰恰是最糟的产品形态（用户点进去发现是空的，
+   分不清是自己没内容还是功能没做完）。
+2. 派生视图是**零维护**的。有人发了「前端开发」，话题页立刻就有内容，
+   不需要任何后台操作。
+
+**什么时候才该上实体表？** 当话题需要**自己的元数据**时：
+封面图、简介文案、运营位、审核状态、话题主持人。那时候「话题」才从
+「标签的分组」变成「一个可运营的对象」，加表之后现有数据可以直接迁，
+接口形状不用变。
+
+**追问**：那 `topic_tag` 是自由文本，怎么避免「前端开发」和「前端 开发」
+变成两个话题？
+→ **接受它**。话题是**精确匹配**的，搜索框里的联想才是模糊的（`LIKE`）。
+和真实产品一致：用户搜「前端」会同时看到两个话题，点哪个看哪个 ——
+模糊只发生在「找」这一层，不发生在「是」这一层。
+真要治理可以加话题别名表，但那是运营需求不是技术需求。
+
+**追问**：相关话题怎么推？
+→ 按「同话题作者的其它话题」而不是随机推热门：
+`WHERE user_id IN (SELECT user_id FROM posts WHERE topic_tag = ?)`。
+「写了同一个话题的人还关注了什么」天然和你此刻的浏览兴趣相关，
+而随机推热门等于在话题页里再放一遍首页的推荐位。
+
+---
+
+### Q：怎么区分「404 是错误」和「404 是预期状态」？
+
+话题不存在时后端返 404（用户手敲 URL、或者搜了个没用过的词），
+但那是**预期状态** —— 页面本来就要渲染自己的空态。
+
+可 404 走 axios 的 reject 路径，会被响应拦截器当成错误，
+在控制台打一条 `[API Error]` 再 reject。于是页面拿到一个「异常」而不是
+一个「没有这个话题」，还顺带把「零 console error」的 e2e 断言也弄挂。
+
+**第一版写法是错的**：我想用
+`validateStatus: (s) => s === 404 || (s >= 200 && s < 300)`。
+但响应拦截器已经 `return response.data` 把 `AxiosResponse` 解开了，
+调用方拿到的就是业务数据本身 —— `status` 和 `data` **都读不到**，
+于是连正常存在的话题都被判成 `null`，页面一律显示「还没有笔记」。
+
+**修法**：改用 config 标记。请求时带 `silent404`，拦截器在 reject 分支里
+先判断它：命中就 `resolve(null)`，既不打日志也不弹错。
+这个约定写在 `request.ts` 的 `getOrNull` 注释里。
+
+**通用判据**：「某个 HTTP 状态码算不算错误」不是后端单方面能决定的，
+取决于**调用方想怎么表现它**。所以这个判断必须做在调用侧，
+不能硬编码进拦截器 —— 否则「用户访问了不存在的资源」这种每天都会发生的
+正常情况，会一直被当成故障报出来。
+
 ## 3. 前端
 
 ### Q：瀑布流怎么实现的？
@@ -730,7 +790,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 6. 一分钟自检清单
 
-面试前确认这 18 条能不看文档说出来：
+面试前确认这 20 条能不看文档说出来：
 
 - [ ] 前端为什么用 Element Plus 却要重写全部样式
 - [ ] `Map<userId, Set<WebSocket>>` 为什么不能是一对一
@@ -748,6 +808,8 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 通知去重为什么 `post_id` 要用 0 哨兵而不是 NULL
 - [ ] 重复互动为什么「浮到顶部 + 重新变未读」而不是新增一条
 - [ ] 通知未读数为什么走 WS 而不是轮询，为什么是覆盖而不是 +1
+- [ ] 话题为什么不做成实体表，什么时候才该上
+- [ ] 为什么话题是精确匹配而搜索联想才模糊
 - [ ] `vi.resetModules()` + `vi.spyOn` 为什么会静默失效
 - [ ] CI 里 Node 版本那个「假绿」的坑
 
@@ -768,6 +830,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 | 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                    |
 | 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                  |
 | 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                     |
+| 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue` |
 | 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                    |
 | 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                               |
 | 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`           |
