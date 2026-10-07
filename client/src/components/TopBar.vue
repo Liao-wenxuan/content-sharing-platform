@@ -35,6 +35,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useSearchHistory } from '@/composables/useSearchHistory'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNotifications } from '@/composables/useNotifications'
+import { topicPath } from '@/api/topics'
 
 const route = useRoute()
 const router = useRouter()
@@ -215,7 +216,7 @@ function onClear() {
   if (route.name === 'search') router.push({ name: 'search' })
 }
 
-/** 选中一条建议：笔记进详情、用户进主页、话题和历史按关键词搜 */
+/** 选中一条建议：话题进话题页、笔记进详情、用户进主页、历史和其余按关键词搜 */
 function pickRow(row: Row) {
   focused.value = false
   if (row.kind === 'post') {
@@ -224,6 +225,13 @@ function pickRow(row: Row) {
   }
   if (row.kind === 'user') {
     router.push(`/profile/${row.id}`)
+    return
+  }
+  if (row.kind === 'topic') {
+    // 点话题直接进话题页，不跳搜索结果。
+    // 用户点的是「这个话题」，不是「用这个词搜一遍」——
+    // 跳搜索页会让他再多点一次才能看到同一批笔记
+    router.push(topicPath(row.value))
     return
   }
   keyword.value = row.value

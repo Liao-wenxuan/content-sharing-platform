@@ -348,18 +348,17 @@ describe('搜索建议下拉', () => {
     expect(w.find('.suggest-panel').exists()).toBe(false)
   })
 
-  it('Enter 选中话题走搜索，并记进历史', async () => {
+  it('Enter 选中话题直接进话题页，不进搜索结果页', async () => {
     const w = await openPanelWithKeyword()
     const wrap = w.find('.search-wrap')
 
     await wrap.trigger('keydown', { key: 'ArrowDown' }) // 第一行 = 话题
     await wrap.trigger('keydown', { key: 'Enter' })
 
-    expect(routerMock.push).toHaveBeenLastCalledWith({
-      name: 'search',
-      query: { q: '猫教程' }
-    })
-    expect(historyMock.items).toContain('猫教程')
+    // 话题名是中文，路径必须编码
+    expect(routerMock.push).toHaveBeenLastCalledWith(`/topic/${encodeURIComponent('猫教程')}`)
+    // 点话题不是「搜这个词」，所以不该把它记进搜索历史
+    expect(historyMock.items).not.toContain('猫教程')
   })
 
   it('没有高亮时回车 = 直接搜输入框里的词', async () => {
@@ -392,10 +391,15 @@ describe('搜索建议下拉', () => {
   it('鼠标点建议和回车等价', async () => {
     const w = await openPanelWithKeyword()
     await w.findAll('.suggest-row')[0].trigger('mousedown')
-    expect(routerMock.push).toHaveBeenLastCalledWith({
-      name: 'search',
-      query: { q: '猫教程' }
-    })
+    // 第一行是话题，和回车一样进话题页
+    expect(routerMock.push).toHaveBeenLastCalledWith(`/topic/${encodeURIComponent('猫教程')}`)
+  })
+
+  it('鼠标点笔记进详情，和回车一样', async () => {
+    const w = await openPanelWithKeyword()
+    // rows 顺序：话题在前、笔记在后（见 TopBar 的 rows computed）
+    await w.findAll('.suggest-row')[1].trigger('mousedown')
+    expect(routerMock.push).toHaveBeenLastCalledWith('/post/11')
   })
 
   it('快速连打时只认最后一次结果', async () => {
