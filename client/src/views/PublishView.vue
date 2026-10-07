@@ -20,6 +20,7 @@ import { PictureFilled, UploadFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { postsApi } from '@/api/posts'
+import { topicsApi, type TopicSummary } from '@/api/topics'
 import {
   POST_CONTENT_MAX_LENGTH,
   UPLOAD_MAX_IMAGES,
@@ -36,6 +37,8 @@ const toast = useToastStore()
 // ===== 表单状态 =====
 const content = ref('')
 const topicTag = ref('')
+/** 热门话题快捷选择：空着的输入框等于劝退 */
+const hotTopics = ref<TopicSummary[]>([])
 const submitting = ref(false)
 const errorMsg = ref('')
 
@@ -72,7 +75,17 @@ const canSubmit = computed(
 onMounted(() => {
   if (!auth.isLoggedIn) {
     router.push('/login')
+    return
   }
+  // 热门话题拉不到就让输入框空着，不影响发布
+  topicsApi
+    .list({ limit: 8 })
+    .then((res) => {
+      hotTopics.value = res.list
+    })
+    .catch(() => {
+      hotTopics.value = []
+    })
 })
 
 // 组件卸载时清理所有 ObjectURL 防内存泄漏
@@ -308,8 +321,24 @@ async function handleSubmit() {
             />
           </el-form-item>
 
+          <!-- 话题是自由输入，但空着输入框等于劝退：给几个现成的热门话题，
+               点一下就填上。既降低了门槛，也让新话题更容易被复用 -->
           <el-form-item label="话题标签">
             <el-input v-model="topicTag" placeholder="例如：前端开发" :maxlength="20" clearable />
+            <div v-if="hotTopics.length > 0" class="hot-topics">
+              <span class="hot-label">热门话题</span>
+              <button
+                v-for="t in hotTopics"
+                :key="t.tag"
+                type="button"
+                class="hot-chip"
+                :disabled="t.tag === topicTag"
+                @click="topicTag = t.tag"
+              >
+                #{{ t.tag }}
+                <span class="hot-count">{{ t.postCount }}</span>
+              </button>
+            </div>
           </el-form-item>
 
           <el-form-item>
@@ -487,6 +516,59 @@ async function handleSubmit() {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted-foreground);
+}
+
+/* ===== 热门话题快捷选择 ===== */
+.hot-topics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.hot-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.hot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.hot-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hot-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 已经选中的那个不用再点 */
+.hot-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hot-count {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 .upload-dragger {
