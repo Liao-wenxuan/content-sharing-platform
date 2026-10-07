@@ -12,6 +12,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Star, ChatDotRound, Collection, ArrowLeft, Plus } from '@element-plus/icons-vue'
 import { postsApi, type Post, type Comment } from '@/api/posts'
+import { topicPath } from '@/api/topics'
 import { useAuthStore } from '@/stores/auth'
 import { COMMENT_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
@@ -299,7 +300,15 @@ watch(
         <section class="content-section">
           <p class="content">{{ post.content }}</p>
 
-          <el-tag v-if="post.topicTag" type="danger" effect="plain" round class="topic-tag">
+          <!-- 话题标签可点：这是笔记详情通往话题页的主入口 -->
+          <el-tag
+            v-if="post.topicTag"
+            type="danger"
+            effect="plain"
+            round
+            class="topic-tag"
+            @click="router.push(topicPath(post.topicTag))"
+          >
             # {{ post.topicTag }}
           </el-tag>
 
@@ -574,6 +583,7 @@ watch(
 
 .topic-tag {
   margin-top: 14px;
+  cursor: pointer;
 }
 
 .actions {
