@@ -560,6 +560,50 @@ Express 的路由签名塞不进 hub，全局变量又让测试没法注入一�
 不能硬编码进拦截器 —— 否则「用户访问了不存在的资源」这种每天都会发生的
 正常情况，会一直被当成故障报出来。
 
+### Q：评论的二级回复为什么只做两层？
+
+**三层以上的楼没人看得下去**，而无限嵌套在前端意味着要写一整套
+折叠 / 递归渲染 / 「展开 N 层」的交互。所以我把它限制成两层，
+代价是「回复一条回复」会被拉平成对父评论的回复 —— 这个代价我明确接受了。
+
+**两条相关的设计**：
+
+1. **回复和一级评论分开返回**（`list` + `replies` 两个数组），
+   不是后端组装成嵌套树。展示只需要作用在一级评论上，
+   回复跟着各自的父评论带出来。组装成树的话后端得递归，
+   前端还得拆开才能渲染「回复某人」的头部。
+2. **通知给「上一级作者」而不是笔记作者**：一级评论通知笔记作者，
+   回复通知被回复的那个人。回复楼中楼不该去打扰笔记作者 ——
+   他收一条就够了，多一条只是噪音。
+
+**追问**：`parent_id` 为什么没有外键？
+→ 因为它是 `ALTER TABLE ADD COLUMN` 加的，而 SQLite **不允许在 ADD COLUMN
+时加外键**（外键只能在 `CREATE TABLE` 时声明）。要给一张老表补外键，
+只能用「新建带列的表 + 拷贝数据 + 改名」，代价远大于收益 ——
+而且「删父评论时要不要级联删回复」本来就应该由应用层显式决定，
+而不是被一个约束悄悄决定。
+
+### Q：置顶为什么不需要唯一约束？
+
+规则本身已经把候选集限制到一条了：**只有笔记作者能置顶，而且只能置顶
+他自己写的那条评论**。所以一条笔记最多只有一条置顶，
+加 `UNIQUE(post_id) WHERE pinned_at IS NOT NULL` 这种部分索引是多余的。
+
+这也解释了为什么 UI 上「置顶」按钮只给笔记作者自己的评论显示：
+把规则做进接口之后，前端不给别人入口是**顺带**的事，而不是必须记住的约定。
+
+**顺带**：前端 `sortComments` 的排序规则必须和后端的 `ORDER BY` 一致。
+两边不一致的症状很隐蔽 —— 用户点一下置顶，界面里顺序对了，
+刷新一下又变了。所以这条规则在 `utils/comments.ts` 和
+`routes/comments.ts` 两边都写了注释指给对方。
+
+**追问**：展开状态为什么存「收起集合」而不是「展开集合」？
+→ 本地发完回复是 `replies.push(newReply)`，**引用没变**，
+`watch(replies)` 根本不触发，于是新回复发出去了却不显示 ——
+这个 bug 是浏览器验证时发现的，单测测不到。
+存「收起集合」就没这个问题：新回复进来时父评论不在收起集合里，
+自然就是展开的。默认展开也更符合预期（有人在回你，不该藏起来）。
+
 ## 3. 前端
 
 ### Q：瀑布流怎么实现的？
@@ -790,7 +834,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 6. 一分钟自检清单
 
-面试前确认这 20 条能不看文档说出来：
+面试前确认这 23 条能不看文档说出来：
 
 - [ ] 前端为什么用 Element Plus 却要重写全部样式
 - [ ] `Map<userId, Set<WebSocket>>` 为什么不能是一对一
@@ -810,6 +854,8 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 通知未读数为什么走 WS 而不是轮询，为什么是覆盖而不是 +1
 - [ ] 话题为什么不做成实体表，什么时候才该上
 - [ ] 为什么话题是精确匹配而搜索联想才模糊
+- [ ] 二级回复为什么只做两层，代价是什么
+- [ ] 置顶为什么不需要唯一约束
 - [ ] `vi.resetModules()` + `vi.spyOn` 为什么会静默失效
 - [ ] CI 里 Node 版本那个「假绿」的坑
 
@@ -831,6 +877,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 | 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                  |
 | 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                     |
 | 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue` |
+| 二级回复 / 置顶的取舍         | `server/src/routes/comments.ts` + `client/src/utils/comments.ts`（排序规则必须前后端一致）       |
 | 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                    |
 | 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                               |
 | 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`           |
