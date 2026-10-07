@@ -73,6 +73,15 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/topic/:tag',
+      name: 'topic',
+      component: () => import('@/views/TopicView.vue'),
+      // 话题名是中文，URL 里必须 encodeURIComponent。
+      // 路由本身不强制编码 —— vue-router 会把 params 解码一次，
+      // 由 topicPath() 负责编码，跳转时不需要关心
+      props: true
+    },
+    {
       // 404 catch-all：未知路径都进 NotFoundView
       // 用 pathMatch 拿到原始 path，便于未来诊断
       path: '/:pathMatch(.*)*',
