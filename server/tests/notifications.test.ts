@@ -18,7 +18,12 @@ import request from 'supertest'
 import type { Express } from 'express'
 import type Database from 'better-sqlite3'
 import { createTestApp, teardownTestDb } from './app'
-import { createNotification, listNotifications, parseMentions } from '../src/lib/notify'
+import {
+  createNotification,
+  listNotifications,
+  parseMentions,
+  getNotifyPrefs
+} from '../src/lib/notify'
 import { setHub, resetHub } from '../src/ws/instance'
 
 let app: Express
@@ -91,6 +96,11 @@ beforeEach(() => {
   db.prepare('DELETE FROM favorites').run()
   db.prepare('DELETE FROM follows').run()
   db.prepare('DELETE FROM comments').run()
+
+  // 通知偏好也必须重置：关掉「新增关注」之后就不再产生 follow 通知了，
+  // 不清的话下一个用例会莫名其妙收不到 —— 和 likes/favorites 那几行同一个道理，
+  // 「被测状态」和「测试残留」必须分开
+  db.prepare('UPDATE users SET notify_prefs = NULL').run()
 
   // 下面「笔记被删」那个用例会真删笔记，这里补回来给后面的用例用
   const alive = db.prepare('SELECT id FROM posts WHERE id = ?').get(postId)
@@ -474,7 +484,139 @@ describe('写完通知会推一帧', () => {
   })
 })
 
-// ===== @ 解析 =====
+// ===== 通知偏好 =====
+
+describe('通知偏好', () => {
+  it('默认全开', async () => {
+    const res = await request(app)
+      .get('/api/notifications/preferences')
+      .set(await auth(authorToken))
+    expect(res.status).toBe(200)
+    expect(res.body.prefs).toEqual({ likes: true, follows: true, mentions: true })
+  })
+
+  it('未登录 401', async () => {
+    expect((await request(app).get('/api/notifications/preferences')).status).toBe(401)
+    expect((await request(app).put('/api/notifications/preferences')).status).toBe(401)
+  })
+
+  it('改一个键不影响另两个', async () => {
+    const res = await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send({ prefs: { follows: false } })
+    expect(res.status).toBe(200)
+    // 关键：只关「新增关注」，另两个保持原样
+    expect(res.body.prefs).toEqual({ likes: true, follows: false, mentions: true })
+  })
+
+  it('多传的键被忽略，不会被存进库里', async () => {
+    const res = await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send({ prefs: { likes: false, evilKey: true, __proto__: { hacked: 1 } } })
+    expect(res.body.prefs).toEqual({ likes: false, follows: true, mentions: true })
+    expect(JSON.stringify(res.body.prefs)).not.toContain('evilKey')
+  })
+
+  it('参数不是对象 400', async () => {
+    const res = await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send('nonsense')
+    expect(res.status).toBe(400)
+  })
+
+  it('关掉某类之后，就不再产生该类通知', async () => {
+    await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send({ prefs: { likes: false } })
+
+    // 点赞 → 不该有通知
+    await request(app)
+      .post(`/api/posts/${postId}/like`)
+      .set(await auth(actorToken))
+      .send()
+    expect(listNotifications(authorId).total).toBe(0)
+
+    // 但关注照常（关的只是「赞和收藏」这一组）
+    await request(app)
+      .post(`/api/users/${authorId}/follow`)
+      .set(await auth(actorToken))
+      .send()
+    const { list } = listNotifications(authorId)
+    expect(list).toHaveLength(1)
+    expect(list[0].type).toBe('follow')
+  })
+
+  it('关掉「评论和@」后，评论和提及都不产生', async () => {
+    await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send({ prefs: { mentions: false } })
+
+    await request(app)
+      .post(`/api/posts/${postId}/comments`)
+      .set(await auth(actorToken))
+      .send({ content: '一条评论' })
+    await request(app)
+      .post(`/api/posts/${postId}/comments`)
+      .set(await auth(actorToken))
+      .send({ content: '@作者 在吗' })
+
+    expect(listNotifications(authorId).total).toBe(0)
+    // 被 @ 的第三个人也该收不到
+    expect(listNotifications(thirdId).total).toBe(0)
+  })
+
+  it('关掉只影响之后的通知，已经收到的不会被删', async () => {
+    await request(app)
+      .post(`/api/posts/${postId}/like`)
+      .set(await auth(actorToken))
+      .send()
+    expect(listNotifications(authorId).total).toBe(1)
+
+    await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send({ prefs: { likes: false } })
+
+    // 历史通知还在（用户关掉的是「别再打扰我」，不是「删掉我的通知」）
+    expect(listNotifications(authorId).total).toBe(1)
+  })
+
+  it('坏 JSON 一律当全开（默认必须是开）', () => {
+    db.prepare('UPDATE users SET notify_prefs = ? WHERE id = ?').run('{坏掉的', authorId)
+    expect(getNotifyPrefs(authorId)).toEqual({ likes: true, follows: true, mentions: true })
+
+    // 值不是布尔也退回默认
+    db.prepare('UPDATE users SET notify_prefs = ? WHERE id = ?').run(
+      '{"likes":"no","follows":false}',
+      authorId
+    )
+    const prefs = getNotifyPrefs(authorId)
+    expect(prefs.likes).toBe(true)
+    expect(prefs.follows).toBe(false)
+  })
+
+  it('NULL 偏好 = 全开', () => {
+    db.prepare('UPDATE users SET notify_prefs = NULL WHERE id = ?').run(authorId)
+    expect(getNotifyPrefs(authorId)).toEqual({ likes: true, follows: true, mentions: true })
+  })
+
+  it('自己的点赞不受自己的偏好影响（自己本来就不收通知）', async () => {
+    await request(app)
+      .put('/api/notifications/preferences')
+      .set(await auth(authorToken))
+      .send({ prefs: { likes: true } })
+    await request(app)
+      .post(`/api/posts/${postId}/like`)
+      .set(await auth(authorToken))
+      .send()
+    expect(listNotifications(authorId).total).toBe(0)
+  })
+})
 
 describe('parseMentions', () => {
   it('认得出 @昵称', () => {
