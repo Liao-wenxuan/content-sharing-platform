@@ -51,19 +51,8 @@ export interface UserPostsResponse {
   total: number
 }
 
-export interface Comment {
-  id: number
-  postId: number
-  userId: number
-  content: string
-  createdAt: string
-  author: PostAuthor
-}
-
-export interface CommentsResponse {
-  list: Comment[]
-  total: number
-}
+// 评论相关的类型和接口已经搬到 api/comments.ts：
+// 评论现在是独立资源（有自己的点赞 / 置顶 / 二级回复），再挂在 posts 下面不合适。
 
 export interface LikeResponse {
   liked: boolean
@@ -157,15 +146,7 @@ export const postsApi = {
   // 获取点赞数（公开）
   getPostLikes(postId: number): Promise<LikeResponse> {
     return request.get<LikeResponse>(`/posts/${postId}/likes`)
-  },
-
-  // 列出评论
-  getComments(postId: number): Promise<CommentsResponse> {
-    return request.get<CommentsResponse>(`/posts/${postId}/comments`)
-  },
-
-  // 发评论
-  postComment(postId: number, content: string): Promise<Comment> {
-    return request.post<Comment>(`/posts/${postId}/comments`, { content })
   }
+
+  // 评论相关的接口搬到 commentsApi 了，见 api/comments.ts
 }
