@@ -22,6 +22,7 @@
     "test:favorite": "node scripts/favorite-smoke.mjs",
     "test:notify": "node scripts/notification-smoke.mjs",
     "test:topic": "node scripts/topic-smoke.mjs",
+    "test:comment": "node scripts/comment-smoke.mjs",
     "test:motion": "node scripts/motion-check.mjs"
   },
   "devDependencies": {
