@@ -13,6 +13,7 @@
  * - WS 帧让铃铛实时更新（不需要刷新）
  * - 通知项能点进被互动的笔记
  * - 「全部已读」清掉红点，刷新后还是已读
+ * - 关掉「赞和收藏」后别人再点赞铃铛不再 +1，且不影响「新增关注」
  * - 零 console error / 零失败请求
  */
 import { chromium } from 'playwright'
@@ -34,7 +35,6 @@ const jwt = serverRequire('jsonwebtoken')
 // 直接连库之前先确认后端 schema 已经建好，否则会撞到底层的
 // SqliteError: no such table，报错完全看不出真正原因
 await ensureSchema(['notifications', 'posts', 'users'])
-
 /** 固定邮箱：authLimiter 是「登录/注册 1 分钟 5 次」，见 chat-smoke 的注释 */
 const EMAIL_A = 'notify_a@test.local'
 const EMAIL_B = 'notify_b@test.local'
@@ -257,7 +257,60 @@ try {
   check('列表里没有未读圆点了', unreadDots === 0, `${unreadDots} 个`)
   await pageA.screenshot({ path: 'shots/notify-read.png' })
 
-  console.log('\n[9] 控制台干净')
+  console.log('\n[9] 关掉「赞和收藏」→ 别人再点赞，铃铛不再 +1')
+  {
+    // 此时红点是 0（上一步刚「全部已读」并刷新验证过），基线干净
+    await pageA.goto(`${BASE}/messages`, { waitUntil: 'networkidle' })
+    await pageA.waitForTimeout(1200)
+    check('铃铛基线为 0', (await bellCount(pageA)) === 0, String(await bellCount(pageA)))
+
+    const switches = pageA.locator('.switch-row .el-switch')
+    check('通知设置有三个开关', (await switches.count()) === 3, `${await switches.count()} 个`)
+
+    // 第一个是「赞和收藏」
+    await switches.first().click()
+    await pageA.waitForTimeout(1200)
+    check('开关进入关闭态', (await switches.first().getAttribute('class')).includes('is-checked') === false)
+
+    await pageB.goto(`${BASE}/post/${postId}`, { waitUntil: 'networkidle' })
+    await pageB.waitForTimeout(1000)
+    // 如果 B 已经赞过，先取消再赞 —— 只有「新赞一次」才可能产生通知
+    const likeBtn = pageB.locator('.actions .action-btn').filter({ hasText: /赞/ }).first()
+    if ((await likeBtn.innerText()).includes('已赞')) {
+      await likeBtn.click()
+      await pageB.waitForTimeout(800)
+    }
+    await pageB.locator('.actions .action-btn').filter({ hasText: /赞/ }).first().click()
+    await pageB.waitForTimeout(1500)
+
+    check('点赞后铃铛仍然是 0', (await bellCount(pageA)) === 0, String(await bellCount(pageA)))
+
+    // 关注那一组还开着，应该照常 +1
+    await pageB.goto(`${BASE}/profile/${A.id}`, { waitUntil: 'networkidle' })
+    await pageB.waitForTimeout(1000)
+    if ((await pageB.locator('.nickname-row .el-button').first().innerText()).includes('已关注')) {
+      await pageB.locator('.nickname-row .el-button').first().click()
+      await pageB.waitForTimeout(1000)
+    }
+    await pageB.locator('.nickname-row .el-button').first().click()
+    await pageB.waitForTimeout(1500)
+    check('关掉一组不影响另一组（关注照常 +1）', (await bellCount(pageA)) === 1, String(await bellCount(pageA)))
+    await pageA.screenshot({ path: 'shots/notify-prefs.png' })
+
+    // 复原：把三个开关都打开，别影响后面复跑
+    await pageA.reload({ waitUntil: 'networkidle' })
+    await pageA.waitForTimeout(1200)
+    const back = pageA.locator('.switch-row .el-switch')
+    for (let i = 0; i < (await back.count()); i++) {
+      if ((await back.nth(i).getAttribute('class')).includes('is-checked') === false) {
+        await back.nth(i).click()
+        await pageA.waitForTimeout(700)
+      }
+    }
+    check('开关状态刷新后还在（真持久化）', (await back.count()) === 3)
+  }
+
+  console.log('\n[10] 控制台干净')
   // 4xx 全部过滤：页面本身的 401/404 探测不算错
   const realErrors = errors.filter((e) => !/HTTP 40[13]/.test(e))
   check('零 console error / 零失败请求', realErrors.length === 0, realErrors.slice(0, 3).join(' | '))
