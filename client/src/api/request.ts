@@ -29,6 +29,16 @@ http.interceptors.request.use(
 http.interceptors.response.use(
   (response) => response.data, // 直接返回 data，调用方少一层 .data
   (error: AxiosError) => {
+    // 「404 是预期状态」的出口（见下方 getOrNull）：
+    // 直接 resolve null，既不打控制台日志也不弹错，交给调用方渲染自己的空态。
+    //
+    // 注意必须在 console.error 之前判：否则「这个话题不存在」这种
+    // 每次点进空白话题都会发生的事，会把控制台刷满 [API Error]，
+    // 顺带把「零 console error」的 e2e 断言也弄挂。
+    if ((error.config as any)?.silent404 && error.response?.status === 404) {
+      return Promise.resolve(null)
+    }
+
     // 完整错误信息：状态码 + 后端 message + URL，方便排查
     console.error(
       '[API Error]',
@@ -67,8 +77,28 @@ interface UnwrappedInstance {
   post<T>(url: string, data?: unknown, config?: Record<string, unknown>): Promise<T>
   put<T>(url: string, data?: unknown, config?: Record<string, unknown>): Promise<T>
   patch<T>(url: string, data?: unknown, config?: Record<string, unknown>): Promise<T>
+  /**
+   * 用于「404 是预期状态」的接口，返回 null 而不是抛错。
+   *
+   * 典型场景：话题页访问一个不存在的话题。手敲 URL 或者搜了个没用过的词
+   * 都会命中，页面本来就要渲染自己的空态 —— 但 404 走 reject 路径会被
+   * 响应拦截器当成错误，在控制台打一条 [API Error] 再 reject，
+   * 于是页面拿到了一个「异常」，还顺带污染了「零 console error」的 e2e 断言。
+   *
+   * 实现只能靠 config 标记（silent404）走拦截器的 reject 分支：
+   * 想在调用侧用 validateStatus 判断 404 是**做不到**的 ——
+   * 响应拦截器已经 `return response.data` 把 AxiosResponse 解开了，
+   * 调用方拿到的就是业务数据本身，status 和 data 都读不到。
+   *
+   * 那个 `as any` 是为了让 axios 认识自定义的 silent404 字段；
+   * 字段本身只在上面的拦截器里被读一次，不影响类型安全。
+   */
+  getOrNull<T>(url: string, config?: Record<string, unknown>): Promise<T | null>
 }
 
 const request = http as unknown as UnwrappedInstance
+
+request.getOrNull = <T>(url: string, config?: Record<string, unknown>): Promise<T | null> =>
+  http.get(url, { ...config, silent404: true } as any) as unknown as Promise<T | null>
 
 export default request
