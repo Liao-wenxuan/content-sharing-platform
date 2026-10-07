@@ -5,6 +5,9 @@ import {
   listNotifications,
   markNotificationsRead,
   unreadCountFor,
+  getNotifyPrefs,
+  saveNotifyPrefs,
+  isNotifyCategory,
   type NotifyType
 } from '../lib/notify'
 
@@ -86,6 +89,51 @@ router.post('/read', writeLimiter, requireAuth, (req: Request, res: Response) =>
   } catch (err: any) {
     console.error('[Mark Read Error]', err)
     res.status(500).json({ message: err.message || '标记已读失败' })
+  }
+})
+
+// ===== GET /api/notifications/preferences —— 通知偏好 =====
+// 注意：这是**读自己的设置**，语义上属于 /me，
+// 但为了和「通知」这个资源的其余接口放在一起，路径用了 /preferences。
+router.get('/preferences', requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = me(req, res)
+    if (userId === null) return
+    res.json({ prefs: getNotifyPrefs(userId) })
+  } catch (err: any) {
+    console.error('[Get Notify Prefs Error]', err)
+    res.status(500).json({ message: err.message || '获取通知设置失败' })
+  }
+})
+
+// ===== PUT /api/notifications/preferences —— 改通知偏好 =====
+router.put('/preferences', writeLimiter, requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = me(req, res)
+    if (userId === null) return
+
+    const raw = (req.body as any)?.prefs ?? (req.body as any)
+    if (!raw || typeof raw !== 'object') {
+      return res.status(400).json({ message: '参数错误' })
+    }
+
+    // **只接受白名单里的键**，其余一律忽略而不是照单全收：
+    // 客户端多传一个 `xxx: true` 不该变成往库里塞一个没人读的字段。
+    // 没传的键保持现状（不是重置成默认值），
+    // 否则前端只想改一个开关，结果把另两个也改了。
+    const current = getNotifyPrefs(userId)
+    const next = { ...current }
+    for (const key of ['likes', 'follows', 'mentions'] as const) {
+      if (isNotifyCategory(key) && typeof raw[key] === 'boolean') {
+        next[key] = raw[key]
+      }
+    }
+
+    saveNotifyPrefs(userId, next)
+    res.json({ prefs: next })
+  } catch (err: any) {
+    console.error('[Save Notify Prefs Error]', err)
+    res.status(500).json({ message: err.message || '保存通知设置失败' })
   }
 })
 

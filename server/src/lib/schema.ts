@@ -23,6 +23,22 @@ export function initSchema(db: Database.Database): void {
     )
   `)
 
+  // ===== 通知偏好 =====
+  // 存 JSON 字符串（'{"likes":false}'），不建 `user_notification_settings` 关系表。
+  //
+  // 理由：**这列从来没被查询过**。它只在「给某个用户写一条通知」那一刻被读一次，
+  // 用来决定这条要不要写。读的时候已经知道 userId 了，顺手把 users 行一起取出来
+  // 就行，不需要额外一次查询，也就没有「为了查询而建表」的理由。
+  //
+  // 存 NULL / 空串 = 全部开启（默认值）—— 老用户不需要迁移，改动不影响他们。
+  const userCols = new Set(
+    (db.pragma('table_info(users)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!userCols.has('notify_prefs')) {
+    db.exec('ALTER TABLE users ADD COLUMN notify_prefs TEXT')
+    console.log('[DB] Migrated: users.notify_prefs added')
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
