@@ -64,6 +64,48 @@ export function initSchema(db: Database.Database): void {
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id)`)
 
+  // ===== 评论增强：二级回复 / 点赞 / 置顶 =====
+  //
+  // ⚠️ parent_id 没有外键约束，只能在应用层校验「父评论必须存在且属于同一篇笔记」。
+  // 原因：SQLite 的 `ALTER TABLE ADD COLUMN` **不支持加外键**（外键只能在
+  // CREATE TABLE 时声明），而 comments 表已经存在了。对一张老表用
+  // 「新建带列的表 + 拷贝 + 改名」来补外键，代价远大于收益 ——
+  // 删父评论时级联删回复这个行为，本来也应该交给应用层显式决定。
+  const commentCols = new Set(
+    (db.pragma('table_info(comments)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!commentCols.has('parent_id')) {
+    db.exec('ALTER TABLE comments ADD COLUMN parent_id INTEGER')
+    console.log('[DB] Migrated: comments.parent_id added')
+  }
+  if (!commentCols.has('pinned_at')) {
+    db.exec('ALTER TABLE comments ADD COLUMN pinned_at DATETIME')
+    console.log('[DB] Migrated: comments.pinned_at added')
+  }
+
+  // 取某个父评论下的回复：按 (parent_id, created_at) 走
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id, created_at)`)
+
+  // 「笔记的置顶评论」查询：置顶只允许作者给自己写的评论置顶，
+  // 所以这里不按 user_id 过滤，直接取「这条笔记下所有置顶的」，
+  // 应用层再用「有几条 > 1」判断是否该拒绝。
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_pinned ON comments(post_id, pinned_at)`)
+
+  // ===== 评论点赞 =====
+  // 形状和 likes 表一致（复合主键 + 幂等），所以可以复用同一套写法。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comment_likes (
+      user_id INTEGER NOT NULL,
+      comment_id INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, comment_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
+    )
+  `)
+  // 「这条评论有多少赞」走这个（详情页一次要显示所有评论的赞数）
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_comment_likes_comment ON comment_likes(comment_id)`)
+
   // ===== 关注关系 =====
   // 用复合主键 (follower_id, followee_id) 而不是「自增 id + UNIQUE」：
   // 主键本身就带唯一性，INSERT OR IGNORE 直接拿到幂等语义，
