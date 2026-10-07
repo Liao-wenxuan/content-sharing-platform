@@ -14,6 +14,9 @@ export type NotifyType = 'like' | 'favorite' | 'follow' | 'comment' | 'mention'
 /** 通知中心顶上的三个分类，值要原样发给后端的 category 参数 */
 export type NotifyCategory = 'likes' | 'follows' | 'mentions'
 
+/** 通知偏好：每个分类一个开关，true = 接收。默认全开 */
+export type NotifyPrefs = Record<NotifyCategory, boolean>
+
 export interface NotificationActor {
   id: number
   nickname: string
@@ -60,6 +63,19 @@ export const notificationsApi = {
     return request.post<{ updated: number; unreadCount: number }>('/notifications/read', {
       category
     })
+  },
+
+  /** 通知偏好：决定「之后」还生不生成这类通知，已存在的通知不受影响 */
+  preferences() {
+    return request.get<{ prefs: NotifyPrefs }>('/notifications/preferences')
+  },
+
+  /**
+   * 改偏好。只传要改的键即可 —— 后端会保留没传的键的现状，
+   * 所以前端改一个开关不会顺手把另两个也重置了。
+   */
+  savePreferences(prefs: Partial<NotifyPrefs>) {
+    return request.put<{ prefs: NotifyPrefs }>('/notifications/preferences', { prefs })
   }
 }
 

@@ -17,7 +17,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { followsApi, type FollowSuggestion } from '@/api/follows'
-import { NOTIFY_TEXT, type NotifyCategory, type NotificationItem } from '@/api/notifications'
+import {
+  NOTIFY_TEXT,
+  notificationsApi,
+  type NotifyCategory,
+  type NotifyPrefs,
+  type NotificationItem
+} from '@/api/notifications'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
 import ChatView from '@/views/ChatView.vue'
@@ -121,8 +127,49 @@ async function followSuggested(userId: number) {
   }
 }
 
-// ===== 通知开关 =====
-const notificationEnabled = ref(false)
+// ===== 通知偏好 =====
+// 三个开关对应上面三个分类，不再是一个笼统的「接收点赞和评论提醒」——
+// 用户能理解的是「赞和收藏 / 新增关注 / 评论和@」，
+// 让他自己去区分 like 和 favorite 没有意义。
+const notifyPrefs = ref<NotifyPrefs>({ likes: true, follows: true, mentions: true })
+const savingPrefs = ref(false)
+
+const PREFS_LABELS: { key: NotifyCategory; label: string; hint: string }[] = [
+  { key: 'likes', label: '赞和收藏', hint: '有人赞或收藏我的笔记' },
+  { key: 'follows', label: '新增关注', hint: '有人关注我' },
+  { key: 'mentions', label: '评论和@', hint: '有人评论我的笔记或在评论里 @ 我' }
+]
+
+async function loadPrefs() {
+  try {
+    const res = await notificationsApi.preferences()
+    notifyPrefs.value = res.prefs
+  } catch {
+    // 拉不到就保持全开：默认必须是开，否则用户会莫名其妙收不到通知
+  }
+}
+
+/**
+ * 改开关。
+ *
+ * 先把新值画上去（el-switch 的 v-model 已经先变了），请求回来后用
+ * 服务端回的权威值覆盖；失败则回滚到改之前的值 —— 开关这种东西
+ * 「看起来拨了但没存上」是最难受的失败方式。
+ */
+async function onPrefChange(key: NotifyCategory, next: boolean) {
+  const before = { ...notifyPrefs.value }
+  notifyPrefs.value = { ...notifyPrefs.value, [key]: next }
+  savingPrefs.value = true
+  try {
+    const res = await notificationsApi.savePreferences({ [key]: next })
+    notifyPrefs.value = res.prefs
+  } catch (err: any) {
+    notifyPrefs.value = before
+    ElMessage.error(err?.response?.data?.message || '保存通知设置失败')
+  } finally {
+    savingPrefs.value = false
+  }
+}
 
 function avatarText(n?: string) {
   return n?.[0]?.toUpperCase() || '?'
@@ -138,6 +185,7 @@ onMounted(() => {
   startNotifications()
   loadNotifications(activeCategory.value)
   loadSuggestions()
+  loadPrefs()
 })
 
 // 切分类就重新拉对应的那一组（后端已经把「评论和@ = comment + mention」合并好了）
@@ -273,10 +321,18 @@ watch(activeCategory, (cat) => {
         <aside class="side-col">
           <el-card shadow="never" class="side-card">
             <template #header><span class="card-title">通知设置</span></template>
-            <div class="switch-row">
-              <span class="switch-label">接收点赞和评论提醒</span>
-              <el-switch v-model="notificationEnabled" />
+            <div v-for="p in PREFS_LABELS" :key="p.key" class="switch-row">
+              <div class="switch-text">
+                <span class="switch-label">{{ p.label }}</span>
+                <span class="switch-hint">{{ p.hint }}</span>
+              </div>
+              <el-switch
+                :model-value="notifyPrefs[p.key]"
+                :loading="savingPrefs"
+                @change="(v: any) => onPrefChange(p.key, !!v)"
+              />
             </div>
+            <p class="prefs-note">关掉只影响之后的新通知，已经收到的不会被删除。</p>
           </el-card>
 
           <el-card shadow="never" class="side-card">
@@ -519,8 +575,35 @@ watch(activeCategory, (cat) => {
   gap: 12px;
 }
 
+/* 三个开关之间要有分隔，否则会看成一块 */
+.switch-row + .switch-row {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-lighter, var(--border));
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .switch-label {
   font-size: 13px;
+}
+
+.switch-hint {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.prefs-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
 }
 
 .suggest-list {
