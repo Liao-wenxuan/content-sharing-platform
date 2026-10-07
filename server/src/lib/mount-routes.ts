@@ -8,6 +8,7 @@ import usersRouter from '../routes/users'
 import uploadsRouter from '../routes/uploads'
 import conversationsRouter from '../routes/conversations'
 import notificationsRouter from '../routes/notifications'
+import topicsRouter from '../routes/topics'
 
 /**
  * 统一挂载所有 API 路由
@@ -32,4 +33,5 @@ export function mountApiRouters(app: Express): void {
   app.use('/api/uploads', uploadsRouter)
   app.use('/api/conversations', conversationsRouter)
   app.use('/api/notifications', notificationsRouter)
+  app.use('/api/topics', topicsRouter)
 }
