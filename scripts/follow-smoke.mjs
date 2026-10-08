@@ -11,7 +11,7 @@
  * - 互相关注标签只在双向时出现
  * - 粉丝 / 关注列表：方向正确、行内按钮状态正确
  * - 关注流只含已关注的人的笔记，未关注的人不出现
- * - 侧栏「关注」入口与发现页共用 path 时的选中态
+ * - 侧栏「关注」入口与发现页共用 path 时的选中态；粉丝/关注列表页也仍高亮「关注」
  * - 零 console error / 零失败请求
  */
 import { chromium } from 'playwright'
@@ -182,6 +182,12 @@ console.log('\n[4] 关注列表 / 粉丝列表方向不能反')
   const rowBtn = page.locator('.rows .row .el-button').first()
   check('列表行内按钮是「已关注」', (await rowBtn.innerText()).trim() === '已关注')
   await page.screenshot({ path: 'shots/follow-list-following.png' })
+
+  // 粉丝/关注列表是从侧栏「关注」点进来的下钻页，侧栏必须还亮着「关注」。
+  // 这条曾经真的坏过：activeMenu 对 /follows/* 没有分支，原样返回后匹配不到
+  // 任何菜单项，于是这一页侧栏全灭，看着像没有导航。
+  const navOnList = await page.locator('.el-menu-item.is-active').innerText()
+  check('列表页侧栏仍高亮「关注」', navOnList.includes('关注'), navOnList.trim())
 
   await page.goto(`${BASE}/follows/${me.targetId}?tab=followers`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(700)
