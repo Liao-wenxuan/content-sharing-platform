@@ -66,6 +66,9 @@ const activeMenu = computed(() => {
   const path = route.path
   if (path === '/') return isFollowRoute.value ? '/?channel=follow' : '/'
   if (path.startsWith('/profile')) return '/profile/me'
+  // 粉丝 / 关注列表是从「关注」这一项点进去的下钻页，高亮要跟着回「关注」，
+  // 否则这一页侧栏全灭，看不出自己从哪来
+  if (path.startsWith('/follows')) return '/?channel=follow'
   // 笔记详情和搜索的入口不在侧栏，回落高亮「发现」保持连贯
   if (path.startsWith('/post')) return '/'
   if (path.startsWith('/search')) return '/'
