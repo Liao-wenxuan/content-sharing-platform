@@ -7,8 +7,11 @@
  * 做法：
  *   - 游客态截：首页 / 搜索 / 详情 / 登录 / 广场
  *   - 登录态截：发布 / 个人主页 / 消息 / 设置 / 首页（对比游客态）
+ *   - 关系与内容态截：收藏夹 / 话题页 / 关注列表 / 评论二级回复
+ *     —— 这几张必须有"东西"才好看，所以脚本会先造关注边、收藏夹、评论
  *   - 登录账号是脚本自造的临时账号（邮箱 @test.local），并给它发几条带图笔记，
  *     否则个人主页是空的、截出来不好看
+ *   - 评论区的二级回复需要两个不同的头像，所以额外注册一个临时账号 @test.local
  *   - 跑完用 `npm run seed:clean --yes` 清掉这个账号，演示库不受影响
  *
  * 用法：
@@ -30,8 +33,11 @@ const VIEWPORT = { width: 1920, height: 1080 }
 
 const EMAIL = 'docshot@test.local'
 const PASSWORD = 'DocShot12345'
+// 第二个临时账号：评论区的二级回复需要两个不同头像才看得出来是"两层"
 // 昵称别和用户本地常用的演示账号重名，否则建议下拉里会出现两条一模一样的用户
 const NICK = '拾光旅人'
+const EMAIL2 = 'docshot2@test.local'
+const PASSWORD2 = 'DocShot12345'
 
 mkdirSync(OUT, { recursive: true })
 
@@ -111,6 +117,9 @@ const MINE = [
   { c: '整理了一份最近常看的清单，安利给同样在纠结的人', tag: '情感', imgs: picks.slice(6, 8) }
 ]
 
+/** 自己发出去的笔记 id，评论区截图要用（置顶权限只对笔记作者开放） */
+const myPostIds = []
+
 /**
  * 发演示笔记 + 设置封面头像。
  * 故意放在游客态截图「之后」再执行：临时账号的笔记会按时间倒序排到 feed 最前面，
@@ -128,6 +137,11 @@ async function publishDemoContent() {
       }
     })
     if (r.status() >= 300) issues.push(`发笔记失败 ${r.status()}`)
+    else {
+      const body = await r.json()
+      // 后端返回体形状各路由不统一，这里只取需要的字段，取不到就跳过
+      myPostIds.push(body?.post?.id ?? body?.id)
+    }
   }
   console.log(`  发布 ${MINE.length} 条演示笔记`)
 
@@ -136,6 +150,125 @@ async function publishDemoContent() {
     headers: { Authorization: `Bearer ${token}` },
     data: { cover: picks[0].u, avatar: picks[3].u }
   })
+}
+
+/** 注册（已存在则登录）一个账号，返回 { token, id } */
+async function ensureAccount(email, password, nickname) {
+  const reg = await page.request.post(`${API}/api/auth/register`, {
+    data: { email, password, nickname }
+  })
+  const body = reg.status() < 300 ? await reg.json() : null
+  if (body?.accessToken) return { token: body.accessToken, id: body.userInfo.id }
+
+  // 已存在就直接登录（脚本可重复跑）
+  const login = await page.request.post(`${API}/api/auth/login`, {
+    data: { email, password }
+  })
+  if (login.status() >= 300) throw new Error(`${email} 既注册不了也登不上：${login.status()}`)
+  const b = await login.json()
+  return { token: b.accessToken, id: b.userInfo.id }
+}
+
+/**
+ * 造关系数据：关注 / 收藏夹 / 评论线程。
+ *
+ * 收藏夹、话题页、关注列表、评论区这四张图如果不给它们"内容"，
+ * 截出来就是空态 —— 空态证明不了任何设计完成度。
+ * 所以这里先造数据再截图，而不是截一张空页充数。
+ */
+async function seedRelationships() {
+  const auth = { Authorization: `Bearer ${token}` }
+
+  // 关注 5 个不同作者（关注列表要能看出一行一行的结构）
+  // 作者 id 在 feed 里是 userId，同时 author 对象里也有一份 —— 两个都兜住，
+  // 只写 authorId 会静默得到空数组，关注列表就截成空页（踩过）
+  const authors = [
+    ...new Set(feed.list.map((p) => p.author?.id ?? p.userId).filter((id) => id && id !== myId))
+  ]
+  for (const id of authors.slice(0, 5)) {
+    const r = await page.request.post(`${API}/api/users/${id}/follow`, { headers: auth })
+    if (r.status() >= 300) issues.push(`关注失败 ${r.status()}`)
+  }
+  // 关注列表截不出东西时只跳过"关注"这一步，不能 return ——
+  // return 会把后面的收藏夹和评论种子一起跳掉，四个截图连锁失败
+  if (authors.length) console.log(`  关注 ${Math.min(5, authors.length)} 位作者`)
+  else issues.push('feed 里没取到任何作者 id，关注列表会截成空页（作者字段名可能又变了）')
+
+  // 两个收藏夹 + 6 条收藏（分散到两个夹和"未分类"里，让三个分区都有内容）
+  // 重跑时同名会撞 409，所以 409 要当成"已存在"去列表里捞回来，
+  // 不能当成失败 —— 否则第二次跑所有收藏都会掉进"未分类"，截图就空了
+  const existing = await (
+    await page.request.get(`${API}/api/posts/me/folders`, { headers: auth })
+  ).json()
+  const folderIds = []
+  for (const name of ['家居灵感', '想重做的菜']) {
+    const found = (existing?.list ?? []).find((f) => f.name === name)
+    if (found) {
+      folderIds.push(found.id)
+      continue
+    }
+    const r = await page.request.post(`${API}/api/posts/me/folders`, {
+      headers: auth,
+      data: { name }
+    })
+    if (r.status() >= 300) {
+      issues.push(`建收藏夹「${name}」失败 ${r.status()}`)
+      continue
+    }
+    const b = await r.json()
+    folderIds.push(b?.folder?.id ?? b?.id)
+  }
+
+  const targets = feed.list.slice(0, 6)
+  for (let i = 0; i < targets.length; i++) {
+    // 每 3 条换一个夹，第 5、6 条故意不传 folderId —— 让"未分类"分区有东西可看
+    const folderId = i < 3 ? folderIds[0] : i === 3 ? folderIds[1] : undefined
+    const r = await page.request.post(`${API}/api/posts/${targets[i].id}/favorite`, {
+      headers: auth,
+      data: folderId ? { folderId } : {}
+    })
+    if (r.status() >= 300) issues.push(`收藏失败 ${r.status()}`)
+  }
+  console.log(`  建 ${folderIds.length} 个收藏夹，收藏 ${targets.length} 条`)
+
+  // 评论线程：主账号在自己笔记下留一条并置顶（置顶权限只对笔记作者开放），
+  // 第二个账号回复它 —— 两个不同头像才能看出「二级回复」这一层
+  const postId = myPostIds.find(Boolean)
+  if (!postId) {
+    issues.push('没有可评论的自有笔记，跳过评论区截图')
+    return
+  }
+
+  const c1 = await page.request.post(`${API}/api/posts/${postId}/comments`, {
+    headers: auth,
+    data: { content: '同款收纳盒在哪买的呀？看了三遍还是没找到链接' }
+  })
+  if (c1.status() >= 300) {
+    issues.push(`发评论失败 ${c1.status()}`)
+    return
+  }
+  // toComment 返回的是扁平对象，不是包了一层 comment
+  const c1body = await c1.json()
+  const comment1 = c1body?.comment ?? c1body
+
+  // 第二个账号：注册时可能被 authLimiter 拦（1 分钟 5 次），失败就跳过回复
+  try {
+    const me2 = await ensureAccount(EMAIL2, PASSWORD2, '林间小雨')
+    const c2 = await page.request.post(`${API}/api/posts/${postId}/comments`, {
+      headers: { Authorization: `Bearer ${me2.token}` },
+      data: { content: '同款！评论区置顶那条写了，我直接私信你了', parentId: comment1.id }
+    })
+    if (c2.status() >= 300) issues.push(`回复评论失败 ${c2.status()}`)
+    else console.log('  评论线程：1 条主楼 + 1 条回复')
+  } catch (e) {
+    issues.push(`第二账号不可用，跳过回复：${e.message}`)
+  }
+
+  // 置顶自己写的那条主楼
+  const pin = await page.request.patch(`${API}/api/posts/${postId}/comments/${comment1.id}/pin`, {
+    headers: auth
+  })
+  if (pin.status() >= 300) issues.push(`置顶失败 ${pin.status()}`)
 }
 
 // ---------- 1. 游客态 ----------
@@ -179,12 +312,13 @@ await goto(`/profile/${myId}`, '.profile')
 await shot('08-profile', '个人主页 · 封面 + 三栏统计 + tab 筛选', 'jpeg')
 
 await goto('/messages', '.messages')
-await shot('09-messages', '消息中心 · 三个分类 + 推荐关注')
+await shot('09-messages', '消息中心 · 通知 / 聊天双 Tab')
 
 await goto('/settings', '.settings')
 await shot('10-settings', '设置 · 深浅色切换 + 账号管理')
 
 // 搜索建议下拉：聚焦即出热门话题，输入后出三类候选
+// 放这里而不是最后 —— 它不依赖任何造出来的数据，编号也才连得上
 await goto('/', '.masonry .card')
 const searchBox = page.locator('.top-bar .search-input input')
 await searchBox.click()
@@ -193,6 +327,46 @@ await searchBox.fill('拿铁')
 await page.locator('.suggest-row').first().waitFor({ state: 'visible', timeout: 10000 })
 await page.waitForTimeout(600)
 await shot('12-search-suggest', '搜索建议下拉 · 笔记 / 话题 / 用户三类候选', 'jpeg')
+
+// ---------- 3. 关系与内容态 ----------
+// 这一段排在最后：它依赖上面造出来的关注边 / 收藏夹 / 评论线程。
+// 顺序反了的话，收藏页和关注页截出来会是空态 —— 空态证明不了任何完成度。
+console.log('\n[3] 关系与内容态')
+
+await seedRelationships()
+
+// 收藏夹：等列表项而不是等根容器 —— 根容器首帧就在，列表要等接口回来
+await goto('/favorites', '.fav-manage')
+await page.locator('.post-row, .folder-row').first().waitFor({ state: 'visible', timeout: 10000 })
+await shot('13-favorites', '收藏夹管理 · 未分类显式可见 + 批量移入', 'jpeg')
+
+// 关注列表：挑一个笔记数最多的标签，封面和笔记数都好看起来
+const tagCount = new Map()
+for (const p of feed.list)
+  if (p.topicTag) tagCount.set(p.topicTag, (tagCount.get(p.topicTag) ?? 0) + 1)
+const hotTag = [...tagCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+if (hotTag) {
+  await goto(`/topic/${encodeURIComponent(hotTag)}`, '.topic')
+  await shot('14-topic', `话题页「${hotTag}」· 现算聚合 + 相关话题`, 'jpeg')
+} else {
+  issues.push('演示库里没有话题标签，跳过话题页截图')
+}
+
+// 关注列表：关注流入口的落点就是这一页。等 .row 是为了确认列表真拿到了数据
+await goto(`/follows/${myId}?tab=following`, '.follow-list')
+await page.locator('.row').first().waitFor({ state: 'visible', timeout: 10000 })
+await shot('15-follows', '关注列表 · 粉丝/关注合用一页 + 互相关注标记', 'jpeg')
+
+// 评论：二级回复 + 置顶。滚到评论区再截，否则 1080 高度里评论区露不全
+const commentPostId = myPostIds.find(Boolean)
+if (commentPostId) {
+  await goto(`/post/${commentPostId}`, '.comment-section')
+  await page.locator('.comment-section').scrollIntoViewIfNeeded()
+  await page.waitForTimeout(500)
+  await shot('16-detail-comments', '评论区 · 二级回复 + 作者置顶 + 评论点赞', 'jpeg')
+} else {
+  issues.push('没有可评论的自有笔记，跳过评论区截图')
+}
 
 await browser.close()
 
@@ -203,7 +377,7 @@ if (issues.length) {
 } else {
   console.log('\n零 console error、零 4xx/5xx')
 }
-console.log(`\n收尾：node server/cleanup-test-data.mjs --yes   # 删掉 ${EMAIL}`)
+console.log(`\n收尾：node server/cleanup-test-data.mjs --yes   # 删掉 ${EMAIL} 和 ${EMAIL2}`)
 
 // browser.close() 之后 Playwright 的 APIContext 连接池偶尔还挂着 keep-alive，
 // 事件循环不空，进程会停在这儿不退出。强制收尾。
