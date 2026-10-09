@@ -1,11 +1,30 @@
-# 依赖与构建产物不进上下文
+# 构建上下文排除清单
+#
+# 为什么必须有：client/Dockerfile 里是 `COPY . .`，
+# 不排除 node_modules 的话，本机装的那份（可能带 Windows 原生模块）
+# 会把容器里 `npm ci` 刚装好的覆盖掉 —— 构建结果取决于构建机器，
+# 而不是 Dockerfile 写了什么。
+
 node_modules
 dist
+
+# 测试：生产构建是 `vite build`（只做 esbuild 转译，不做类型检查），
+# vue-tsc 那一步在 CI 里单独跑。镜像里带测试文件纯属白占体积
+tests
+vitest.config.ts
 coverage
 
-# 环境变量：镜像里不能带任何密钥
-.env
-.env.*
-!.env.example
+# unplugin-vue-components 在构建时自己生成，本地那份不入库也没关系
+components.d.ts
 
-*.md
+# 环境变量：镜像里的 VITE_API_BASE 走构建期 ARG，
+# 不该被本机的 .env 悄悄盖掉
+.env
+.env.local
+.env.*.local
+
+*.log
+.vscode
+.idea
+.DS_Store
+Thumbs.db

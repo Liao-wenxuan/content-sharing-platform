@@ -1,24 +1,33 @@
-# ===== 后端镜像 =====
-# 构建期上下文尽量小：node_modules 有几百 MB，进上下文要几分钟，
-# 而且会把 Windows 的 node_modules 拷进 Linux 镜像（原生模块直接不能用）。
+# 构建上下文排除清单
+#
+# server/Dockerfile 里 COPY 的是具体路径（package*.json / tsconfig.json / src），
+# 所以这里主要不是为了正确性，而是为了速度：
+# 不排除的话，每次 build 都要把 node_modules 和 uploads/demo
+# 整个打包传给 daemon，几十上百 MB 白传。
+#
+# 注意 seed.mjs 故意**不**排除 —— 运行阶段要 COPY 它进镜像，
+# `docker compose --profile seed run --rm seed` 靠它灌演示数据。
+
 node_modules
 dist
+
+# tsc 的 include 只有 src/**/*，测试文件不进产物
+tests
 coverage
 
-# 运行时产物，不进镜像
-data.db
-data.db-journal
-data.db-wal
-data.db-shm
+# 上传目录是 bind mount 进容器的（compose 里挂 ./server/uploads），
+# 镜像里只需要一个空目录，Dockerfile 里有 mkdir -p
 uploads
-.docker-data
 
-# 环境变量：镜像里不能带任何密钥
+# 运行时生成的本地数据库，绝不能烤进镜像
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
 .env
-.env.*
-!.env.example
+.env.local
 
-# 测试与文档：运行时用不到
-tests
-docs
-*.md
+*.log
+.vscode
+.idea
