@@ -317,6 +317,70 @@ await shot('09-messages', '消息中心 · 通知 / 聊天双 Tab')
 await goto('/settings', '.settings')
 await shot('10-settings', '设置 · 深浅色切换 + 账号管理')
 
+// ---------- 市集：走一遍真实交易再截图 ----------
+// 不直接复用 seed 里的演示数据：那批商品没有任何订单，
+// 订单页和钱包页会是空态 —— 而空态证明不了「这个功能完成了」。
+// 所以先下单 → 支付 → 发货，让钱包里真的有流水、在途真的有余额。
+console.log('\n[3] 市集：造一笔真实的订单')
+
+const PRODUCT_TITLE = '截图专用 · 铸铁煎锅'
+const PRICE_YUAN = '168.00'
+let productId = 0
+let orderId = 0
+
+{
+  const create = await page.request.post(`${API}/api/products`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      title: PRODUCT_TITLE,
+      description: '用了半年，家里换电炉了。铸铁无涂层，导热均匀。',
+      priceCents: 16800,
+      stock: 8,
+      images: []
+    }
+  })
+  productId = create.ok() ? (await create.json()).id : 0
+  console.log(`  商品已发布 id=${productId}`)
+
+  const auth = { Authorization: `Bearer ${token}` }
+  await page.request.post(`${API}/api/wallet/topup`, { headers: auth, data: { amountCents: 300000 } })
+  await page.request.post(`${API}/api/cart`, { headers: auth, data: { productId, quantity: 2 } })
+
+  const order = await page.request.post(`${API}/api/orders`, { headers: auth, data: { sellerId: myId } })
+  if (order.ok()) orderId = (await order.json()).id
+  const pay = await page.request.post(`${API}/api/orders/${orderId}/pay`, { headers: auth })
+  console.log(`  下单 ${orderId} 支付 ${pay.status()}`)
+
+  // 只走到「已发货」：在途里还压着钱，钱包页那条对账说明才有东西可展示
+  await page.request.post(`${API}/api/orders/${orderId}/ship`, { headers: auth })
+
+  // 再往车里放两件（不同卖家各一件），购物车截图才有内容。
+  // 下单会清掉刚结算那笔的行，不补的话拍出来是空态 —— 而空态证明不了
+  // 「按卖家分组」这个本页最关键的设计
+  const other = await page.request.get(`${API}/api/products?page=1&pageSize=3&sort=new`)
+  if (other.ok()) {
+    const { list } = await other.json()
+    for (const p of list.filter((x) => x.sellerId !== myId).slice(0, 2)) {
+      await page.request.post(`${API}/api/cart`, { headers: auth, data: { productId: p.id, quantity: 1 } })
+    }
+  }
+}
+
+await goto('/market', '.market .card')
+await shot('21-market-shop', '市集橱窗 · 搜索 / 排序 / 发布商品')
+
+await goto(`/market/product/${productId}`, '.product-detail .price')
+await shot('22-market-product', '商品详情 · 卖家视角可改价改库存上下架')
+
+await goto('/market/cart', '.cart-view .group')
+await shot('23-market-cart', '购物车 · 按卖家分组，每组一个结算入口')
+
+await goto('/market/orders', '.orders .order')
+await shot('24-market-orders', '订单 · 我买的 / 我卖的两个 Tab，按状态表出按钮')
+
+await goto('/market/wallet', '.wallet .audit-line')
+await shot('25-market-wallet', '钱包 · 余额 + 流水 + 全局对账（在途 336.00 元）')
+
 // 搜索建议下拉：聚焦即出热门话题，输入后出三类候选
 // 放这里而不是最后 —— 它不依赖任何造出来的数据，编号也才连得上
 await goto('/', '.masonry .card')
