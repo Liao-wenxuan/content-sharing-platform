@@ -23,6 +23,7 @@
     "test:notify": "node scripts/notification-smoke.mjs",
     "test:topic": "node scripts/topic-smoke.mjs",
     "test:comment": "node scripts/comment-smoke.mjs",
+    "test:history": "node scripts/view-history-smoke.mjs",
     "test:motion": "node scripts/motion-check.mjs"
   },
   "devDependencies": {
