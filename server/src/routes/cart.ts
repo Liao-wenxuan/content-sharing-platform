@@ -33,7 +33,7 @@ function readCart(userId: number) {
   const rows = db
     .prepare(
       `SELECT c.product_id, c.quantity, c.created_at,
-              p.title, p.price_cents, p.cover_image, p.stock, p.status,
+              p.title, p.price_cents, p.cover_image, p.stock, p.status, p.seller_id,
               u.nickname AS seller_nickname
          FROM cart_items c
          JOIN products p ON p.id = c.product_id
@@ -53,6 +53,14 @@ function readCart(userId: number) {
       title: r.title,
       priceCents: r.price_cents,
       coverImage: r.cover_image,
+      /**
+       * 卖家 id，购物车**必须**带上它。
+       *
+       * 因为一笔订单只能包含一个卖家的商品（见 orders.ts），客户端要靠它
+       * 把购物车按卖家分组、每组一个「结算」按钮 —— 拿 sellerNickname 分组
+       * 是行不通的，昵称不唯一，两个同名卖家会并成一单然后下单 400。
+       */
+      sellerId: r.seller_id,
       // 库存和上下架状态一起返回：前端要在购物车里就提示
       // 「这件只剩 1 件」或「已下架」，而不是等到结算才失败
       stock: r.stock,

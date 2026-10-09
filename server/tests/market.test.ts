@@ -250,6 +250,25 @@ describe('购物车', () => {
       .set('Authorization', `Bearer ${buyerToken}`)
     expect(res.status).toBe(200)
   })
+
+  it('购物车行带 sellerId —— 客户端要靠它按卖家分组结算', async () => {
+    const a = await mkProduct(sellerToken)
+    const b = await mkProduct(seller2Token)
+    for (const p of [a, b]) {
+      await request(app)
+        .post('/api/cart')
+        .set('Authorization', `Bearer ${buyerToken}`)
+        .send({ productId: p.body.id, quantity: 1 })
+    }
+
+    const res = await request(app).get('/api/cart').set('Authorization', `Bearer ${buyerToken}`)
+    const byProduct = new Map(res.body.list.map((r: any) => [r.productId, r]))
+
+    // 少了这个字段，客户端就只能拿昵称分组 —— 同名卖家会被并成一单，
+    // 然后 POST /api/orders 因为「购物车里没有这位卖家的商品」而 400。
+    expect(byProduct.get(a.body.id).sellerId).toBe(sellerId)
+    expect(byProduct.get(b.body.id).sellerId).not.toBe(sellerId)
+  })
 })
 
 describe('订单：快照与库存', () => {
