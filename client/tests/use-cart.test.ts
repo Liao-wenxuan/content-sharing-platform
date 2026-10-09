@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
-import type { Cart, type CartItem } from '@/api/cart'
+import type { Cart, CartItem } from '@/api/cart'
 
 vi.mock('@/api/cart', () => ({
   cartApi: {

@@ -68,6 +68,17 @@ vi.mock('vue-router', () => ({
 const toast = { show: vi.fn() }
 vi.mock('@/stores/toast', () => ({ useToastStore: () => toast }))
 
+/**
+ * vi.mocked 之后**必须**用它包一层才能调 mockResolvedValue。
+ *
+ * 直接 `cart.list.mockResolvedValue(...)` 类型是过不了的：cartApi 的静态类型
+ * 里 list 就是个普通函数，`mockResolvedValue` 不在它上面。
+ * 这是 vue-tsc -p tsconfig.app.json 才查得到的错误 —— 而 CI 跑的是那个配置。
+ */
+const cart = vi.mocked(cartApi)
+const orders = vi.mocked(ordersApi)
+const wallet = vi.mocked(walletApi)
+
 // ===== 数据 =====
 function item(over: Partial<CartItem> & { productId: number; sellerId: number }): CartItem {
   return {
@@ -87,12 +98,14 @@ function item(over: Partial<CartItem> & { productId: number; sellerId: number })
 
 /** 造一个购物车响应，让真实的 useCart 去做分组 */
 function setCart(items: CartItem[]) {
-  const cart: Cart = {
+  // 别把局部变量也叫 cart：模块级已经有一个 vi.mocked 后的 cart 了，
+  // 同名会把 `cart.list.mockResolvedValue` 解析成 CartItem[] 上的属性
+  const payload: Cart = {
     list: items,
     totalCents: items.reduce((s, i) => s + i.subtotalCents, 0),
     count: items.length
   }
-  cartApi.list.mockResolvedValue(cart)
+  cart.list.mockResolvedValue(payload)
 }
 
 const stubs = {
@@ -136,7 +149,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   // 默认空车：没显式 setCart 的用例拿到的是空购物车
   setCart([])
-  walletApi.info.mockResolvedValue({ balanceCents: 50000, list: [], pagination: {} } as any)
+  wallet.info.mockResolvedValue({ balanceCents: 50000, list: [], pagination: {} } as any)
 })
 
 afterEach(() => {
@@ -213,16 +226,16 @@ describe('CartView 结算的两步', () => {
     await findButton(w, '结算这一家')!.trigger('click')
     await flushPromises()
 
-    expect(walletApi.info).toHaveBeenCalled()
+    expect(wallet.info).toHaveBeenCalled()
     // 关键：此时还没有下单，更没有扣钱
-    expect(ordersApi.create).not.toHaveBeenCalled()
-    expect(ordersApi.pay).not.toHaveBeenCalled()
+    expect(orders.create).not.toHaveBeenCalled()
+    expect(orders.pay).not.toHaveBeenCalled()
     expect(w.find('.dialog-stub').exists()).toBe(true)
     expect(w.find('.amount').text()).toContain('30.00')
   })
 
   it('下单之后才出现「立即支付」，支付走的是新订单号', async () => {
-    ordersApi.create.mockResolvedValue({ id: 77, status: 'pending' } as any)
+    orders.create.mockResolvedValue({ id: 77, status: 'pending' } as any)
     const w = mountView()
     await flushPromises()
 
@@ -231,22 +244,22 @@ describe('CartView 结算的两步', () => {
     await findButton(w, '确认下单')!.trigger('click')
     await flushPromises()
 
-    expect(ordersApi.create).toHaveBeenCalledWith(10)
+    expect(orders.create).toHaveBeenCalledWith(10)
     // 下单这一刻没有动钱
-    expect(ordersApi.pay).not.toHaveBeenCalled()
+    expect(orders.pay).not.toHaveBeenCalled()
     expect(w.text()).toContain('#77')
     expect(w.text()).toContain('库存已经占用')
 
-    ordersApi.pay.mockResolvedValue({ id: 77, balanceCents: 20000 } as any)
+    orders.pay.mockResolvedValue({ id: 77, balanceCents: 20000 } as any)
     await findButton(w, '立即支付')!.trigger('click')
     await flushPromises()
 
-    expect(ordersApi.pay).toHaveBeenCalledWith(77)
+    expect(orders.pay).toHaveBeenCalledWith(77)
     expect(push).toHaveBeenCalledWith('/market/orders')
   })
 
   it('下单失败时把服务端的原话显示出来，且不进入支付步骤', async () => {
-    ordersApi.create.mockRejectedValue({
+    orders.create.mockRejectedValue({
       response: { data: { message: '「手冲咖啡壶」刚被抢完了，订单未创建' } }
     })
     const w = mountView()
@@ -259,11 +272,11 @@ describe('CartView 结算的两步', () => {
 
     expect(w.text()).toContain('刚被抢完了')
     expect(findButton(w, '立即支付')).toBeUndefined()
-    expect(ordersApi.pay).not.toHaveBeenCalled()
+    expect(orders.pay).not.toHaveBeenCalled()
   })
 
   it('余额不够时下单按钮禁用，并说清原因', async () => {
-    walletApi.info.mockResolvedValue({ balanceCents: 100, list: [], pagination: {} } as any)
+    wallet.info.mockResolvedValue({ balanceCents: 100, list: [], pagination: {} } as any)
     const w = mountView()
     await flushPromises()
 
@@ -273,7 +286,7 @@ describe('CartView 结算的两步', () => {
     expect(w.text()).toContain('余额不够')
     expect(findButton(w, '余额不足')!.attributes('disabled')).toBeDefined()
     // 连确认下单都按不下去，不可能走到扣钱那一步
-    expect(ordersApi.create).not.toHaveBeenCalled()
+    expect(orders.create).not.toHaveBeenCalled()
   })
 
   it('未接的支付方式置灰，不做成能点的按钮', async () => {
@@ -296,7 +309,7 @@ describe('CartView 改数量与移除', () => {
   })
 
   it('改数量传绝对值', async () => {
-    cartApi.setQuantity.mockResolvedValue({ list: [], totalCents: 0, count: 0 })
+    cart.setQuantity.mockResolvedValue({ list: [], totalCents: 0, count: 0 })
     setCart([item({ productId: 1, sellerId: 10 })])
     const w = mountView()
     await flushPromises()
@@ -304,21 +317,21 @@ describe('CartView 改数量与移除', () => {
     await w.find('.stepper-stub').trigger('click')
     await flushPromises()
 
-    expect(cartApi.setQuantity).toHaveBeenCalledWith(1, 5)
+    expect(cart.setQuantity).toHaveBeenCalledWith(1, 5)
   })
 
   it('改失败要提示并重新拉车，否则界面停在错的数上', async () => {
-    cartApi.setQuantity.mockRejectedValue(new Error('boom'))
+    cart.setQuantity.mockRejectedValue(new Error('boom'))
     setCart([item({ productId: 1, sellerId: 10 })])
     const w = mountView()
     await flushPromises()
-    cartApi.list.mockClear()
+    cart.list.mockClear()
 
     await w.find('.stepper-stub').trigger('click')
     await flushPromises()
 
     expect(toast.show).toHaveBeenCalledWith('修改数量失败', 'error')
-    expect(cartApi.list).toHaveBeenCalled()
+    expect(cart.list).toHaveBeenCalled()
   })
 
   it('确认框点取消就不移除', async () => {
@@ -333,12 +346,12 @@ describe('CartView 改数量与移除', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(cartApi.remove).not.toHaveBeenCalled()
+    expect(cart.remove).not.toHaveBeenCalled()
   })
 
   it('确认后真的移除', async () => {
     ElMessageBox.confirm.mockResolvedValue('confirm')
-    cartApi.remove.mockResolvedValue({ list: [], totalCents: 0, count: 0 })
+    cart.remove.mockResolvedValue({ list: [], totalCents: 0, count: 0 })
     setCart([item({ productId: 1, sellerId: 10 })])
     const w = mountView()
     await flushPromises()
@@ -349,6 +362,6 @@ describe('CartView 改数量与移除', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(cartApi.remove).toHaveBeenCalledWith(1)
+    expect(cart.remove).toHaveBeenCalledWith(1)
   })
 })

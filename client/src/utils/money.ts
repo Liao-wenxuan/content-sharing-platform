@@ -48,8 +48,11 @@ export function formatYuan(cents: number): string {
  * - 最多两位小数（`.5` 和 `12.5` 都合法，但 `12.345` 不合法）
  * - 不接受科学计数法（`1e3`）、千分位（`1,000`）、负号、货币符号
  * - 不接受 `NaN` / `Infinity` / 超安全整数
+ *
+ * 入参类型里带上 null / undefined：输入框 v-model 清空时给的就是 undefined，
+ * 签名不该假装那不会发生 —— 运行时 `String(input ?? '')` 本来就兜住了。
  */
-export function yuanToCents(input: string | number): number | null {
+export function yuanToCents(input: string | number | null | undefined): number | null {
   const s = String(input ?? '').trim()
   if (!s) return null
   if (!/^\d+(\.\d{1,2})?$/.test(s)) return null

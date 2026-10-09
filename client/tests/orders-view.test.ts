@@ -58,6 +58,9 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ fullPath: '/market/orders' })
 }))
 
+/** vi.mocked 之后才认 mockResolvedValue —— 直接在原对象上调类型过不了 */
+const api = vi.mocked(ordersApi)
+
 const toast = { show: vi.fn() }
 vi.mock('@/stores/toast', () => ({ useToastStore: () => toast }))
 
@@ -149,8 +152,8 @@ function expectedLabels(status: OrderStatus, who: 'buyer' | 'seller'): string[] 
 beforeEach(() => {
   vi.clearAllMocks()
   setActivePinia(createPinia())
-  ordersApi.list.mockResolvedValue(listResult([]) as any)
-  ordersApi.selling.mockResolvedValue({ list: [] } as any)
+  api.list.mockResolvedValue(listResult([]) as any)
+  api.selling.mockResolvedValue({ list: [] } as any)
 })
 
 afterEach(() => {
@@ -161,7 +164,7 @@ describe('OrdersView 按钮由状态表驱动', () => {
   const CASES: OrderStatus[] = ['pending', 'paid', 'shipped', 'completed', 'cancelled', 'refunded']
 
   it.each(CASES)('待支付的 %s：买家按钮和服务端规则一致', async (status) => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status })]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status })]) as any)
     const w = mountView()
     await flushPromises()
 
@@ -169,7 +172,7 @@ describe('OrdersView 按钮由状态表驱动', () => {
   })
 
   it.each(CASES)('待发货视角的 %s：卖家按钮和服务端规则一致', async (status) => {
-    ordersApi.selling.mockResolvedValue({ list: [mkOrder({ status })] } as any)
+    api.selling.mockResolvedValue({ list: [mkOrder({ status })] } as any)
     const w = mountView()
     await flushPromises()
     await switchTab(w, 0, 'sell')
@@ -178,7 +181,7 @@ describe('OrdersView 按钮由状态表驱动', () => {
   })
 
   it('终态订单一个按钮都不给', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'completed' })]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'completed' })]) as any)
     const w = mountView()
     await flushPromises()
 
@@ -186,7 +189,7 @@ describe('OrdersView 按钮由状态表驱动', () => {
   })
 
   it('待支付给买家「支付」和「取消」，但不给「发货」', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
     const w = mountView()
     await flushPromises()
 
@@ -200,8 +203,8 @@ describe('OrdersView 按钮由状态表驱动', () => {
 
 describe('OrdersView 操作', () => {
   it('支付成功后提示里带上扣款后的余额', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
-    ordersApi.pay.mockResolvedValue({ ...mkOrder({ status: 'paid' }), balanceCents: 20000 } as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
+    api.pay.mockResolvedValue({ ...mkOrder({ status: 'paid' }), balanceCents: 20000 } as any)
     const w = mountView()
     await flushPromises()
 
@@ -211,12 +214,12 @@ describe('OrdersView 操作', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(ordersApi.pay).toHaveBeenCalledWith(1)
+    expect(api.pay).toHaveBeenCalledWith(1)
     expect(ElMessage.success).toHaveBeenCalledWith('支付成功，余额 ¥200.00')
   })
 
   it('取消要先确认，点掉就不发请求', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
     ElMessageBox.confirm.mockRejectedValue('cancel')
     const w = mountView()
     await flushPromises()
@@ -227,13 +230,13 @@ describe('OrdersView 操作', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(ordersApi.cancel).not.toHaveBeenCalled()
+    expect(api.cancel).not.toHaveBeenCalled()
   })
 
   it('确认取消才真的取消', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
     ElMessageBox.confirm.mockResolvedValue('confirm')
-    ordersApi.cancel.mockResolvedValue(mkOrder({ status: 'cancelled' }) as any)
+    api.cancel.mockResolvedValue(mkOrder({ status: 'cancelled' }) as any)
     const w = mountView()
     await flushPromises()
 
@@ -243,13 +246,13 @@ describe('OrdersView 操作', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(ordersApi.cancel).toHaveBeenCalledWith(1)
+    expect(api.cancel).toHaveBeenCalledWith(1)
     expect(ElMessage.success).toHaveBeenCalledWith('订单已取消')
   })
 
   it('付款和发货不弹确认框（失败了能重试，问一遍只是添堵）', async () => {
-    ordersApi.selling.mockResolvedValue({ list: [mkOrder({ status: 'paid' })] } as any)
-    ordersApi.ship.mockResolvedValue(mkOrder({ status: 'shipped' }) as any)
+    api.selling.mockResolvedValue({ list: [mkOrder({ status: 'paid' })] } as any)
+    api.ship.mockResolvedValue(mkOrder({ status: 'shipped' }) as any)
     const w = mountView()
     await flushPromises()
     await switchTab(w, 0, 'sell')
@@ -261,12 +264,12 @@ describe('OrdersView 操作', () => {
     await flushPromises()
 
     expect(ElMessageBox.confirm).not.toHaveBeenCalled()
-    expect(ordersApi.ship).toHaveBeenCalledWith(1)
+    expect(api.ship).toHaveBeenCalledWith(1)
   })
 
   it('失败时弹后端的原话，不假装成功', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
-    ordersApi.pay.mockRejectedValue({ response: { data: { message: '余额不足，请先充值' } } })
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'pending' })]) as any)
+    api.pay.mockRejectedValue({ response: { data: { message: '余额不足，请先充值' } } })
     const w = mountView()
     await flushPromises()
 
@@ -281,9 +284,9 @@ describe('OrdersView 操作', () => {
   })
 
   it('退款提示里说清钱退到哪了', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder({ status: 'paid' })]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder({ status: 'paid' })]) as any)
     ElMessageBox.confirm.mockResolvedValue('confirm')
-    ordersApi.refund.mockResolvedValue(mkOrder({ status: 'refunded' }) as any)
+    api.refund.mockResolvedValue(mkOrder({ status: 'refunded' }) as any)
     const w = mountView()
     await flushPromises()
 
@@ -308,12 +311,12 @@ describe('OrdersView 空态', () => {
   })
 
   it('状态筛选会传给接口', async () => {
-    ordersApi.list.mockResolvedValue(listResult([mkOrder()]) as any)
+    api.list.mockResolvedValue(listResult([mkOrder()]) as any)
     const w = mountView()
     await flushPromises()
 
     await switchTab(w, 1, 'pending')
 
-    expect(ordersApi.list).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'pending' }))
+    expect(api.list).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'pending' }))
   })
 })

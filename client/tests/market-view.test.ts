@@ -27,6 +27,9 @@ vi.mock('@/api/products', () => ({
 
 vi.mock('@/api/uploads', () => ({ uploadImage: vi.fn() }))
 
+/** vi.mocked 之后才认 mockResolvedValue —— 直接在原对象上调类型过不了 */
+const api = vi.mocked(productsApi)
+
 const ElMessage = { success: vi.fn(), error: vi.fn() }
 vi.mock('element-plus', () => ({
   ElMessage: {
@@ -150,7 +153,7 @@ async function openPublish(w: ReturnType<typeof mount>, values: Record<string, s
 beforeEach(() => {
   vi.clearAllMocks()
   setActivePinia(createPinia())
-  productsApi.list.mockResolvedValue(listResult([mkProduct()]) as any)
+  api.list.mockResolvedValue(listResult([mkProduct()]) as any)
 })
 
 afterEach(() => {
@@ -159,7 +162,7 @@ afterEach(() => {
 
 describe('MarketView 列表', () => {
   it('渲染商品卡片和价格', async () => {
-    productsApi.list.mockResolvedValue(
+    api.list.mockResolvedValue(
       listResult([
         mkProduct({ id: 1, title: '咖啡壶' }),
         mkProduct({ id: 2, title: '滤杯' })
@@ -178,13 +181,11 @@ describe('MarketView 列表', () => {
     mountView()
     await flushPromises()
 
-    expect(productsApi.list).toHaveBeenCalledWith(
-      expect.objectContaining({ q: undefined, sort: 'new' })
-    )
+    expect(api.list).toHaveBeenCalledWith(expect.objectContaining({ q: undefined, sort: 'new' }))
   })
 
   it('空列表给空态', async () => {
-    productsApi.list.mockResolvedValue(listResult([]) as any)
+    api.list.mockResolvedValue(listResult([]) as any)
     const w = mountView()
     await flushPromises()
 
@@ -193,13 +194,13 @@ describe('MarketView 列表', () => {
   })
 
   it('接口失败时给错误态和重试', async () => {
-    productsApi.list.mockRejectedValue({ response: { data: { message: '数据库忙' } } })
+    api.list.mockRejectedValue({ response: { data: { message: '数据库忙' } } })
     const w = mountView()
     await flushPromises()
 
     expect(w.text()).toContain('数据库忙')
 
-    productsApi.list.mockResolvedValue(listResult([mkProduct()]) as any)
+    api.list.mockResolvedValue(listResult([mkProduct()]) as any)
     await findButton(w, '重试')!.trigger('click')
     await flushPromises()
 
@@ -207,13 +208,11 @@ describe('MarketView 列表', () => {
   })
 
   it('翻页是追加并按 id 去重', async () => {
-    productsApi.list.mockResolvedValue(listResult([mkProduct({ id: 1 })], { hasMore: true }) as any)
+    api.list.mockResolvedValue(listResult([mkProduct({ id: 1 })], { hasMore: true }) as any)
     const w = mountView()
     await flushPromises()
 
-    productsApi.list.mockResolvedValue(
-      listResult([mkProduct({ id: 1 }), mkProduct({ id: 2 })]) as any
-    )
+    api.list.mockResolvedValue(listResult([mkProduct({ id: 1 }), mkProduct({ id: 2 })]) as any)
     await findButton(w, '加载更多')!.trigger('click')
     await flushPromises()
 
@@ -223,7 +222,7 @@ describe('MarketView 列表', () => {
 
 describe('MarketView 发布商品', () => {
   it('元换算成整数分，89.99 变成 8999', async () => {
-    productsApi.create.mockResolvedValue(mkProduct({ id: 5 }) as any)
+    api.create.mockResolvedValue(mkProduct({ id: 5 }) as any)
     const w = mountView()
     await flushPromises()
 
@@ -231,7 +230,7 @@ describe('MarketView 发布商品', () => {
     await dialogButton(w, '发布')!.trigger('click')
     await flushPromises()
 
-    expect(productsApi.create).toHaveBeenCalledWith(
+    expect(api.create).toHaveBeenCalledWith(
       expect.objectContaining({ title: '玻璃保鲜盒', priceCents: 8999 })
     )
   })
@@ -244,7 +243,7 @@ describe('MarketView 发布商品', () => {
     await dialogButton(w, '发布')!.trigger('click')
     await flushPromises()
 
-    expect(productsApi.create).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
     expect(w.text()).toContain('最多两位小数')
   })
 
@@ -256,11 +255,11 @@ describe('MarketView 发布商品', () => {
     await dialogButton(w, '发布')!.trigger('click')
     await flushPromises()
 
-    expect(productsApi.create).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
   })
 
   it('商品名去掉首尾空格再发', async () => {
-    productsApi.create.mockResolvedValue(mkProduct({ id: 5 }) as any)
+    api.create.mockResolvedValue(mkProduct({ id: 5 }) as any)
     const w = mountView()
     await flushPromises()
 
@@ -268,13 +267,13 @@ describe('MarketView 发布商品', () => {
     await dialogButton(w, '发布')!.trigger('click')
     await flushPromises()
 
-    expect(productsApi.create).toHaveBeenCalledWith(
+    expect(api.create).toHaveBeenCalledWith(
       expect.objectContaining({ title: '帆布托特包', priceCents: 9900 })
     )
   })
 
   it('发布失败时把服务端的原话显示出来，表单不关', async () => {
-    productsApi.create.mockRejectedValue({
+    api.create.mockRejectedValue({
       response: { data: { message: '价格必须是非负整数（单位：分）' } }
     })
     const w = mountView()
@@ -289,7 +288,7 @@ describe('MarketView 发布商品', () => {
   })
 
   it('发布成功后跳到那件商品的详情', async () => {
-    productsApi.create.mockResolvedValue(mkProduct({ id: 42 }) as any)
+    api.create.mockResolvedValue(mkProduct({ id: 42 }) as any)
     const w = mountView()
     await flushPromises()
 
