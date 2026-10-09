@@ -29,5 +29,18 @@ export const FOLDER_MAX_COUNT = 50
  */
 export const VIEW_HISTORY_LIMIT = 200
 
+// ===== 市集 =====
+
+/** 同一件商品在购物车里最多买几件 */
+export const CART_MAX_QUANTITY = 99
+
+/** 商品标题 / 描述长度上限 */
+export const PRODUCT_TITLE_MAX = 60
+export const PRODUCT_DESC_MAX = 1000
+
+/** 一次充值上限（分）。设上限是为了不让演示环境出现「一个亿余额」这种脏数据 */
+export const TOPUP_MAX_CENTS = 10_000_000
+export const TOPUP_MIN_CENTS = 100
+
 // 默认端口
 export const DEFAULT_PORT = 3000

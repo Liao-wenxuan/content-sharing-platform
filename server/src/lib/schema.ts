@@ -318,4 +318,142 @@ export function initSchema(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_view_history_user
        ON view_history(user_id, viewed_at DESC)`
   )
+
+  // ============================================================
+  // 市集：商品 / 购物车 / 订单 / 钱包
+  // ============================================================
+
+  // ===== 商品 =====
+  // ⚠️ **price_cents 是整数分，不是元**。
+  // 浮点数存钱是经典错误：0.1 + 0.2 !== 0.3，累加几十次之后
+  // 账面金额和用户预期会对不上，而这类 bug 在测试里很难被发现
+  // （单笔看起来是对的）。全链路只用整数，前端负责除 100 格式化。
+  //
+  // status 用 CHECK 枚举而不是 TEXT 自由写：拼错一个值不会报错，
+  // 只会让商品永远既不在「在售」也不在「已下架」里，列表查不到。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seller_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      price_cents INTEGER NOT NULL,
+      cover_image TEXT,
+      images TEXT,                          -- JSON 数组，和 posts.image_urls 同一个约定
+      stock INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'on_sale',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      CHECK (price_cents >= 0),
+      CHECK (stock >= 0),
+      CHECK (status IN ('on_sale', 'off_shelf')),
+      FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_products_status ON products(status, created_at DESC)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id)`)
+
+  // ===== 购物车 =====
+  // 复合主键 (user_id, product_id)：同一件商品在购物车里**只有一行**，
+  // 再加一次是改数量而不是加一行。否则列表里会出现三条一样的商品，
+  // 用户改数量时也不知道该改哪一条。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cart_items (
+      user_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      PRIMARY KEY (user_id, product_id),
+      CHECK (quantity > 0),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+  `)
+
+  // ===== 订单 =====
+  // 订单状态机：
+  //   pending  ──支付──▶ paid ──发货──▶ shipped ──确认收货──▶ completed
+  //      │                  │                 │
+  //      └──取消──▶ cancelled ◀──退款──┘
+  //
+  // cancelled / completed / refunded 都是终态，不能再变。
+  // 允许的流转在路由层显式校验（`ALLOWED_TRANSITIONS`），不靠每个地方
+  // 各自判断 —— 那样一定会漏掉一处。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      total_cents INTEGER NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      paid_at DATETIME,
+      CHECK (total_cents >= 0),
+      CHECK (status IN ('pending', 'paid', 'shipped', 'completed', 'cancelled', 'refunded')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC)`)
+
+  // ===== 订单行：必须快照标题和单价 =====
+  // ⚠️ 这里的 title / price_cents **是下单那一刻的副本**，不 JOIN 商品表。
+  // 理由：商品改价或改名之后，历史订单显示的必须是当时成交的那一条。
+  // 如果按 JOIN 取现在的价格，用户翻三个月前的订单会看到价格被改过 ——
+  // 账单不具备历史性，这比多存两列的代价严重得多。
+  //
+  // product_id 刻意**不建外键**：商品被删之后订单行必须留着，
+  // 否则「我买过什么」的历史会跟着商品一起消失。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      title_snapshot TEXT NOT NULL,
+      price_cents_snapshot INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      CHECK (price_cents_snapshot >= 0),
+      CHECK (quantity > 0),
+      FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)`)
+
+  // ===== 钱包 =====
+  // **CHECK (balance_cents >= 0) 是最后一道防线**，不是装饰。
+  // 正常路径靠 `UPDATE ... WHERE balance_cents >= ?` 的条件更新挡住超扣，
+  // 但只要有任何一条代码路径忘了带条件，负余额就会真的写进去。
+  // 让数据库兜住，负余额在物理上就不可能出现。
+  //
+  // balance_cents 是**缓存**，wallet_transactions 才是权威账本 ——
+  // 余额可以由流水算出来，缓存它只是为了查询 O(1)；
+  // 万一两者对不上，以流水为准能重算出正确余额。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wallets (
+      user_id INTEGER PRIMARY KEY,
+      balance_cents INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (balance_cents >= 0),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS wallet_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      delta_cents INTEGER NOT NULL,          -- 正=入账 负=出账
+      balance_after_cents INTEGER NOT NULL,  -- 记流水当时的余额，对账用
+      reason TEXT NOT NULL,                  -- top_up / pay_order / refund
+      ref_order_id INTEGER,
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      CHECK (delta_cents <> 0),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_wallet_tx_user
+       ON wallet_transactions(user_id, created_at DESC, id DESC)`
+  )
 }
