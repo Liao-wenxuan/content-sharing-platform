@@ -840,6 +840,82 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 > ② 每次提交都过三 job CI（typecheck / test / lint）；
 > ③ 提供了 `docker compose up` 的完整容器化方案，结构和我计划的真实部署一致。
 
+### Q：浏览记录为什么要限长？为什么时间戳要用毫秒？
+
+> 限长是因为这张表**只增不减**，是个典型的只涨不落的数据结构。裁剪放在
+> 「写入时顺手剪掉超出的部分」，而不是定时任务或读取时截断 ——
+> 前者保证表里的量始终有界，后者只是让用户看不见，磁盘照样涨。
+>
+> 毫秒是为了让裁剪**正确**。默认的 `CURRENT_TIMESTAMP` 只有秒级，
+> 用户连续点开两篇笔记完全可能落在同一秒里，而"保留最新 N 条"必须能分出先后。
+> 同一秒的行排序是不确定的，裁剪就变成「随机删掉几条」。
+> 实测用 40ms 间隔插两条，秒级精度下顺序就分不出来。
+>
+> 追问：为什么重复看同一篇是 UPDATE 不是 INSERT？
+> 因为复合主键 `(user_id, post_id)` 让重复看变成把 `viewed_at` 顶上去。
+> 否则连点十次同一篇，列表前十位全是它，「浏览记录」变成「重复计数器」。
+
+### Q：`ON DELETE CASCADE` 在 SQLite 里真的生效吗？
+
+> 生效，但**靠的是一个不显式的默认值**。SQLite 自己默认是**关闭**外键约束的，
+> 意味着 DDL 里写的 `ON DELETE CASCADE` 什么都不做；是 `better-sqlite3`
+> 帮我们默认打开了。
+>
+> 我实测确认过（内存库建父子表，删父行看子行还在不在），但还是在
+> `db.ts` 里**显式写了一��� `foreign_keys = ON`** ——
+> 因为这是一个只靠库默认值兜底的不变量：换库、升级大版本、或者有人为了
+> "性能"关掉它，所有 CASCADE 会**静默失效**：删一篇笔记，likes / favorites /
+> view_history 里各留下一批孤儿行，而且没有任何报错。
+>
+> 泛化后的判据：**凡是"靠库的默认值"成立的东西，显式写一遍**。
+> 把「我们知道」变成「代码保证」。测试注入的 `:memory:` 实例也一起设，
+> 这样两边都由代码保证而不是碰巧一致。
+
+### Q：怎么给视图写组件测试？踩过什么坑？
+
+> 视图测试的价值在于：它能钉住那些**写错了也不会崩**的判断。
+> 比如话题页「404 和请求失败是两种东西」、登录页「`//evil.com` 必须被挡掉」、
+> 关注列表「粉丝和关注的接口不能反」—— 写错了页面照样出卡片，
+> 只是内容不对，用户很难自己判断是 bug 还是推荐。
+>
+> 踩了四个坑，都值得说：
+>
+> 1. **stub 要照抄真实组件的契约**。我给 `el-empty` 写的 stub 只透传插槽，
+>    漏了 `description` prop，而 EmptyState 的主标题恰恰就是传给它的 ——
+>    三条「空态文案」断言全红，页面在浏览器里却完全正常。
+>    **某个断言失败而页面明明是对的，先怀疑 stub 而不是先怀疑源码。**
+> 2. **stub 的 props 列表也要全**。`el-input` 不声明 `size`，它会作为
+>    fallthrough 属性落到根 `<input>` 上，jsdom 直接抛异常刷爆输出。
+> 3. **stub 救不了模块级单例**。我 mock 了 `ChatView`，但它 import 的
+>    `useChat` 在模块顶层就调了 `useAuthStore()` —— stub 只影响渲染，
+>    不阻止模块被求值，于是直接炸「没有 active pinia」。得连 useChat 一起 mock。
+> 4. **整个模块替换会抹掉值导出**。整模块 mock `@/api/notifications` 把
+>    `NOTIFY_TEXT` 也抹了，页面 import 它时报 "No XXX export is defined"。
+>    改用 `importOriginal` 只覆盖要打桩的那个 api。
+>
+> 另外测异步要重渲染的组件时，`route` 必须每个用例一份 `reactive`：
+> 普通对象不触发 computed 重算，而且上一个用例挂载的组件还活着时，
+> 下一个用例改参数会把所有历史 watcher 一起点着，调用次数从 2 变成 10。
+
+### Q：你是怎么发现项目里有「假功能」的？
+
+> 补 README 配图的时候，脚本会造数据再截图。**肉眼核对生成物**时
+> 看见个人主页侧栏「关注」那一项在关注列表页不高亮 —— 顺着查下去发现
+> `activeMenu` 按 path 穷举时漏了 `/follows/*` 分支。
+> 这类问题类型检查和单测都发现不了：模板编译通过、computed 逻辑没报错，
+> 只有真的渲染出来才知道亮没亮。
+>
+> 后来我又专门扫了一遍 TODO / FIXME / "敬请期待"，发现同一个卡片里
+> 藏着三个占位按钮，其中「发布新笔记」最糟 ——
+> **发布流程早就做完了，`/publish` 路由就在那儿，点了却提示「即将上线」**。
+> 这比「钱包」那种诚实的占位更伤：它主动把面试官的注意力引到
+> 一个已经存在却装作没有的东西上。
+>
+> 结论记下来：**会被人点到的占位，比没有更糟**。
+> 「钱包」做不完整我直接删了；「浏览记录」真的做出来了；
+> 但笔记栏的「私密 / 合集」我留着了 —— 那是**诚实的**空态，
+> 功能确实没做、界面上也明说了，和「谎称已实现」不是一回事。
+
 ### Q：这个项目还有什么没做好的？
 
 > 三个我清楚的：
@@ -848,7 +924,9 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 > ② **SQLite 不适合多实例**。它是单文件、单机写入，现在的后端一旦要横向扩容就会撞上
 > 文件锁，写库要换 Postgres；WS 的 `Map<userId, Set<WebSocket>>` 也是**进程内**的，
 > 多实例必须换成 Redis Pub/Sub 做跨进程广播。这是最优先要动的一处。
-> ③ **通知 Tab 还是 mock 数据**（赞和收藏 / 关注 / 评论），只有聊天走了真实链路。
+> ③ **笔记的「私密 / 合集」是诚实的占位**。主页那两个筛选项点进去只显示
+> 「即将上线」—— 功能确实没做，但既然摆出来了就是个承诺。
+> 要么补上（`posts.visibility` 一列 + 合集表），要么把筛选项摘掉。
 
 ### Q：如果让你重做一遍，哪里会不一样？
 
@@ -862,7 +940,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 6. 一分钟自检清单
 
-面试前确认这 24 条能不看文档说出来：
+面试前确认这 33 条能不看文档说出来：
 
 - [ ] 前端为什么用 Element Plus 却要重写全部样式
 - [ ] `Map<userId, Set<WebSocket>>` 为什么不能是一对一
@@ -887,6 +965,14 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 通知设置为什么是三个开关，偏好为什么存 JSON 而不是关系表
 - [ ] `vi.resetModules()` + `vi.spyOn` 为什么会静默失效
 - [ ] CI 里 Node 版本那个「假绿」的坑
+- [ ] 浏览记录为什么限长，为什么 `viewed_at` 要用毫秒而不是 `CURRENT_TIMESTAMP`
+- [ ] SQLite 的 `ON DELETE CASCADE` 靠的是 `better-sqlite3` 的默认值，为什么还要显式写
+- [ ] 组件测试的 stub 要照抄真实契约（`el-empty` 的 description、fallthrough 属性）
+- [ ] 为什么 stub 救不了模块级单例（`useChat` 在顶层调了 store）
+- [ ] 登录后的 `redirect` 为什么必须显式排除 `//evil.com`（协议相对 URL）
+- [ ] 发现 ⇄ 关注两套数据源：关注流为什么不传 `category`
+- [ ] 「会被人点到的占位比没有更糟」，以及诚实占位和谎称已实现的区别
+- [ ] `.dockerignore` 为什么必须有（`COPY . .` 会让本机 node_modules 覆盖容器里的）
 
 ---
 
@@ -908,6 +994,9 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 | 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue` |
 | 二级回复 / 置顶的取舍         | `server/src/routes/comments.ts` + `client/src/utils/comments.ts`（排序规则必须前后端一致）       |
 | 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                    |
+| 浏览记录：限长与毫秒时间戳    | `server/src/routes/viewHistory.ts` + `server/src/lib/schema.ts`（`view_history`）                |
+| 视图组件测试的 stub 陷阱      | `client/tests/topic-view.test.ts`（契约）、`client/tests/messages-view.test.ts`（模块级单例）    |
+| 外键靠库默认值有什么风险      | `server/src/lib/db.ts`（`pragma('foreign_keys = ON')` 的注释）                                   |
 | 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                               |
 | 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`           |
 | CI 配置                       | `.github/workflows/ci.yml`                                                                       |
