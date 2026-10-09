@@ -10,6 +10,10 @@ import conversationsRouter from '../routes/conversations'
 import notificationsRouter from '../routes/notifications'
 import topicsRouter from '../routes/topics'
 import viewHistoryRouter from '../routes/viewHistory'
+import productsRouter from '../routes/products'
+import cartRouter from '../routes/cart'
+import ordersRouter from '../routes/orders'
+import walletRouter from '../routes/wallet'
 
 /**
  * 统一挂载所有 API 路由
@@ -36,4 +40,11 @@ export function mountApiRouters(app: Express): void {
   app.use('/api/conversations', conversationsRouter)
   app.use('/api/notifications', notificationsRouter)
   app.use('/api/topics', topicsRouter)
+  // ===== 市集：三个独立前缀，不和 /api/posts 混 =====
+  // 商品 / 购物车 / 订单互相之间不共享路径前缀，
+  // 所以不存在「/:id 吃掉 /me」的顺序问题，各自内部自己注意即可。
+  app.use('/api/products', productsRouter)
+  app.use('/api/cart', cartRouter)
+  app.use('/api/orders', ordersRouter)
+  app.use('/api/wallet', walletRouter)
 }

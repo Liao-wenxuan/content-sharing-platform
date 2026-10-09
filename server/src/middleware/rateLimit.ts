@@ -64,3 +64,19 @@ export const viewLimiter = makeLimiter({
   limit: 200,
   message: '浏览过于频繁，请稍后再试'
 })
+
+/**
+ * 电商写操作：1 分钟 60 次
+ *
+ * 为什么要单独一档：购物车的数量是个 stepper，用户点一下 +/- 就是一次写请求。
+ * 一次结账流程下来（加购 3 次 + 改数量 5 次 + 下单 + 支付）轻松就 10 次，
+ * 而 writeLimiter 只有 20/min —— 逛得稍急一点就会开始吃 429，
+ * 用户看到的现象是「点加号偶尔没反应」，且完全查不出原因。
+ *
+ * 60/min 对真人是十几倍的余量，对脚本来说已经是噪音。
+ */
+export const shopLimiter = makeLimiter({
+  windowMs: 60 * 1000,
+  limit: 60,
+  message: '操作过于频繁，请稍后再试'
+})
