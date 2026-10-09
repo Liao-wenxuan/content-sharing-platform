@@ -181,7 +181,16 @@ function switchTab(next: 'buy' | 'sell') {
   load()
 }
 
-function onFilterChange() {
+/**
+ * 状态筛选。
+ *
+ * ⚠️ 必须把新值写回 statusFilter 再 load：
+ * 筛选组用的是单向 `:model-value`（不是 v-model），change 事件只带值、
+ * 不会自己同步回 ref。少写这一行的话，点「待支付」会重新请求一次
+ * 但带的还是空 status —— 筛选看着能点，实际永远返回全部。
+ */
+function onFilterChange(value: OrderStatus | '') {
+  statusFilter.value = value
   load()
 }
 
