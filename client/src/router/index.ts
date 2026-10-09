@@ -54,6 +54,33 @@ const router = createRouter({
       component: () => import('@/views/MarketView.vue')
     },
     {
+      // 市集的四个子页都挂在 /market 下（不是散在根路径）：
+      // SideNav 只给市集留一个入口，其余靠页面内的 MarketTabs 切换，
+      // 侧栏因此不会退化成一份功能清单
+      path: '/market/product/:id',
+      name: 'product-detail',
+      component: () => import('@/views/ProductDetailView.vue'),
+      props: true
+    },
+    {
+      path: '/market/cart',
+      name: 'cart',
+      component: () => import('@/views/CartView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/market/orders',
+      name: 'orders',
+      component: () => import('@/views/OrdersView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/market/wallet',
+      name: 'wallet',
+      component: () => import('@/views/WalletView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       // 搜索结果页：关键词走 ?q=，所以可分享 / 可刷新 / 可前进后退
       path: '/search',
       name: 'search',
