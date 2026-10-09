@@ -225,6 +225,84 @@ for (const p of POSTS) {
   }
 }
 
+// ============================================================
+// 市集演示数据
+// ============================================================
+// 商品跟着作者走：每件商品挂在一个演示用户名下，这样「我的商品」
+// 和「我卖出的订单」都有真实数据可看，不是悬空的。
+//
+// 幂等：先删掉演示用户名下的商品，重复执行不会灌出两批。
+// 外键是 ON DELETE CASCADE，删商品会自动带走购物车行和订单行引用，
+// 但**不能删订单行** —— 订单是账单，历史必须留着。所以这里不碰 orders。
+const PRODUCTS = [
+  { u: 0, t: '手冲咖啡壶 600ml 细口鹅颈', d: '滤网可拆，附赠滤纸 100 张', p: 8900, s: 12, c: '家居' },
+  { u: 1, t: '陶瓷手捏饭碗（两只装）', d: '每个杯子手捏成型，釉色略有差异', p: 6800, s: 8, c: '家居' },
+  { u: 2, t: '亚麻围裙 · 燕麦色', d: '双层亚麻，越洗越软', p: 12900, s: 20, c: '穿搭' },
+  { u: 3, t: '便携咖啡磨豆机', d: '不锈钢刀盘，摇一摇三十秒出粉', p: 26800, s: 5, c: '家居' },
+  { u: 4, t: '手工皂 · 燕麦牛奶（3 块）', d: '无添加，孕期可用', p: 4500, s: 40, c: '家居' },
+  { u: 5, t: '棉麻抱枕套 45×45', d: '隐形拉链，可拆洗', p: 5900, s: 15, c: '家居' },
+  { u: 6, t: '香薰蜡烛 · 雪松', d: '大豆蜡，燃烧 40 小时', p: 7800, s: 3, c: '家居' },
+  { u: 7, t: '手冲滤杯 V60 陶瓷', d: '锥形 60 度角，导流槽 12 道', p: 15800, s: 6, c: '家居' },
+  { u: 8, t: '帆布托特包 · 加厚', d: '16 盎司帆布，装得下 16 寸笔记本', p: 9900, s: 25, c: '穿搭' },
+  { u: 9, t: '玻璃保鲜盒 三件套', d: '耐热玻璃，可进烤箱', p: 11800, s: 10, c: '家居' },
+  { u: 0, t: '折叠沥水篮（已下架）', d: '演示「下架商品别人看不到」', p: 3900, s: 0, c: '家居', off: true }
+]
+
+db.prepare('DELETE FROM products WHERE seller_id IN (SELECT id FROM users WHERE nickname IN (?,?,?,?,?,?))')
+  .run(...NICKNAMES)
+
+const insertProduct = db.prepare(
+  `INSERT INTO products (seller_id, title, description, price_cents, cover_image, images, stock, status)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+)
+
+for (let i = 0; i < PRODUCTS.length; i++) {
+  const it = PRODUCTS[i]
+  const cover = img(`d${(i % 30) + 1}`) || img('d1')
+  const second = img(`d${((i + 5) % 30) + 1}`)
+  const images = JSON.stringify([cover, second].filter(Boolean))
+  insertProduct.run(
+    // 取模而不是直接索引：NICKNAMES 以后加减用户时，
+    // 越界的 undefined 会被 better-sqlite3 绑成 NULL，
+    // 报的是一个和「商品写不进去」毫无关系的 NOT NULL 约束错误
+    userIds[it.u % userIds.length],
+    it.t,
+    it.d,
+    it.p,
+    cover,
+    images,
+    it.s,
+    it.off ? 'off_shelf' : 'on_sale'
+  )
+}
+
+// 给每个演示用户发一笔启动余额，这样任何演示账号都能直接试完整条
+// 结算流程而不必先充值。走的是和真实充值完全一样的结构（余额 + 流水），
+// 不是直接 UPDATE 余额 —— 那样账本就和余额对不上了。
+const DEMO_BALANCE = 200000 // 2000 元
+const ensureWallet = db.prepare(
+  `INSERT INTO wallets (user_id, balance_cents) VALUES (?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET balance_cents = excluded.balance_cents`
+)
+const seedTx = db.prepare(
+  `INSERT INTO wallet_transactions (user_id, delta_cents, balance_after_cents, reason)
+   VALUES (?, ?, ?, 'top_up')`
+)
+db.prepare(
+  `DELETE FROM wallet_transactions WHERE user_id IN (SELECT id FROM users WHERE nickname IN (?,?,?,?,?,?))`
+).run(...NICKNAMES)
+db.prepare(
+  `DELETE FROM wallets WHERE user_id IN (SELECT id FROM users WHERE nickname IN (?,?,?,?,?,?))`
+).run(...NICKNAMES)
+for (const uid of userIds) {
+  ensureWallet.run(uid, DEMO_BALANCE)
+  seedTx.run(uid, DEMO_BALANCE, DEMO_BALANCE)
+}
+
+const productCount = db.prepare('SELECT COUNT(*) AS c FROM products').get().c
+console.log(`\n市集：写入 ${PRODUCTS.length} 件商品（含 1 件下架演示）`)
+console.log(`钱包：${userIds.length} 个演示账号各注入 ${DEMO_BALANCE / 100} 元余额`)
+
 const total = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c
 const withImg = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE image_urls IS NOT NULL AND image_urls != '[]'`).get().c
 console.log(`\n写入 ${POSTS.length} 条（其中 ${POSTS.length - noImage} 条带图）`)
