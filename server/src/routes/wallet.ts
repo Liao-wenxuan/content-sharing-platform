@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { ensureWallet, creditWallet, TX_REASON } from '../lib/wallet'
+import { auditLedger, transitTransactions } from '../lib/transit'
 import { TOPUP_MAX_CENTS, TOPUP_MIN_CENTS } from '../constants'
 
 /**
@@ -75,6 +76,25 @@ router.get('/', requireAuth, (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('[Wallet Error]', err)
     res.status(500).json({ message: err.message || '加载钱包失败' })
+  }
+})
+
+// ===== GET /api/wallet/audit ===== 对账
+/**
+ * 「这个支付系统的账做对了吗」——大多数实现答不上来这个问题。
+ *
+ * 守恒律：所有钱包余额 + 在途余额 == 充值总额 - 退款总额
+ * （支付和结算都只是账户间搬运，不改变总量）
+ *
+ * 这个接口对外暴露是有意的：它不是内部调试用的，
+ * 而是「可核对」这个承诺的一部分 —— 说了可对账，就得真能查。
+ */
+router.get('/audit', requireAuth, (_req: Request, res: Response) => {
+  try {
+    res.json({ ...auditLedger(), transit: transitTransactions(10) })
+  } catch (err: any) {
+    console.error('[Wallet Audit Error]', err)
+    res.status(500).json({ message: err.message || '对账失败' })
   }
 })
 
