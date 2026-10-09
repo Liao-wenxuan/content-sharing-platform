@@ -28,6 +28,9 @@
 | 话题     | `/topic/:tag` 话题页：封面 + 笔记数 + 参与人数 + 相关话题（按「同话题作者的其它话题」推）+ 瀑布流；**不建 topics 表**，话题是 `posts.topic_tag` 的现算聚合视图，零维护、不可能有空壳话题；话题精确匹配（搜索联想才模糊）；三处入口全通：笔记详情标签 / 搜索建议 / 发布页热门话题一键填                                                                                                                                |
 | 通知     | 五个来源（赞 / 收藏 / 关注 / 评论 / @提及）落一张可回溯的流水；**同一组合只保留一条**（重复互动浮到顶部并重新点亮，而不是刷屏）；未读数靠 **WS 帧实时更新**（别人点赞的那一刻铃铛就 +1，不用轮询）；三个分类可分别「全部已读」+ **按分类的通知开关**（关掉只影响之后的新通知，历史不删）；笔记被删后通知仍在，显示「原笔记已删除」                                                                                    |
 | 消息     | 两个顶层 Tab：通知（真实后端，见上一行）+ **实时聊天**（WebSocket 1v1：会话列表 / 历史分页 / 未读红点 / 已读回执 / 正在输入 / 多端同步 / 断线重连补发）；顶栏铃铛显示**聊天 + 通知**的合并未读                                                                                                                                                                                                                        |
+| 市集     | 完整 C2C 交易链路：商品橱窗（搜索 / 三种排序 / 翻页 / **发布商品**）/ 商品详情（**卖家视角**改价改库存上下架，买家视角加购直购）/ **购物车按卖家分组**结算 / **站内余额支付**（真的条件扣减 + 账本流水）/ 订单（我买的我卖的两个 tab，付款发货收货退款）/ 钱包（余额 + 可核对的流水 + 充值）。金额**全程整数分**，订单行是快照，库存用条件 UPDATE 防超卖，钱包有 `CHECK (balance >= 0)` 兜底                          |
+| 支付     | 站内余额支付（真实现），微信 / 支付宝**置灰标注「未接入」而不是假装能点** —— 做成可点的话点了只能弹一句「模拟成功」，那比没有更糟。结算框里会列出三种方式和各自状态，让讨论有落点                                                                                                                                                                                                                                     |
+| 交易规则 | 一笔订单只能一个卖家的商品（闲鱼式 C2C 约束，发货权限因此天然清晰）；加购**不占库存**（那是预留问题，需要超时释放），下单才占用；改数量传**绝对值**（传增量的话请求重试一次就多买一件）；PATCH 改不存在的商品 → 404，DELETE 不存在的 → 200（"改成 N"需要知道失败，"确保它不在"应当幂等）                                                                                                                              |
 | 布局     | 桌面三栏：左侧固定 ElMenu（发现 / 发布 / 市集 / 我的 / 设置）+ 顶部栏（搜索 / 发布 / 主题 / 消息铃铛 / 用户菜单）+ 内容区；登录页走独立全屏                                                                                                                                                                                                                                                                           |
 | 首页频道 | 12 个内容频道用 ElTabs 平铺一行（推荐 / 穿搭 / 美食 / 彩妆 / 影视 / 职场 / 情感 / 家居 / 游戏 / 旅行 / 健身 / 视频），选中态为居中红色短条                                                                                                                                                                                                                                                                            |
 | 设置     | 5 组设置项卡片 + 深色模式 ElSwitch + 账号摘要 + 退出登录 + 协议链接                                                                                                                                                                                                                                                                                                                                                   |
@@ -143,9 +146,9 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，248 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，320 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，260 条）
+cd server && npm test        # 后端单测（vitest + supertest，299 条）
 
 npm run test:e2e             # Playwright 桌面端全流程回归（登录态）
 npm run test:search          # 搜索功能 + 注入防护
@@ -157,6 +160,7 @@ npm run test:notify          # 通知中心：双浏览器验证 WS 实时铃铛
 npm run test:topic           # 话题页：三处入口是否都通 / 精确匹配语义 / 404 空态不打错（31 断言）
 npm run test:comment         # 评论增强：两级回复 / 点赞持久化 / 置顶权限与排序（34 断言，双上下文）
 npm run test:history        # 浏览记录：进详情页自动记一笔 / 重复看不重复 / 游客不记 / 清空（21 断言）
+npm run test:market         # 市集：发布 → 加购 → 下架 → 下单 → 支付 → 发货 → 收货 → 退款 → 对账（35 断言，双上下文）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
 npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
 ```
@@ -164,6 +168,10 @@ npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配�
 > 前端单测不只测纯函数：WebSocket 状态机（握手语义 / 退避重连 / 4401 停止重试 / 心跳保活）、
 > 聊天乐观发送（tempId → 真实 id 的乱序 ack 收敛）、顶栏未读红点与建议下拉键盘导航
 > 都是挂载或真实驱动的。覆盖率门槛配在 `client/vitest.config.ts`（四项均 60%），跌破会让 CI 直接红。
+>
+> 市集那一套特别值得看：`test:market` 走的是**完整生命周期**而不是"页面能打开"，
+> 最后一步是**拿流水的 delta 求和去验余额**。退款如果只退库存不退钱，
+> 前面所有断言都会绿，只有这一条会红 —— 而那正是它抓到过的真 bug。
 
 > Playwright 脚本依赖 dev server 在跑；**刚重启 vite 时第一次跑会因为 Element Plus 依赖预构建未完成而假失败**（`el-*` 判不可见但零 console error），先 `curl localhost:5173` 触发预构建、等十几秒再跑即可。
 
@@ -175,20 +183,22 @@ content-sharing-platform/
 ├─ client/                       # Vue 3 + Vite 前端
 │  ├─ src/
 │  │  ├─ views/                  # 15 个页面组件 = 14 条路由 + ChatView（嵌在 MessagesView 里，不单独占路由）
-│  │  │                          # Home / PostDetail / Publish / Profile / FollowList / Messages / Market / Search / Settings / Favorites / Topic / Login / NotFound
-│  │  ├─ components/             # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ EmptyState / ErrorBoundary
+│  │  │                          # Home / PostDetail / Publish / Profile / FollowList / Messages / Search / Settings / Favorites / Topic / Login / NotFound + 市集五个：Market / ProductDetail / Cart / Orders / Wallet
+│  │  ├─ components/             # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ MarketTabs（市集分区，购物车角标）/ EmptyState / ErrorBoundary
 │  │  ├─ assets/styles/          # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）+ motion.css（五档时长 / 缓动字典 / reduced-motion 兜底）
 │  │  ├─ composables/            # useWebSocket（连接状态机 / 退避重连 / 心跳）/ useChat（乐观发送 + ack 收敛）
 │  │  │                          # useNotifications（模块级单例 + WS 覆盖而非 +1）/ useFollow / useFavorite（乐观更新 + 失败回滚）
-│  │  │                          # useTheme / useSearchHistory / useRelativeTime
-│  │  ├─ api/                    # request.ts（axios 实例 + 拦截器 + getOrNull）/ auth / posts（含点赞）
+│  │  │                          # useTheme / useSearchHistory / useRelativeTime / useCart（市集共用购物车，模块级单例 + 按 sellerId 分组）
+│  │  ├─ api/                    # request.ts（axios 实例 + 拦截器 + getOrNull）/ auth / posts（含点赞）/ uploads
 │  │  │                          # comments / follows / favorites / notifications / topics / conversations / wsProtocol（WS 协议的前端镜像）
+│  │  │                          # 市集四个：products / cart / orders / wallet —— 与服务端 routes 一一对应，字段名照抄不改
 │  │  ├─ utils/                  # masonry.ts（列数换算 / 高度估算 / 最短列优先分列 / 关键词切分）
 │  │  │                          # comments.ts（sortComments / groupReplies —— 规则必须与后端 ORDER BY 一致）
+│  │  │                          # money.ts（整数分 ↔ 元；元换分全程整数运算，不用浮点乘 100）
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
-│  │  ├─ router/                 # Vue Router 配置（13 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
+│  │  ├─ router/                 # Vue Router 配置（18 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，18 文件 248 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，23 文件 320 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
 │  │  ├─ websocket-machine.test.ts  # 握手语义 / 退避重连 / 4401 / 心跳保活
 │  │  ├─ use-chat.test.ts        # 乐观发送 / 乱序 ack 收敛 / 已读回执 / 游标分页
@@ -203,6 +213,11 @@ content-sharing-platform/
 │  │  ├─ favorites-view.test.ts  # 挂载收藏夹：未分类是服务端筛选 / 删夹不删内容
 │  │  ├─ follow-list-view.test.ts    # 挂载关注列表：粉丝关注方向不能反 / 空态四种
 │  │  ├─ view-history-view.test.ts   # 挂载浏览记录：清空按钮的显隐 / 翻页去重
+│  │  ├─ cart-view.test.ts       # 挂载购物车：按卖家分块 / 结算必须是两步（下单≠支付）/ 余额不够禁下单
+│  │  ├─ market-view.test.ts     # 挂载橱窗：元↔分转换拒绝 12.345 / 翻页去重 / 发布失败不关表单
+│  │  ├─ orders-view.test.ts     # 挂载订单：按钮集合直接对着 ORDER_ACTIONS 断言，而不是断言某个按钮出现了
+│  │  ├─ use-cart.test.ts        # 按 sellerId 分组（昵称相同也必须分两组）/ isPayable 的防御性复查
+│  │  ├─ money.test.ts           # 整数分 ↔ 元：0.29 → 29 不能是 28.999…（浮点乘 100 是坏的）
 │  │  └─ masonry / post-masonry / search-history / comments-utils / websocket（纯函数层）
 │  ├─ Dockerfile / nginx.conf    # 多阶段构建 + 静态托管与反代
 │  ├─ components.d.ts            # unplugin-vue-components 生成的组件声明
@@ -220,15 +235,17 @@ content-sharing-platform/
 │  │  ├─ lib/mount-routes.ts     # mountApiRouters()：生产与测试挂同一份路由（避免"测试全 404 但文件绿"）
 │  │  ├─ middleware/auth.ts      # JWT 校验 (requireAuth / optionalAuth)
 │  │  ├─ routes/                 # auth / users / posts / likes / comments / favorites / notifications / topics / viewHistory / uploads / conversations
+│  │  │                          # 市集四条独立前缀：products / cart / orders / wallet（不和 /api/posts 混，涨跌互不影响）
 │  │  │                          # 注意：关注的 5 个接口（follow / relation / followers / following / suggestions）挂在 users.ts 里，
 │  │  │                          # 因为它们的主键都是 userId；客户端则单独拆成 api/follows.ts
+│  │  ├─ lib/wallet.ts           # 余额变动的唯一入口：加钱 / 扣钱都和写流水成对出现，扣钱走条件 UPDATE
 │  │  └─ constants.ts            # 服务端常量（与 client mirror）
-│  ├─ tests/                     # vitest + supertest（15 文件 260 条）
+│  ├─ tests/                     # vitest + supertest（16 文件 299 条）
 │  ├─ Dockerfile                 # 多阶段：构建期装原生模块工具链，运行时 prune 掉 devDeps
-│  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边，幂等，DB_PATH 与后端一致）
+│  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边 + 11 件商品（含 1 件下架演示）+ 各 2000 元余额，幂等，DB_PATH 与后端一致）
 │  └─ uploads/                   # multer 落地目录（.gitignore）
 │
-├─ scripts/                      # Playwright 自动化 + 文档配图生成（24 个）
+├─ scripts/                      # Playwright 自动化 + 文档配图生成（26 个）
 │  ├─ ensure-schema.mjs          # e2e 前置：先打一个必然碰库的接口把懒建表触发出来，再校验表在
 │  ├─ desktop-smoke.mjs          # 桌面端登录态全流程回归（40+ 断言，含零 console error 断言）
 │  ├─ follow-smoke.mjs           # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮（28 断言）
@@ -237,6 +254,7 @@ content-sharing-platform/
 │  ├─ topic-smoke.mjs            # 话题页：三处入口是否都通 / 精确匹配语义 / 404 空态不打错（31 断言）
 │  ├─ comment-smoke.mjs          # 评论增强：两级回复 / 点赞持久化 / 置顶权限与排序（34 断言，双上下文）
 │  ├─ view-history-smoke.mjs      # 浏览记录：自动记一笔 / 重复看不重复 / 游客不记 / 清空（21 断言）
+│  ├─ market-smoke.mjs          # 市集完整生命周期：发布→加购→下架→下单→支付→发货→收货→退款→流水对账（35 断言，双上下文）
 │  ├─ search-smoke.mjs           # 搜索功能回归（24 断言）
 │  ├─ chat-smoke.mjs             # 即时通信回归（20 断言，多端同步 / 断线重连补发）
 │  ├─ motion-check.mjs           # 逐帧采样证明动效真的在推进，且 reduced-motion 下真的停
@@ -285,25 +303,40 @@ content-sharing-platform/
 | **展开态存「收起集合」而非「展开集合」**       | 有回复的评论默认展开，所以记录的是"用户手动收起过哪几条"。存展开集合的话，收到新回复时 `replies.push()` 不改引用，`watch` 根本不会触发，新回复要刷新才看得到                                                               | 双向都踩过：先写成展开集合，"新回复不自动展开"，改成收起集合后同一份代码两个问题一起解决                                                               |
 | **`getOrNull` 用 config 标记而非硬编码状态码** | 话题页要区分"这个话题不存在"和"请求失败"，但响应拦截器已经 `return response.data`，`validateStatus` 那条路拿不到 `status`。改成请求 config 上挂 `silent404` 标记，拦截器据此在 reject 分支里 resolve null                  | 某个状态码算不算错误，**由调用侧决定**而不是由拦截器替所有人决定。同一个 404 在列表页该报错，在话题页只是空态                                          |
 | **组件库插槽会被静默丢弃**                     | Element Plus 2.14.6 的 `el-tabs` 根本没有 `extra` 插槽（只有 `add-icon` / `default`）。写进去的内容 Vue 一声不吭地丢掉，模板编译通过、类型检查过、单测全绿，只有在真实 DOM 里才看得到"切换器从来没显示过"                  | 凡是"组件有没有把内容吐出来"的断言，只有 e2e 在真实 DOM 上验才算数。修完要补一条 e2e 当回归钉子                                                        |
+| **购物车按 sellerId 分组，不按昵称**           | 界面上「一单只能一个卖家」是服务端约束的直接后果，不是排版偏好。分组、小计、结算按钮全都从同一份分组结果算出来，模板里不再出现第二次分组                                                                                   | 用昵称分组的话，两个同名卖家会被并成一单，下单直接 400「购物车里没有这位卖家的商品」，而报错信息离真正的病因很远                                       |
+| **不可结算的行压暗但**不**隐藏**               | 已下架 / 库存不够的行仍然列出来，旁边写清原因。静默隐藏会让用户以为自己的东西被吞了 —— 然后他会刷新、刷新、再刷新，直到清缓存                                                                                              | 「不让用户点」和「不让用户看见」是两件事。后者在这里会造成真实的客诉                                                                                   |
+| **结算必须是两步，UI 不能合并**                | 结算框里先「确认下单」（这时库存已扣、订单待支付），再「立即支付」（这时才动钱）。中间那一档不是多余的步骤，它就是「待支付」状态存在的意义：用户可以稍后再付，也可以直接取消，库存会退回去                                 | 合并成一步看着更干脆，但订单状态机就没有 `pending` 了，取消退款也就没有落脚点                                                                          |
+| **未接的支付方式置灰，不做成能点的按钮**       | 微信 / 支付宝在结算框里列出来，但标「未接入」且禁用。做成可点的话，点了只能弹一句「模拟成功」—— 那比没有更糟：这个项目里已经因为同一个理由删掉过一个假入口（「发布新笔记」点了提示"即将上线"，而功能早就做完了）           | 列出支付方式是为了让讨论有落点，不是假装接了 SDK。**会被人点到的占位，比没有更糟**                                                                     |
+| **单向 `:model-value` 必须自己写回**           | 状态筛选绑的是 `:model-value="statusFilter"` 加 `@change`，而 change 只带值不会同步回 ref。少写一行 `statusFilter.value = v`，点「待支付」会重新请求但带的还是空 status —— 筛选看着能点，实际永远返回全部                  | 不报错的 bug 最难发现：页面渲染正常、接口正常返回、只是结果不对。是「断言筛选要传给接口」这条测试把它抓出来的                                          |
 
 ### 后端
 
-| 亮点                                   | 实现                                                                                                                                                                                                                                                                                                 |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **可测试架构（Proxy 注入）**           | `db.ts` 用 `new Proxy()` 包装，测试用 `setTestDb(new Database(':memory:'))` 注入内存实例，生产文件 DB 和测试实例互不污染                                                                                                                                                                             |
-| **schema 抽取复用**                    | `CREATE TABLE` 抽到 `lib/schema.ts` 的 `initSchema(db)`，生产启动和每个测试文件共用同一份 DDL                                                                                                                                                                                                        |
-| **260 个集成测试**                     | vitest 15 个测试文件覆盖 auth / posts / likes / comments / follows / favorites / notifications / topics / suggest / users / uploads / conversations / ws / view-history；`fileParallelism: false` 避免共享 DB 竞态                                                                                   |
-| **分层限流**                           | `express-rate-limit` 三档：auth 5/min、writes 20/min、uploads 30/min，`NODE_ENV=test` 自动跳过                                                                                                                                                                                                       |
-| **全局错误中间件**                     | `AppError` 类 + 4 个 catch 层（multer / JSON parse / 404 / 未知错误），统一响应格式，日志分级                                                                                                                                                                                                        |
-| **env 启动校验**                       | `lib/env.ts` 用 dotenv 加载后校验 `JWT_SECRET` 必填，缺失直接 fail fast 而不是运行时才炸                                                                                                                                                                                                             |
-| **通知去重用 `0` 哨兵而非 `NULL`**     | `notifications` 表对 `(user_id, type, post_id, comment_id)` 建 UNIQUE，想靠它挡住「重复点赞刷屏」。但 **SQLite 认为 `NULL != NULL`**，去重对「关注」这类没有 `post_id` 的通知会完全失效。改用 `0` 哨兵后去重才真的生效；代价是 `post_id` 失去外键约束，靠查询时 `LEFT JOIN posts` 兜住已删笔记       |
-| **建不建表的判据是「有没有查询场景」** | 话题没有建 `topics` 表，而是 `posts.topic_tag` 的 `GROUP BY` 聚合视图。判据不是「数据有没有关系」，而是**这一列有没有被查询过**：通知偏好只有「写之前读一下做判断」这种用法，就跟着 `users` 存 JSON；一旦要「按它筛 / 排 / 关联」才值得独立成表 + 建索引。这样话题零维护，且不可能出现一个空壳话题页 |
-| **重复互动不新增行，而是重新点亮**     | 幂等互动后再发一条通知，用户看到的是刷屏。改成「已有记录时 `updated_at` 浮到顶部并重置为未读」；且三个写入点必须先判 `changes > 0` 再发通知——否则已读通知会被无意义地重新点亮，红点长亮下不去                                                                                                        |
-| **通知开关的判断收在写入口**           | 「这条要不要写」这个判断放在 `createNotification()` 内部而不是散在四个调用点。判断集中在一个函数里，不变量（关掉某分类后任何路径都不会绕过）才是可维护的；代价是函数多了一个参数，但省掉的是"以后新增写入点时记得判断"这种隐式约定                                                                   |
-| **解析失败的默认值要选无害的一边**     | `getNotifyPrefs` 遇到 `NULL` / 空串 / 坏 JSON 一律当**全开**。如果默认当关掉，用户会莫名其妙收不到通知，**而且查不出原因**——这种 bug 比崩溃难查得多。凡是"配置解析失败"的路径，都要想一遍"错了之后用户会损失什么、能不能自己发现"                                                                    |
-| **评论只支持两级**                     | 用产品限制换实现简单。回复一条回复直接返回 400，而不是设计任意深度的树 —— 前端不用处理无限嵌套的展开态，SQL 一次 `WHERE parent_id IN (...)` 就能拿全，排序规则也只有一套                                                                                                                             |
-| **置顶靠规则，不靠唯一约束**           | 「只有笔记作者能置顶**自己写的**评论」这条权限规则，已经把候选集限制到最多一条，所以根本不需要加唯一索引。省下的不只是索引，还有"数据库和业务规则谁说了算"这个歧义                                                                                                                                   |
-| **`parent_id` 没有外键**               | SQLite 的 `ALTER TABLE ADD COLUMN` 不支持带外键约束（只能建新表再搬数据）。改成迁移里用 `PRAGMA table_info` 判断列是否存在再 ALTER（幂等），约束下沉到路由层校验                                                                                                                                     |
+| 亮点                                        | 实现                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **可测试架构（Proxy 注入）**                | `db.ts` 用 `new Proxy()` 包装，测试用 `setTestDb(new Database(':memory:'))` 注入内存实例，生产文件 DB 和测试实例互不污染                                                                                                                                                                                      |
+| **schema 抽取复用**                         | `CREATE TABLE` 抽到 `lib/schema.ts` 的 `initSchema(db)`，生产启动和每个测试文件共用同一份 DDL                                                                                                                                                                                                                 |
+| **299 个集成测试**                          | vitest 16 个测试文件覆盖 auth / posts / likes / comments / follows / favorites / notifications / topics / suggest / users / uploads / conversations / view-history / market；`fileParallelism: false` 避免共享 DB 竞态                                                                                        |
+| **分层限流**                                | `express-rate-limit` 四档：auth 5/min、writes 20/min、uploads 30/min、**shop 60/min**（市集写操作单独一档 —— 购物车数量加减是 stepper 式高频操作，套 20/min 会让正常用户被限流）；`NODE_ENV=test` 自动跳过                                                                                                    |
+| **全局错误中间件**                          | `AppError` 类 + 4 个 catch 层（multer / JSON parse / 404 / 未知错误），统一响应格式，日志分级                                                                                                                                                                                                                 |
+| **env 启动校验**                            | `lib/env.ts` 用 dotenv 加载后校验 `JWT_SECRET` 必填，缺失直接 fail fast 而不是运行时才炸                                                                                                                                                                                                                      |
+| **通知去重用 `0` 哨兵而非 `NULL`**          | `notifications` 表对 `(user_id, type, post_id, comment_id)` 建 UNIQUE，想靠它挡住「重复点赞刷屏」。但 **SQLite 认为 `NULL != NULL`**，去重对「关注」这类没有 `post_id` 的通知会完全失效。改用 `0` 哨兵后去重才真的生效；代价是 `post_id` 失去外键约束，靠查询时 `LEFT JOIN posts` 兜住已删笔记                |
+| **建不建表的判据是「有没有查询场景」**      | 话题没有建 `topics` 表，而是 `posts.topic_tag` 的 `GROUP BY` 聚合视图。判据不是「数据有没有关系」，而是**这一列有没有被查询过**：通知偏好只有「写之前读一下做判断」这种用法，就跟着 `users` 存 JSON；一旦要「按它筛 / 排 / 关联」才值得独立成表 + 建索引。这样话题零维护，且不可能出现一个空壳话题页          |
+| **重复互动不新增行，而是重新点亮**          | 幂等互动后再发一条通知，用户看到的是刷屏。改成「已有记录时 `updated_at` 浮到顶部并重置为未读」；且三个写入点必须先判 `changes > 0` 再发通知——否则已读通知会被无意义地重新点亮，红点长亮下不去                                                                                                                 |
+| **通知开关的判断收在写入口**                | 「这条要不要写」这个判断放在 `createNotification()` 内部而不是散在四个调用点。判断集中在一个函数里，不变量（关掉某分类后任何路径都不会绕过）才是可维护的；代价是函数多了一个参数，但省掉的是"以后新增写入点时记得判断"这种隐式约定                                                                            |
+| **解析失败的默认值要选无害的一边**          | `getNotifyPrefs` 遇到 `NULL` / 空串 / 坏 JSON 一律当**全开**。如果默认当关掉，用户会莫名其妙收不到通知，**而且查不出原因**——这种 bug 比崩溃难查得多。凡是"配置解析失败"的路径，都要想一遍"错了之后用户会损失什么、能不能自己发现"                                                                             |
+| **评论只支持两级**                          | 用产品限制换实现简单。回复一条回复直接返回 400，而不是设计任意深度的树 —— 前端不用处理无限嵌套的展开态，SQL 一次 `WHERE parent_id IN (...)` 就能拿全，排序规则也只有一套                                                                                                                                      |
+| **置顶靠规则，不靠唯一约束**                | 「只有笔记作者能置顶**自己写的**评论」这条权限规则，已经把候选集限制到最多一条，所以根本不需要加唯一索引。省下的不只是索引，还有"数据库和业务规则谁说了算"这个歧义                                                                                                                                            |
+| **`parent_id` 没有外键**                    | SQLite 的 `ALTER TABLE ADD COLUMN` 不支持带外键约束（只能建新表再搬数据）。改成迁移里用 `PRAGMA table_info` 判断列是否存在再 ALTER（幂等），约束下沉到路由层校验                                                                                                                                              |
+| **金额全程整数分，且拒绝而非截断**          | `price_cents` / `balance_cents` 全程整数，`parsePrice` 用 `/^\d+$/` 整串匹配而不是 `parseInt`。因为 `parseInt('8900.5')` 会**静默截断成 8900 通过** —— 那正是「金额上的帮忙」，比报错危险得多。客户端 `yuanToCents` 同理，且不用浮点乘 100（`0.29 * 100 === 28.999999999999996`），改成按小数位拆开的整数运算 |
+| **订单行是快照，不 JOIN 商品表**            | `order_items` 存 `title_snapshot` / `price_cents_snapshot`，下单那一刻复制一份。卖家改价、改名甚至删商品，历史订单金额都不变 —— **账单必须具备历史性**。`product_id` 刻意不建外键：商品删了订单行要留着                                                                                                       |
+| **扣库存用条件 UPDATE 而非先查后写**        | `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`，检查和扣减在同一条语句里，不存在「查的时候够、写的时候不够」的窗口。`changes === 0` 就是被别人抢先，抛错回滚整个事务                                                                                                                     |
+| **余额是缓存，流水是权威**                  | `balance_cents` 只是 O(1) 查询用的缓存，可以由 `wallet_transactions` 求和重算。所以每次变动都写一条带 `balance_after` 的流水 —— e2e 最后一步就是拿流水的 delta 求和去验余额，两者对不上就是有 bug                                                                                                             |
+| **状态机集中在一张表里**                    | 订单的每一次状态变更都必须查 `ALLOWED_TRANSITIONS`，新增状态时不可能漏判；UPDATE 的 WHERE 带上原状态，两个并发请求只有一个能成功，另一个 `changes === 0`                                                                                                                                                      |
+| **一单一卖家是产品约束，不是偷懒**          | 闲鱼那一类 C2C 交易的真实约束。多卖家混单的话「谁发货 / 运费怎么算 / 退款退给谁」各自变成独立问题；限制成一单一卖家之后**发货权限天然清晰** —— 商品的卖家就是订单的卖家，省掉一整层角色判定                                                                                                                   |
+| **购物车必须带 sellerId 而不是昵称**        | 昵称不唯一，两个同名卖家会被客户端并成一组，然后下单 400「购物车里没有这位卖家的商品」—— 报错离真正的病因很远                                                                                                                                                                                                 |
+| **PATCH 不存在 → 404，DELETE 不存在 → 200** | 改数量是「改成 N」，调用方需要知道失败没有，所以 404；移除是「确保它不在」，重复执行也该成功，所以 200。同一个「不存在」在两个动词下语义不同，这是接口设计里最容易顺手写成一样的地方                                                                                                                          |
+| **改别人的资源返回 404 而非 403**           | 403 会泄露「这个 id 确实存在，只是不是你的」，接口变成探测用户创建量的信息通道。统一按「对你而言不存在」处理                                                                                                                                                                                                  |
+| **加购不占库存**                            | 加购就扣的话，用户把东西丢在车里不结账，库存就被占住了 —— 那是**预留（reservation）**问题，需要超时释放 + 过期清理一整套机制。诚实且简单的取舍是「加购只表达意图，下单才占用」，代价是下单可能买不到，用上面那条条件 UPDATE 兜底                                                                              |
 
 ### 工程化
 

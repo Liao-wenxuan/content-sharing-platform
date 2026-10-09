@@ -14,9 +14,10 @@
 
 > 这是一个仿小红书的内容社区，PC 桌面端三栏布局，前端 Vue 3 + TypeScript + Element Plus，
 > 后端 Express + SQLite 手写 SQL。功能上有账号、内容、搜索、互动、消息中心，
+> 以及一整套 **C2C 市集**（商品 / 购物车 / 订单 / 站内余额支付 / 钱包账本）。
 > 最花时间的是**用 `ws` 库手写的 WebSocket 1v1 实时聊天**——多端同步、已读回执、
 > 正在输入、断线重连补偿都自己实现了，没用 Socket.IO。
-> 工程上配了 222 条单元测试、覆盖率当 CI 门禁，还有一套 Playwright 端到端回归。
+> 工程上配了 619 条单元测试、覆盖率当 CI 门禁，还有一套 Playwright 端到端回归。
 
 ### 简历上怎么写（3~5 条，别写多）
 
@@ -27,8 +28,11 @@
   以及基于 `tempId → 本地负数 id` 映射表的**乐观发送与乱序 ack 收敛**。
 - 后端 **Express + SQLite（better-sqlite3）手写 SQL**，含 JWT 鉴权、游标分页、
   LIKE 通配符转义、multer 分片上传、WS 握手鉴权（失败 4401 直接关闭）。
-- 建立 **222 条单元测试**（后端 107 / 前端 115，覆盖 WS 状态机、乐观发送 ack 收敛、
-  组件键盘导航等真实交互），前端覆盖率门槛写入 CI 配置，跌破即红。
+- 实现**站内余额支付的 C2C 交易链路**：金额全程整数分并拒绝小数而非截断、
+  订单行快照不 JOIN 商品表、扣库存用条件 UPDATE 防超卖、
+  「余额是缓存、流水是权威」的可对账钱包。
+- 建立 **619 条单元测试**（后端 299 / 前端 320，覆盖 WS 状态机、乐观发送 ack 收敛、
+  金额换算、组件键盘导航等真实交互），前端覆盖率门槛写入 CI 配置，跌破即红。
 - 搭建三 job 并行 CI（typecheck / test / lint），并提供 **`docker compose up` 一键起全栈**
   （多阶段构建 + nginx 反代 `/api` `/uploads` `/ws`）。
 
@@ -744,14 +748,18 @@ e2e 里专门验了这一点：关掉「赞和收藏」后，点赞不 +1 但关
 
 ### Q：为什么前端也要写组件测试？纯函数测试不够吗？
 
-**我做的**：222 条单测（后端 107 / 前端 115），前端里有 59 条是
-composable 和组件级的（之前全是纯函数）。
+**我做的**：619 条单测（后端 299 / 前端 320），前端里有 170 条是
+composable 和组件级的（最早全是纯函数）。
 
-**为什么纯函数不够**：这个项目里最容易出错的三个点都不是纯函数：
+**为什么纯函数不够**：这个项目里最容易出错的几个点都不是纯函数：
 
 1. **WS 状态机**——`onopen` 到底算不算 open、4401 要不要重连，这些是「事件 → 状态」的转移。
 2. **乐观发送的 ack 收敛**——涉及 `ref` 数组的原地替换和时序。
 3. **建议下拉的键盘导航**——涉及 `rows` 展平顺序和 `groups` 渲染顺序是否一致。
+4. **市集的两步结算**——「下单」和「支付」是两次独立请求，
+   浏览器里点一次按钮只该发生其中一步，断言必须写死先后。
+5. **购物车的卖家分组**——昵称不唯一，分错了下单直接 400，
+   而报错离真正的病因很远。
 
 这三件事单测纯函数都测不到，只有真的驱动一遍才看得出来。
 
@@ -829,7 +837,125 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ---
 
-## 5. 挑战性问题的准备
+## 5. 市集与交易
+
+### Q：支付是怎么做的？接了微信/支付宝吗？
+
+> 没有接，而且**没有假装接**。支付是站内余额支付：真的条件扣减、真的写账本流水。
+> 微信/支付宝在结算框里列出来，但标「未接入」且禁用。
+>
+> 为什么不做假网关：假网关只能做成「点了弹个成功」，那种在面试里是减分的。
+> 余额支付能做出来的**真正确实现**其实不少 —— 条件扣减防超扣、余额不为负、
+> 每笔都有可核对的流水。做成这样，比一个跳转到第三方再跳回来的假流程有价值得多。
+>
+> 追问「那你怎么对账」：`balance_cents` 只是 O(1) 查询用的缓存，可以由
+> `wallet_transactions` 的 delta 求和重算。每次变动都写一条带 `balance_after` 的流水，
+> e2e 最后一步就是拿流水的求和去验余额。
+
+### Q：金额为什么全程用整数分？浮点不行吗？
+
+> 浮点在金额上会累积误差，而且是那种**不报错、只在对账时才暴露**的误差。
+> 所以 `price_cents` / `balance_cents` 全程整数。
+>
+> 客户端的元 → 分转换也不用浮点乘 100，因为 `0.29 * 100 === 28.999999999999996`。
+> 改成按小数位拆开做整数运算，并有单测钉死 `yuanToCents('0.29') === 29`，
+> 同时用一个反证断言说明浮点那条路确实是坏的。
+
+### Q：价格传了小数会怎样？
+
+> **拒绝，不截断。**
+>
+> 这里踩过一个坑：原来用 `parseInt`，于是 `parseInt('8900.5')` 静默截断成 8900 通过了 ——
+> 那正是注释里说要避免的「金额上的帮忙」，比报错危险得多。改成 `/^\d+$/` 整串匹配。
+>
+> 客户端 `yuanToCents` 同样严格：输入 `12.345` 直接报错，不猜 12.34 也不猜 12.35。
+> 这条是单测钉死的，而且我在 README 和代码注释里都写明了原因。
+
+### Q：为什么一笔订单只能一个卖家？这是偷懒吧？
+
+> 这是闲鱼那一类 C2C 交易的真实约束，不是偷懒。多卖家混单的话，
+> 「谁发货」「运费怎么算」「退款退给谁」会各自变成独立问题。
+> 限制成一单一卖家之后，**发货权限天然清晰** —— 商品的卖家就是订单的卖家，
+> 省掉一整层角色判定。
+>
+> 界面上购物车按卖家分块、每块一个结算按钮，也是这个约束的直接后果，
+> 不是排版偏好。顺带踩过一个坑：最初购物车接口只返回 `sellerNickname`，
+> 客户端只能拿昵称分组，两个同名卖家会被并成一单，下单 400
+> 「购物车里没有这位卖家的商品」—— 报错离真正的病因很远，所以后端补了 `sellerId`。
+
+### Q：怎么防止超卖？
+
+> `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?` ——
+> 检查和扣减在**同一条语句**里，不存在「查的时候够、写的时候不够」的窗口。
+> `changes === 0` 就是被别人抢先，抛错回滚整个事务。
+>
+> 「先 SELECT 再 UPDATE」在并发下会超卖：两个请求都查到 stock=1，都以为够卖一件。
+> SQLite 是单写者所以这问题不明显，但这是防超卖的通用写法，
+> 我在 `market.test.ts` 里也有并发下单的用例。
+
+### Q：加购的时候为什么不减库存？
+
+> 减了就意味着「预留」。用户把商品丢在购物车里不结账，库存就被他占住了。
+> 解决预留需要超时释放 + 过期清理一整套机制，而且并发下预留本身也要防超卖。
+>
+> 这个项目里的取舍是**加购只表达意图，下单才占用**。代价是下单时可能买不到 ——
+> 用上面那条条件 UPDATE 兜底，失败就明确告诉用户「刚被抢完了」。
+> 诚实且简单的取舍，比假装支持预留要好。
+
+### Q：订单里的商品信息是实时查商品表吗？
+
+> 不是，**是快照**。`order_items` 存 `title_snapshot` / `price_cents_snapshot`，
+> 下单那一刻复制一份。卖家改价、改名甚至删商品，历史订单金额都不变。
+>
+> 因为账单必须具备历史性。`product_id` 刻意不建外键 —— 商品删了订单行要留着。
+
+### Q：订单状态怎么管的？会不会出现「已发货又变成已支付」？
+
+> 状态流转集中在一张 `ALLOWED_TRANSITIONS` 表里，每个变更都得查它，
+> 新增状态时不可能漏判。UPDATE 的 WHERE 还会带上原状态，
+> 所以两个并发请求只有一个能成功，另一个 `changes === 0`。
+
+### Q：购物车为什么按绝对值改数量，不收「+1」？
+
+> 购物车数量是个 stepper 控件。如果接口收增量，那么请求失败重试一次，
+> 用户就多买了一件 —— 而且他不知道自己买了多少。
+> 收绝对值天然幂等，重试多少次结果都一样。
+
+### Q：改别人商品的接口返回什么？为什么不返回 403？
+
+> 返回 404。403 会泄露「这个 id 确实存在，只是不是你的」，
+> 接口就变成探测别人创建量的信息通道。统一按「对你而言不存在」处理。
+
+### Q：购物车接口 PATCH 不存在返回 404、DELETE 不存在返回 200，why 不统一？
+
+> 因为语义不同。改数量是「改成 N」，调用方需要知道失败没有，所以 404；
+> 移除是「确保它不在」，重复执行也应该成功，所以 200。
+> 同一个「不存在」在两个动词下该给不同答案，这是接口设计里最容易顺手写成一样的地方。
+
+### Q：退款为什么要同时退库存和退钱？
+
+> 这个是我写完发现漏的。原来 `transition` 里只在 `cancelled` / `refunded`
+> 挂了退库存，钱完全没动 —— 于是界面上写着「已退款」，用户的余额一分没变，
+> **只有对账的时候才会发现**。
+>
+> 修的时候顺手把整件事收进事务：改状态、退库存、退钱原来是三条独立语句，
+> 中间失败会留下「货退回去了钱还卡在平台账上」的组合，而用户看到的是「已退款」。
+>
+> 抓它的是 e2e 的最后一条断言（拿流水的 delta 求和去验余额）：
+> 如果退款只退库存，前面所有断言都会绿，只有这一条会红。
+
+### Q：为什么侧栏只有「市集」一项，购物车和订单不在侧栏？
+
+> 侧栏的定位是频道级浏览，已经有七项了。再把购物车、订单、钱包铺进去，
+> 它就变成一份功能清单而不是导航，每个入口都得靠图标猜意思。
+>
+> 所以做成页面内的分段导航（`MarketTabs`），走进去之后相关的东西都在手边。
+> 顺带补了一条规则：SideNav 的高亮是按 path 穷举的，
+> 漏掉 `/market/*` 分支的话，在购物车里侧栏会全灭 —— 和当初漏判 `/follows/*` 是同一类错。
+
+---
+
+## 6. 挑战性问题的准备
 
 ### Q：你这个项目没上线，怎么证明它真的能用？
 
@@ -940,7 +1066,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ## 6. 一分钟自检清单
 
-面试前确认这 33 条能不看文档说出来：
+面试前确认这 46 条能不看文档说出来：
 
 - [ ] 前端为什么用 Element Plus 却要重写全部样式
 - [ ] `Map<userId, Set<WebSocket>>` 为什么不能是一对一
@@ -973,31 +1099,55 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 发现 ⇄ 关注两套数据源：关注流为什么不传 `category`
 - [ ] 「会被人点到的占位比没有更糟」，以及诚实占位和谎称已实现的区别
 - [ ] `.dockerignore` 为什么必须有（`COPY . .` 会让本机 node_modules 覆盖容器里的）
+- [ ] 支付为什么是站内余额而不是假网关，以及「假网关在面试里是减分项」
+- [ ] 金额为什么全程整数分，客户端换算为什么不用浮点乘 100
+- [ ] 价格传小数为什么必须拒绝而不是截断（`parseInt` 的坑）
+- [ ] 一单一卖家是产品约束还是偷懒，它让发货权限怎么变简单
+- [ ] 购物车为什么必须带 `sellerId` 而不是昵称
+- [ ] 防超卖为什么用条件 UPDATE 而不是先查后写
+- [ ] 加购为什么不减库存，预留机制要付出什么
+- [ ] 订单行为什么是快照，`product_id` 为什么不建外键
+- [ ] 购物车改数量为什么传绝对值不传增量
+- [ ] 改别人资源为什么 404 而不是 403
+- [ ] 购物车 PATCH 不存在 404、DELETE 不存在 200，语义差别在哪
+- [ ] 退款为什么要同时退库存和退钱，为什么必须收进事务
+- [ ] 「余额是缓存、流水是权威」怎么验证
+- [ ] 结算为什么必须是两步，中间的「待支付」状态有什么意义
+- [ ] 不可结算的商品为什么压暗而不是隐藏
+- [ ] 未接的支付方式为什么置灰而不是做成能点的假按钮
+- [ ] 单向 `:model-value` 为什么必须自己把新值写回 ref
 
 ---
 
 ## 附：关键文件索引
 
-| 想讲什么                      | 去哪看                                                                                           |
-| ----------------------------- | ------------------------------------------------------------------------------------------------ |
-| WS 帧协议                     | `server/src/ws/protocol.ts` + `client/src/api/wsProtocol.ts`                                     |
-| 多端同步                      | `server/src/ws/hub.ts`                                                                           |
-| 握手 / 心跳 / 重连 / 离线补偿 | `server/src/ws/server.ts` + `client/src/composables/useWebSocket.ts`                             |
-| 乐观发送 + ack 收敛           | `client/src/composables/useChat.ts`                                                              |
-| 搜索注入防护                  | `server/src/routes/posts.ts`（`/search` 与 `/search/suggest`）                                   |
-| 关注关系建模                  | `server/src/lib/schema.ts`（`follows`）+ `server/src/routes/users.ts`                            |
-| 关注按钮的乐观更新            | `client/src/composables/useFollow.ts` + `client/tests/use-follow.test.ts`                        |
-| 收藏夹建模                    | `server/src/lib/schema.ts`（`favorites` / `favorite_folders`）+ `server/src/routes/favorites.ts` |
-| 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                    |
-| 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                  |
-| 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                     |
-| 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue` |
-| 二级回复 / 置顶的取舍         | `server/src/routes/comments.ts` + `client/src/utils/comments.ts`（排序规则必须前后端一致）       |
-| 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                    |
-| 浏览记录：限长与毫秒时间戳    | `server/src/routes/viewHistory.ts` + `server/src/lib/schema.ts`（`view_history`）                |
-| 视图组件测试的 stub 陷阱      | `client/tests/topic-view.test.ts`（契约）、`client/tests/messages-view.test.ts`（模块级单例）    |
-| 外键靠库默认值有什么风险      | `server/src/lib/db.ts`（`pragma('foreign_keys = ON')` 的注释）                                   |
-| 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                               |
-| 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`           |
-| CI 配置                       | `.github/workflows/ci.yml`                                                                       |
-| 更多踩坑记录                  | `docs/architecture.md`                                                                           |
+| 想讲什么                      | 去哪看                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| WS 帧协议                     | `server/src/ws/protocol.ts` + `client/src/api/wsProtocol.ts`                                            |
+| 多端同步                      | `server/src/ws/hub.ts`                                                                                  |
+| 握手 / 心跳 / 重连 / 离线补偿 | `server/src/ws/server.ts` + `client/src/composables/useWebSocket.ts`                                    |
+| 乐观发送 + ack 收敛           | `client/src/composables/useChat.ts`                                                                     |
+| 搜索注入防护                  | `server/src/routes/posts.ts`（`/search` 与 `/search/suggest`）                                          |
+| 关注关系建模                  | `server/src/lib/schema.ts`（`follows`）+ `server/src/routes/users.ts`                                   |
+| 关注按钮的乐观更新            | `client/src/composables/useFollow.ts` + `client/tests/use-follow.test.ts`                               |
+| 收藏夹建模                    | `server/src/lib/schema.ts`（`favorites` / `favorite_folders`）+ `server/src/routes/favorites.ts`        |
+| 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                           |
+| 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                         |
+| 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                            |
+| 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue`        |
+| 二级回复 / 置顶的取舍         | `server/src/routes/comments.ts` + `client/src/utils/comments.ts`（排序规则必须前后端一致）              |
+| 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                           |
+| 浏览记录：限长与毫秒时间戳    | `server/src/routes/viewHistory.ts` + `server/src/lib/schema.ts`（`view_history`）                       |
+| 交易表结构（快照 / CHECK）    | `server/src/lib/schema.ts`（`products` / `orders` / `order_items` / `wallets` / `wallet_transactions`） |
+| 订单状态机                    | `server/src/routes/orders.ts`（`ALLOWED_TRANSITIONS` + 条件 UPDATE）                                    |
+| 余额变动与账本流水            | `server/src/lib/wallet.ts`（加钱扣钱都和写流水成对出现）                                                |
+| 金额换算与严格性              | `client/src/utils/money.ts` + `client/tests/money.test.ts`                                              |
+| 购物车按卖家分组              | `client/src/composables/useCart.ts` + `client/tests/use-cart.test.ts`                                   |
+| 结算两步与不可结算行          | `client/src/views/CartView.vue` + `client/tests/cart-view.test.ts`                                      |
+| 完整交易生命周期回归          | `scripts/market-smoke.mjs`（35 断言，最后一条是流水对账）                                               |
+| 视图组件测试的 stub 陷阱      | `client/tests/topic-view.test.ts`（契约）、`client/tests/messages-view.test.ts`（模块级单例）           |
+| 外键靠库默认值有什么风险      | `server/src/lib/db.ts`（`pragma('foreign_keys = ON')` 的注释）                                          |
+| 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                                      |
+| 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`                  |
+| CI 配置                       | `.github/workflows/ci.yml`                                                                              |
+| 更多踩坑记录                  | `docs/architecture.md`                                                                                  |
