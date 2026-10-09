@@ -3,6 +3,7 @@ import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
+import { ensureWallet, creditWallet, TX_REASON } from '../lib/wallet'
 import { TOPUP_MAX_CENTS, TOPUP_MIN_CENTS } from '../constants'
 
 /**
@@ -28,15 +29,6 @@ const REASON_TEXT: Record<string, string> = {
   top_up: '充值',
   pay_order: '订单支付',
   refund_order: '订单退款'
-}
-
-/** 懒创建钱包：注册时不建，用到余额时才建，省一张表的空行 */
-function ensureWallet(userId: number): number {
-  const row = db.prepare('SELECT balance_cents FROM wallets WHERE user_id = ?').get(userId) as any
-  if (row) return row.balance_cents
-
-  db.prepare('INSERT OR IGNORE INTO wallets (user_id, balance_cents) VALUES (?, 0)').run(userId)
-  return 0
 }
 
 function toTransaction(row: any) {
@@ -108,26 +100,9 @@ router.post('/topup', shopLimiter, requireAuth, (req: Request, res: Response) =>
 
   // 「加余额」和「写流水」必须在同一个事务里：
   // 只加钱不写流水的话，账本就对不上；反过来余额没加但流水记了更糟
-  const run = db.transaction(() => {
-    ensureWallet(userId)
-    db.prepare(
-      `UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
-        WHERE user_id = ?`
-    ).run(amount, userId)
+  const balance = db.transaction(() => creditWallet(userId, amount, TX_REASON.TOP_UP))()
 
-    const balance = (
-      db.prepare('SELECT balance_cents FROM wallets WHERE user_id = ?').get(userId) as any
-    ).balance_cents
-
-    db.prepare(
-      `INSERT INTO wallet_transactions (user_id, delta_cents, balance_after_cents, reason)
-       VALUES (?, ?, ?, 'top_up')`
-    ).run(userId, amount, balance)
-
-    return balance
-  })
-
-  res.json({ balanceCents: run() })
+  res.json({ balanceCents: balance })
 })
 
 export default router
