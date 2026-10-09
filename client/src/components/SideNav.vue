@@ -66,6 +66,10 @@ const activeMenu = computed(() => {
   const path = route.path
   if (path === '/') return isFollowRoute.value ? '/?channel=follow' : '/'
   if (path.startsWith('/profile')) return '/profile/me'
+  // 市集的四个子页（详情 / 购物车 / 订单 / 钱包）都归「市集」这一项。
+  // 漏掉这个分支的话，在购物车里侧栏会全灭 ——
+  // 和当初 /follows/* 漏判是同一类错，都是「按 path 穷举」必然要补的分支
+  if (path.startsWith('/market')) return '/market'
   // 粉丝 / 关注列表是从「关注」这一项点进去的下钻页，高亮要跟着回「关注」，
   // 否则这一页侧栏全灭，看不出自己从哪来
   if (path.startsWith('/follows')) return '/?channel=follow'
