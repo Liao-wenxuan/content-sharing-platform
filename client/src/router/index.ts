@@ -82,6 +82,13 @@ const router = createRouter({
       props: true
     },
     {
+      // 浏览记录：私密、只对「我」有意义，所以是独立页面而不是个人主页的第五个 tab
+      path: '/history',
+      name: 'history',
+      component: () => import('@/views/ViewHistoryView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       // 404 catch-all：未知路径都进 NotFoundView
       // 用 pathMatch 拿到原始 path，便于未来诊断
       path: '/:pathMatch(.*)*',
