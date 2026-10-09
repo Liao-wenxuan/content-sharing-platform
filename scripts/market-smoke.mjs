@@ -37,7 +37,9 @@ await ensureSchema([
   'orders',
   'order_items',
   'wallets',
-  'wallet_transactions'
+  'wallet_transactions',
+  'transit_accounts',
+  'transit_transactions'
 ])
 
 const PASSWORD = 'Market12345'
@@ -69,11 +71,16 @@ function withDb(fn) {
 /**
  * 造测试用户并把上一轮留下的市集数据清干净。
  *
+ * @param fund 给这个账号预充多少分。**卖家必须传 0** ——
+ *   卖家是收钱的一方，不是花钱的一方。给他预充一份的话，
+ *   「卖家还没收到钱」就断言不了绝对值（起点不是 0），
+ *   得改成比较差值，多一层出错的机会。
+ *
  * 必须清的是**根状态**：钱包和流水。派生数据（订单、购物车）外键 CASCADE 会带走，
  * 但钱包行留着的话下一轮的「余额应该是 X」断言就会被上一轮污染 ——
  * 症状是第一次跑绿、第二次跑红，方向还正好相反，很难查。
  */
-function ensureUser({ email, nick }) {
+function ensureUser({ email, nick }, fund = 100000) {
   return withDb((db) => {
     let row = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
     if (!row) {
@@ -105,20 +112,27 @@ function ensureUser({ email, nick }) {
     db.prepare('DELETE FROM products WHERE seller_id = ?').run(id)
     db.prepare('DELETE FROM products WHERE title = ?').run(TITLE)
 
+    // 在途账本不属于任何用户，删账号带不走它。必须显式清 ——
+    // 不清的话上一轮压着的钱会让守恒律断言在第二轮凭空差出一笔
+    db.prepare('DELETE FROM transit_transactions').run()
+    db.prepare('DELETE FROM transit_accounts').run()
+
     // 给买家充一笔固定余额。走余额+流水结构，不直接 UPDATE ——
     // 直接改余额的话流水就求和不回来了，正好破坏这个脚本最后要验的那条不变量
-    db.prepare('INSERT INTO wallets (user_id, balance_cents) VALUES (?, ?)').run(id, 100000)
-    db.prepare(
-      `INSERT INTO wallet_transactions (user_id, delta_cents, balance_after_cents, reason)
-       VALUES (?, ?, ?, 'top_up')`
-    ).run(id, 100000, 100000)
+    if (fund > 0) {
+      db.prepare('INSERT INTO wallets (user_id, balance_cents) VALUES (?, ?)').run(id, fund)
+      db.prepare(
+        `INSERT INTO wallet_transactions (user_id, delta_cents, balance_after_cents, reason)
+         VALUES (?, ?, ?, 'top_up')`
+      ).run(id, fund, fund)
+    }
 
     return { id, token: jwt.sign({ userId: id, email }, SECRET) }
   })
 }
 
-const seller = ensureUser(SELLER)
-const buyer = ensureUser(BUYER)
+const seller = ensureUser(SELLER, 0)
+const buyer = ensureUser(BUYER, 100000)
 
 const balanceOf = (userId) =>
   withDb(
@@ -143,6 +157,33 @@ const ledgerSumOf = (userId) =>
         .prepare('SELECT COALESCE(SUM(delta_cents), 0) AS s FROM wallet_transactions WHERE user_id = ?')
         .get(userId).s
   )
+
+/**
+ * 全局守恒律：所有钱包余额 + 在途余额 == 充值总额。
+ *
+ * 这条断言是整个脚本里最狠的一条：支付、结算、退款任何一步做错，
+ * 或者漏了，钱就会既不在任何钱包也不在在途 —— 那时候账就不平了，
+ * 而且**没有任何单点接口能反映出这件事**。只有把全局加起来才知道。
+ *
+ * ⚠️ 退款不是资金流出：它是「在途 → 买家」的搬运，钱还在系统里。
+ * 一开始这里写成「充值 - 退款」，立刻被自己写的断言打脸。
+ */
+function auditBalance() {
+  return withDb((db) => {
+    const wallets =
+      db.prepare('SELECT COALESCE(SUM(balance_cents), 0) AS s FROM wallets').get().s
+    const transit =
+      db.prepare('SELECT COALESCE(SUM(balance_cents), 0) AS s FROM transit_accounts').get().s
+    const topUp =
+      db
+        .prepare("SELECT COALESCE(SUM(delta_cents), 0) AS s FROM wallet_transactions WHERE reason = 'top_up'")
+        .get().s
+    return { wallets, transit, topUp, diff: wallets + transit - topUp }
+  })
+}
+
+const transitBalance = () =>
+  withDb((db) => db.prepare('SELECT COALESCE(SUM(balance_cents), 0) AS s FROM transit_accounts').get().s)
 
 async function attachAuth(page, user, nick) {
   await page.addInitScript(
@@ -303,7 +344,7 @@ try {
     )
   }
 
-  console.log('\n[6] 支付 → 余额真的少了')
+  console.log('\n[6] 支付 → 钱进在途，卖家此刻还没收到')
   {
     await dialogAction(pageBuyer, '立即支付')
     await pageBuyer.waitForURL(/\/market\/orders/, { timeout: 8000 }).catch(() => {})
@@ -311,9 +352,14 @@ try {
 
     check('订单变成已支付', orderStatusOf(orderId) === 'paid', orderStatusOf(orderId))
     check('余额扣掉 128.50', balanceOf(buyer.id) === 87150, `实际 ${balanceOf(buyer.id)}`)
+    // 这一对断言是整个脚本的核心：付款时钱进的是**在途**，不是卖家账户。
+    // 少了在途这一层，钱就会在退款时需要从卖家账里扣，而卖家可能已经花掉了
+    check('钱压在在途里', transitBalance() === 12850, `实际 ${transitBalance()}`)
+    check('卖家此刻还没收到钱', balanceOf(seller.id) === 0, `实际 ${balanceOf(seller.id)}`)
+    check('守恒律：钱包 + 在途 == 充值总额', auditBalance().diff === 0, JSON.stringify(auditBalance()))
   }
 
-  console.log('\n[7] 卖家发货 → 买家确认收货')
+  console.log('\n[7] 卖家发货 → 买家确认收货 → 钱结算给卖家')
   {
     await open(pageSeller, '/market/orders', '.orders')
     await pageSeller.locator('.group-stub, .el-radio-group').first().waitFor({ state: 'visible' })
@@ -327,6 +373,9 @@ try {
     await pageSeller.locator('.ops .el-button', { hasText: '发货' }).click()
     await pageSeller.waitForTimeout(900)
     check('发货后状态是已发货', orderStatusOf(orderId) === 'shipped', orderStatusOf(orderId))
+    // 发货了钱还在途：货在路上，钱也还在路上
+    check('发货后钱还在途（还没结算）', transitBalance() === 12850, `实际 ${transitBalance()}`)
+    check('发货后卖家还没收到钱', balanceOf(seller.id) === 0, `实际 ${balanceOf(seller.id)}`)
 
     await open(pageBuyer, '/market/orders', '.orders')
     // 定位到**这一笔**订单，而不是整个列表。
@@ -341,11 +390,16 @@ try {
     await buyerOrder.locator('.ops .el-button', { hasText: '确认收货' }).click()
     await pageBuyer.waitForTimeout(900)
     check('确认收货后状态是已完成', orderStatusOf(orderId) === 'completed', orderStatusOf(orderId))
+    // 结算只发生在确认收货这一刻
+    check('确认收货后钱结算给卖家', balanceOf(seller.id) === 12850, `实际 ${balanceOf(seller.id)}`)
+    check('在途归零', transitBalance() === 0, `实际 ${transitBalance()}`)
+    check('守恒律仍然成立', auditBalance().diff === 0, JSON.stringify(auditBalance()))
   }
 
-  console.log('\n[8] 退款：库存和钱都要回来')
+  console.log('\n[8] 退款：库存和钱都要回来，而且是从在途退不是从卖家扣')
   {
-    // 已完成的订单走不了退款，得重新开一笔 pending→paid→refunded 的
+    const sellerBefore = balanceOf(seller.id)
+    // 已完成的订单走不了退款（状态机里 completed 是终态），重新开一笔
     await open(pageBuyer, `/market/product/${productId}`, '.product-detail')
     await pageBuyer.locator('.buy-row .el-button', { hasText: '加入购物车' }).click()
     await pageBuyer.waitForTimeout(800)
@@ -359,6 +413,7 @@ try {
 
     const afterPay = balanceOf(buyer.id)
     check('第二笔也扣了钱', afterPay === 87150 - 12850, `实际 ${afterPay}`)
+    check('第二笔也压在在途里', transitBalance() === 12850, `实际 ${transitBalance()}`)
 
     await open(pageBuyer, '/market/orders', '.orders')
     await pageBuyer.locator('.order', { hasText: `#${refundOrderId}` }).locator('.ops .el-button', { hasText: '申请退款' }).click()
@@ -371,10 +426,15 @@ try {
       balanceOf(buyer.id) === afterPay + 12850,
       `实际 ${balanceOf(buyer.id)}`
     )
+    // 退款走的是「在途 → 买家」，卖家一分不碰。
+    // 「从卖家账里扣」那种实现下，卖家一旦把余额花掉就扣不动了
+    check('退款不碰卖家的账', balanceOf(seller.id) === sellerBefore, `实际 ${balanceOf(seller.id)}`)
     check('库存也退回来了', stockOf(productId) === 9, `实际 ${stockOf(productId)}`)
+    check('在途已清空', transitBalance() === 0, `实际 ${transitBalance()}`)
+    check('守恒律仍然成立', auditBalance().diff === 0, JSON.stringify(auditBalance()))
   }
 
-  console.log('\n[9] 钱包：流水能求和算回余额')
+  console.log('\n[9] 钱包：流水能求和算回余额，且全局账平')
   {
     await open(pageBuyer, '/market/wallet', '.wallet')
     const shown = await pageBuyer.locator('.balance-value').innerText()
@@ -389,6 +449,32 @@ try {
       `流水 ${ledgerSumOf(buyer.id)} vs 余额 ${balanceOf(buyer.id)}`
     )
     check('流水里有退款这一笔', (await pageBuyer.locator('.tx-table').innerText()).includes('订单退款'))
+
+    // 卖家那边必须有 sale_income：这是「钱真的到了卖家」的唯一证据
+    const sellerTx = withDb((db) =>
+      db
+        .prepare("SELECT COUNT(*) AS c FROM wallet_transactions WHERE user_id = ? AND reason = 'sale_income'")
+        .get(seller.id).c
+    )
+    check('卖家流水里有 sale_income', sellerTx === 1, `${sellerTx} 笔`)
+
+    // 全局守恒：所有钱包 + 在途 == 充值总额。
+    // 任何一步做错或者漏了，钱就会既不在钱包也不在在途，而**没有任何单点接口能看出来**
+    const a = auditBalance()
+    check('全局账平（钱包 + 在途 == 充值总额）', a.diff === 0, JSON.stringify(a))
+
+    // 对账接口自己也报平
+    const auditRes = await pageBuyer.evaluate(async () => {
+      const token = JSON.parse(localStorage.getItem('auth')).token
+      const r = await fetch('http://localhost:3000/api/wallet/audit', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return r.json()
+    })
+    check('对账接口报平', auditRes.balanced === true && auditRes.diffCents === 0, JSON.stringify({
+      balanced: auditRes.balanced,
+      diff: auditRes.diffCents
+    }))
   }
 
   console.log('\n[10] 控制台干净')

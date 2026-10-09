@@ -67,12 +67,20 @@ if (!APPLY) {
 }
 
 const tx = db.transaction((ids) => {
+  // 在途账本不是外键挂到 users 上的（它不属于任何用户），
+  // 所以删账号不会带走它。不显式清的话，e2e 的守恒律断言会被上一轮压着的钱弄红
+  db.prepare('DELETE FROM transit_transactions').run()
+  db.prepare('DELETE FROM transit_accounts').run()
+
   for (const id of ids) {
     db.prepare('DELETE FROM posts WHERE user_id = ?').run(id)
     db.prepare('DELETE FROM users WHERE id = ?').run(id)
   }
 })
 tx(targets.map((t) => t.id))
+
+const audit = db.prepare('SELECT COALESCE(SUM(balance_cents), 0) AS s FROM transit_accounts').get()
+console.log(`在途已清零：剩余 ${audit.s} 分`)
 
 const left = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c
 const withImg = db
