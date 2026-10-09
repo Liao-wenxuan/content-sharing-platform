@@ -3,7 +3,7 @@ import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
-import { creditWallet, debitWallet, TX_REASON } from '../lib/wallet'
+import { holdFromBuyer, settleToSeller, releaseToBuyer } from '../lib/transit'
 
 /**
  * 订单 / 支付 / 发货
@@ -90,6 +90,25 @@ function loadOwnOrder(req: Request, res: Response) {
     return null
   }
   return order
+}
+
+/**
+ * 订单的卖家 id。
+ *
+ * 一单一卖家这个约束（见文件头）让「订单的卖家」不需要单独存一列：
+ * 订单行的商品卖家全都是同一个人，取第一行的即可。
+ * 真要多卖家的话，这里就是第一个该炸的地方 —— 那正是当初限制成一单一卖家省掉的复杂度。
+ */
+function sellerIdOf(orderId: number): number {
+  const row = db
+    .prepare(
+      `SELECT p.seller_id FROM order_items i
+         JOIN products p ON p.id = i.product_id
+        WHERE i.order_id = ? ORDER BY i.id LIMIT 1`
+    )
+    .get(orderId) as any
+  if (!row) throw new HttpError(500, '订单数据异常：找不到卖家')
+  return row.seller_id
 }
 
 // ===== POST /api/orders ===== 下单
@@ -289,19 +308,25 @@ function transition(req: Request, res: Response, next: string) {
       }
 
       /**
-       * 退款必须真的把钱退回去。
+       * 资金流转和状态变更绑死，同一个事务里做：
        *
-       * 之前这里只退库存、不动钱包 —— 于是界面上写着「已退款」，
-       * 用户的余额却一分没变，对账的时候才会发现。
-       * 「会被人点到的占位比没有更糟」在这个项目里已经吃过一次亏了。
+       * - `completed`（确认收货）：在途的钱结算给卖家
+       * - `refunded`（退款）：在途的钱原路退回买家
+       * - `paid` / `shipped` / `cancelled`：钱不动，还在在途里
        *
-       * 退的是 order.total_cents，和支付时扣的是同一个数
-       * （没有优惠、没有运费，所以「付了多少」和「退多少」永远相等）。
-       * paid 和 shipped 两条退款路径都必然经过 paid，
-       * 所以不会出现「没付过款就退钱」的路径。
+       * 少做前两步的后果不是「少一笔收入」，而是**整本账不平** ——
+       * 充值总额 - 退款总额 ≠ 所有钱包余额之和，差多少都说不清楚。
+       * 详见 lib/transit.ts。
+       *
+       * ⚠️ completed 是终态、refunded 也是终态（ALLOWED_TRANSITIONS 里
+       * 都没有它们），加上 UPDATE 的 WHERE 带原状态，
+       * 所以「结算」和「退款」各自最多发生一次。
        */
+      if (next === 'completed') {
+        settleToSeller(order.id, sellerIdOf(order.id), userId, order.total_cents)
+      }
       if (next === 'refunded') {
-        creditWallet(userId, order.total_cents, TX_REASON.REFUND_ORDER, order.id)
+        releaseToBuyer(order.id, userId, order.total_cents)
       }
 
       return order.id
@@ -331,9 +356,15 @@ router.post('/:id/pay', shopLimiter, requireAuth, (req: Request, res: Response) 
     if (order.status !== 'pending') throw new HttpError(409, '这笔订单已经付过了')
 
     const amount = order.total_cents
-    // 条件更新：余额够不够由数据库判，不够时返回 null。
-    // 「先查余额再扣」在并发下会超扣 —— 两个请求都查到 100，都以为够扣 80。
-    const after = debitWallet(userId, amount, TX_REASON.PAY_ORDER, order.id)
+    /**
+     * 钱进**在途**，不是直接给卖家。
+     *
+     * 直接给卖家的话，账虽然平，但买家一退款就得从卖家账里扣；
+     * 卖家一旦把余额花掉，退款就扣不回来了 ——
+     * 要么退款失败（荒谬），要么允许卖家余额为负（违反 CHECK）。
+     * 在途资金让退款永远只需要「在途 → 买家」，详见 lib/transit.ts。
+     */
+    const after = holdFromBuyer(userId, amount, order.id, sellerIdOf(order.id))
     if (after === null) throw new HttpError(402, '余额不足，请先充值')
 
     const upd = db

@@ -21,6 +21,8 @@ import db from './db'
 export const TX_REASON = {
   TOP_UP: 'top_up',
   PAY_ORDER: 'pay_order',
+  /** 确认收货后卖家收到的货款（在途 → 卖家钱包，见 lib/transit.ts） */
+  SALE_INCOME: 'sale_income',
   REFUND_ORDER: 'refund_order'
 } as const
 

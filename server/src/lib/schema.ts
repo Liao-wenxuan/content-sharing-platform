@@ -456,4 +456,50 @@ export function initSchema(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_wallet_tx_user
        ON wallet_transactions(user_id, created_at DESC, id DESC)`
   )
+
+  // ===== 在途资金 =====
+  // 买家付了钱、货在路上、钱还没到卖家 —— 这段时间钱在平台手上。
+  // **这笔钱不属于任何用户**，所以它不能待在 wallets 里：
+  // wallets.user_id 有 FOREIGN KEY 指向 users(id)，写一个假的平台 user_id
+  // 要么被外键挡，要么就得为了绕过外键而放松约束。两条路都不好。
+  //
+  // 独立成表还有个好处：用户钱包是「用户能花的钱」，
+  // 在途是「用户碰不到的钱」。混在一张表里的话，
+  // 任何一段遍历 wallets 做「累计资产」的代码都会把在途算进去。
+  //
+  // 为什么需要它（这是支付系统绕不开的第三种状态）：
+  // 买家 pay 扣了钱，卖家一分没收到。中间的差额要么是「平台收了」，
+  // 要么是「钱还在路上」。不显式记这一笔，整本账就是不平的 ——
+  // 充值总额 - 退款总额 ≠ 所有钱包余额之和，差多少说不清楚。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS transit_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      balance_cents INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CHECK (balance_cents >= 0)
+    )
+  `)
+
+  // 在途的账本。和 wallet_transactions 一样的形状，只是 owner 不是用户。
+  // 不变量（每条都要能验）：
+  //   balance_after_cents == 上一条的 balance_after_cents + delta_cents
+  //   全部 delta_cents 求和 == transit_accounts.balance_cents
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS transit_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      delta_cents INTEGER NOT NULL,          -- 正=买家付进来 负=转出（结算或退款）
+      balance_after_cents INTEGER NOT NULL,
+      kind TEXT NOT NULL,                    -- hold / settle / release
+      ref_order_id INTEGER,
+      buyer_id INTEGER,                      -- hold 时记下，退款要退给谁
+      seller_id INTEGER,                     -- settle 时记下，钱结给谁
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      CHECK (delta_cents <> 0)
+    )
+  `)
+
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_transit_tx_order
+       ON transit_transactions(ref_order_id, id)`
+  )
 }
