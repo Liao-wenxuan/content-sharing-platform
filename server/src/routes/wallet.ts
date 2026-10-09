@@ -1,0 +1,133 @@
+import { Router, type Request, type Response } from 'express'
+import db from '../lib/db'
+import { requireAuth } from '../middleware/auth'
+import { shopLimiter } from '../middleware/rateLimit'
+import { toISO } from '../lib/time'
+import { TOPUP_MAX_CENTS, TOPUP_MIN_CENTS } from '../constants'
+
+/**
+ * 钱包
+ *
+ * 这个项目的「支付」是**站内余额支付**，不是假网关。
+ * 理由：余额支付能做出真的正确实现 —— 条件扣减、余额不为负、
+ * 每一笔都有账本流水可以核对；而假网关只能做成「点了弹个成功」，
+ * 那种在面试里是减分的。
+ *
+ * 微信 / 支付宝在结算页会作为选项列出来，但会明确标注「模拟」：
+ * 列出支付方式是为了让讨论有落点，不是假装接了 SDK。
+ *
+ * **余额是缓存，流水是权威**：
+ * balance_cents 可以由 transactions 求和算出来，缓存它只是为了 O(1) 查询；
+ * 万一两者对不上，以流水为准能重算出正确余额。
+ * 所以每次变动都写一条带 balance_after 的流水 —— 那是给对账用的。
+ */
+
+const router = Router({ mergeParams: true })
+
+const REASON_TEXT: Record<string, string> = {
+  top_up: '充值',
+  pay_order: '订单支付',
+  refund_order: '订单退款'
+}
+
+/** 懒创建钱包：注册时不建，用到余额时才建，省一张表的空行 */
+function ensureWallet(userId: number): number {
+  const row = db.prepare('SELECT balance_cents FROM wallets WHERE user_id = ?').get(userId) as any
+  if (row) return row.balance_cents
+
+  db.prepare('INSERT OR IGNORE INTO wallets (user_id, balance_cents) VALUES (?, 0)').run(userId)
+  return 0
+}
+
+function toTransaction(row: any) {
+  return {
+    id: row.id,
+    deltaCents: row.delta_cents,
+    balanceAfterCents: row.balance_after_cents,
+    reason: row.reason,
+    reasonText: REASON_TEXT[row.reason] ?? row.reason,
+    refOrderId: row.ref_order_id,
+    createdAt: toISO(row.created_at)
+  }
+}
+
+// ===== GET /api/wallet ===== 余额 + 流水
+router.get('/', requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = req.userId
+    if (typeof userId !== 'number') return res.status(401).json({ message: '未登录' })
+
+    const page = Math.max(1, parseInt(String(req.query.page)) || 1)
+    const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
+    const offset = (page - 1) * pageSize
+
+    const balanceCents = ensureWallet(userId)
+
+    const total = (
+      db
+        .prepare('SELECT COUNT(*) AS c FROM wallet_transactions WHERE user_id = ?')
+        .get(userId) as any
+    ).c
+    const rows = db
+      .prepare(
+        `SELECT * FROM wallet_transactions WHERE user_id = ?
+          ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
+      )
+      .all(userId, pageSize, offset) as any[]
+
+    res.json({
+      balanceCents,
+      list: rows.map(toTransaction),
+      pagination: { page, pageSize, total, hasMore: offset + rows.length < total }
+    })
+  } catch (err: any) {
+    console.error('[Wallet Error]', err)
+    res.status(500).json({ message: err.message || '加载钱包失败' })
+  }
+})
+
+// ===== POST /api/wallet/topup ===== 充值
+// 真实场景这一步是第三方支付回调，验签之后才加钱。
+// 这里没有第三方，所以就是「点了就加」—— 但它仍然走和支付完全一样的
+// 事务 + 流水结构，换成真网关时只需要把「加钱」那段挪进回调里。
+router.post('/topup', shopLimiter, requireAuth, (req: Request, res: Response) => {
+  const userId = req.userId
+  if (typeof userId !== 'number') return res.status(401).json({ message: '未登录' })
+
+  // 参数校验放在事务外：它不碰数据库，没有和别的写入产生竞争的可能
+  const amount = parseInt(String((req.body as any)?.amountCents))
+  if (!Number.isInteger(amount)) {
+    return res.status(400).json({ message: '金额必须是整数（单位：分）' })
+  }
+  if (amount < TOPUP_MIN_CENTS) {
+    return res.status(400).json({ message: `单次最少充值 ${TOPUP_MIN_CENTS / 100} 元` })
+  }
+  if (amount > TOPUP_MAX_CENTS) {
+    return res.status(400).json({ message: `单次最多充值 ${TOPUP_MAX_CENTS / 100} 元` })
+  }
+
+  // 「加余额」和「写流水」必须在同一个事务里：
+  // 只加钱不写流水的话，账本就对不上；反过来余额没加但流水记了更糟
+  const run = db.transaction(() => {
+    ensureWallet(userId)
+    db.prepare(
+      `UPDATE wallets SET balance_cents = balance_cents + ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+        WHERE user_id = ?`
+    ).run(amount, userId)
+
+    const balance = (
+      db.prepare('SELECT balance_cents FROM wallets WHERE user_id = ?').get(userId) as any
+    ).balance_cents
+
+    db.prepare(
+      `INSERT INTO wallet_transactions (user_id, delta_cents, balance_after_cents, reason)
+       VALUES (?, ?, ?, 'top_up')`
+    ).run(userId, amount, balance)
+
+    return balance
+  })
+
+  res.json({ balanceCents: run() })
+})
+
+export default router
