@@ -540,6 +540,60 @@ describe('订单：状态机', () => {
       .set('Authorization', `Bearer ${sellerToken}`)
     expect(res.status).toBe(404)
   })
+
+  it('退款把钱退回来，不只是还库存', async () => {
+    const { order } = await makePendingOrder(buyerToken, sellerToken, sellerId, 3000)
+
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 10000 })
+    const paid = await request(app)
+      .post(`/api/orders/${order.body.id}/pay`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    expect(paid.body.balanceCents).toBe(7000)
+
+    const refunded = await request(app)
+      .post(`/api/orders/${order.body.id}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    expect(refunded.status).toBe(200)
+    expect(refunded.body.status).toBe('refunded')
+    // 退款之前一笔钱都没退，界面上却写着「已退款」—— 只有对账才发现得了
+    expect(walletBalance(buyerId)).toBe(10000)
+
+    // 账本要有一条 refund 流水，且带上订单号，能和订单对上
+    const w = await request(app).get('/api/wallet').set('Authorization', `Bearer ${buyerToken}`)
+    const tx = w.body.list[0]
+    expect(tx.reason).toBe('refund_order')
+    expect(tx.deltaCents).toBe(3000)
+    expect(tx.balanceAfterCents).toBe(10000)
+    expect(tx.refOrderId).toBe(order.body.id)
+    // 「余额是缓存、流水是权威」：两者必须能对上
+    const sum = w.body.list.reduce((a: number, t: any) => a + t.deltaCents, 0)
+    expect(sum).toBe(w.body.balanceCents)
+  })
+
+  it('退款是终态：退两次不会退两次钱', async () => {
+    const { order } = await makePendingOrder(buyerToken, sellerToken, sellerId, 3000)
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 10000 })
+    await request(app)
+      .post(`/api/orders/${order.body.id}/pay`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    await request(app)
+      .post(`/api/orders/${order.body.id}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    const again = await request(app)
+      .post(`/api/orders/${order.body.id}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    expect(again.status).toBe(409)
+    expect(walletBalance(buyerId)).toBe(10000)
+  })
 })
 
 describe('钱包', () => {

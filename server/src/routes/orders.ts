@@ -3,6 +3,7 @@ import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
+import { creditWallet, debitWallet, TX_REASON } from '../lib/wallet'
 
 /**
  * 订单 / 支付 / 发货
@@ -256,31 +257,63 @@ function transition(req: Request, res: Response, next: string) {
     })
   }
 
-  // WHERE 里再带上原状态：两个请求同时打过来时，
-  // 只有一个能把 pending 改成 paid，另一个 changes === 0
-  const info = db
-    .prepare(
-      `UPDATE orders SET status = ?, paid_at = CASE WHEN ? = 'paid' THEN strftime('%Y-%m-%d %H:%M:%f', 'now') ELSE paid_at END
-        WHERE id = ? AND user_id = ? AND status = ?`
-    )
-    .run(next, next, order.id, userId, order.status)
+  // 改状态 + 退库存 + 退钱必须原子完成。
+  // 之前这三步是三条独立语句：第二步失败会留下「已退款但库存没回来」，
+  // 第三步失败更糟 —— 货已经退回去了，钱还卡在平台账上，
+  // 而用户界面上显示的是「已退款」。这种半截状态没人能自查出来。
+  // 事务里的失败是靠抛异常回滚的，所以这里必须自己接住转成 HTTP 响应 ——
+  // 漏掉的话 better-sqlite3 会把异常抛到 Express 的错误中间件，
+  // 用户拿到一个 500「服务器内部错误」，而真实原因只是订单状态被别人改了。
+  let orderId: number
+  try {
+    orderId = db.transaction(() => {
+      // WHERE 里带上原状态：两个请求同时打过来时，
+      // 只有一个能把 pending 改成 paid，另一个 changes === 0
+      const info = db
+        .prepare(
+          `UPDATE orders SET status = ?, paid_at = CASE WHEN ? = 'paid' THEN strftime('%Y-%m-%d %H:%M:%f', 'now') ELSE paid_at END
+          WHERE id = ? AND user_id = ? AND status = ?`
+        )
+        .run(next, next, order.id, userId, order.status)
+      if (info.changes === 0) throw new HttpError(409, '订单状态已变化，请刷新后重试')
 
-  if (info.changes === 0) {
-    return res.status(409).json({ message: '订单状态已变化，请刷新后重试' })
+      const items = readOrderItems(order.id)
+
+      // 取消和退款都要把库存还回去。
+      // 容易漏的是**取消**：库存是在下单那一刻扣的（不是付款时），
+      // 所以「没付款就取消」同样占着货，不退就是凭空少了一批库存。
+      // 只有「发货之后又取消」是不允许的 —— 货已经在路上了，那条路径只能走退款。
+      if (next === 'cancelled' || next === 'refunded') {
+        const restock = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?')
+        for (const it of items) restock.run(it.quantity, it.product_id)
+      }
+
+      /**
+       * 退款必须真的把钱退回去。
+       *
+       * 之前这里只退库存、不动钱包 —— 于是界面上写着「已退款」，
+       * 用户的余额却一分没变，对账的时候才会发现。
+       * 「会被人点到的占位比没有更糟」在这个项目里已经吃过一次亏了。
+       *
+       * 退的是 order.total_cents，和支付时扣的是同一个数
+       * （没有优惠、没有运费，所以「付了多少」和「退多少」永远相等）。
+       * paid 和 shipped 两条退款路径都必然经过 paid，
+       * 所以不会出现「没付过款就退钱」的路径。
+       */
+      if (next === 'refunded') {
+        creditWallet(userId, order.total_cents, TX_REASON.REFUND_ORDER, order.id)
+      }
+
+      return order.id
+    })()
+  } catch (err: any) {
+    if (err instanceof HttpError) return res.status(err.status).json({ message: err.message })
+    console.error('[Order Transition Error]', err)
+    return res.status(500).json({ message: err.message || '操作失败' })
   }
 
-  // 取消和退款都要把库存还回去。
-  // 容易漏的是**取消**：库存是在下单那一刻扣的（不是付款时），
-  // 所以「没付款就取消」同样占着货，不退就是凭空少了一批库存。
-  // 只有「发货之后又取消」是不允许的 —— 货已经在路上了，那条路径只能走退款。
-  if (next === 'cancelled' || next === 'refunded') {
-    const items = readOrderItems(order.id)
-    const restock = db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?')
-    for (const it of items) restock.run(it.quantity, it.product_id)
-  }
-
-  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id) as any
-  res.json(toOrder(updated, readOrderItems(order.id)))
+  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any
+  res.json(toOrder(updated, readOrderItems(orderId)))
 }
 
 // ===== 支付：余额扣减 + 账本流水，和状态变更在同一个事务里 =====
@@ -298,26 +331,10 @@ router.post('/:id/pay', shopLimiter, requireAuth, (req: Request, res: Response) 
     if (order.status !== 'pending') throw new HttpError(409, '这笔订单已经付过了')
 
     const amount = order.total_cents
-    // 条件更新：余额够不够由数据库判，changes === 0 就是不够。
-    // 「先查余额再扣」在并发下会超扣 —— 两个请求都查到 100，都以为够。
-    const pay = db
-      .prepare(
-        `UPDATE wallets SET balance_cents = balance_cents - ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
-          WHERE user_id = ? AND balance_cents >= ?`
-      )
-      .run(amount, userId, amount)
-    if (pay.changes === 0) {
-      throw new HttpError(402, '余额不足，请先充值')
-    }
-
-    const after = (
-      db.prepare('SELECT balance_cents FROM wallets WHERE user_id = ?').get(userId) as any
-    ).balance_cents
-
-    db.prepare(
-      `INSERT INTO wallet_transactions (user_id, delta_cents, balance_after_cents, reason, ref_order_id)
-       VALUES (?, ?, ?, 'pay_order', ?)`
-    ).run(userId, -amount, after, order.id)
+    // 条件更新：余额够不够由数据库判，不够时返回 null。
+    // 「先查余额再扣」在并发下会超扣 —— 两个请求都查到 100，都以为够扣 80。
+    const after = debitWallet(userId, amount, TX_REASON.PAY_ORDER, order.id)
+    if (after === null) throw new HttpError(402, '余额不足，请先充值')
 
     const upd = db
       .prepare(
@@ -325,6 +342,8 @@ router.post('/:id/pay', shopLimiter, requireAuth, (req: Request, res: Response) 
           WHERE id = ? AND status = 'pending'`
       )
       .run(order.id)
+    // 注意这一步在扣款**之后**。所以它失败时整个事务回滚，
+    // 钱会自动退回去 —— 这正是它必须待在事务里的原因。
     if (upd.changes === 0) throw new HttpError(409, '订单状态已变化，请刷新后重试')
 
     return { orderId: order.id, balanceCents: after }
