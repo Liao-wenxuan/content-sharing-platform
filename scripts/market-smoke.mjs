@@ -449,6 +449,10 @@ try {
       `流水 ${ledgerSumOf(buyer.id)} vs 余额 ${balanceOf(buyer.id)}`
     )
     check('流水里有退款这一笔', (await pageBuyer.locator('.tx-table').innerText()).includes('订单退款'))
+    check(
+      '钱包页把「账目已对平」摆在界面上',
+      (await pageBuyer.locator('.audit-line').innerText()).includes('账目已对平')
+    )
 
     // 卖家那边必须有 sale_income：这是「钱真的到了卖家」的唯一证据
     const sellerTx = withDb((db) =>

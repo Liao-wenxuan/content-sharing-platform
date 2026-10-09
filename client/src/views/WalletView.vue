@@ -15,7 +15,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { walletApi } from '@/api/wallet'
+import { walletApi, type LedgerAudit } from '@/api/wallet'
 import { formatYuan, yuanToCents } from '@/utils/money'
 import { useCart } from '@/composables/useCart'
 import MarketTabs from '@/components/MarketTabs.vue'
@@ -32,6 +32,7 @@ const page = ref(1)
 const loading = ref(false)
 const loadingMore = ref(false)
 const errorMsg = ref('')
+const audit = ref<LedgerAudit | null>(null)
 
 async function load() {
   loading.value = true
@@ -43,6 +44,13 @@ async function load() {
     total.value = res.pagination.total
     hasMore.value = res.pagination.hasMore
     page.value = 1
+    // 对账和流水一起拉：这一页的核心承诺就是「钱算得清」，
+    // 只显示自己的余额而不给出全局校验的话，那和没有账本没有区别
+    try {
+      audit.value = await walletApi.audit()
+    } catch {
+      audit.value = null
+    }
   } catch (err: any) {
     errorMsg.value = err?.response?.data?.message || '加载钱包失败'
   } finally {
@@ -121,6 +129,24 @@ onMounted(load)
       <p class="balance-label">余额</p>
       <p class="balance-value">{{ formatYuan(balanceCents) }}</p>
       <p class="balance-note">站内余额就是本站唯一的支付方式。每一笔支付都会写一条可核对的流水。</p>
+
+      <!-- 对账条：把「账是平的」摆在界面上，而不是只写在测试里。
+           diff 非 0 时变红 —— 真出了账目问题，这一行会立刻指出来 -->
+      <div v-if="audit" class="audit" :class="{ bad: !audit.balanced }">
+        <div class="audit-line">
+          <span class="audit-dot" />
+          {{ audit.balanced ? '账目已对平' : `账目差 ${formatYuan(Math.abs(audit.diffCents))}` }}
+        </div>
+        <div class="audit-detail">
+          <span>全部钱包 {{ formatYuan(audit.walletsCents) }}</span>
+          <span>在途 {{ formatYuan(audit.transitCents) }}</span>
+          <span>充值 {{ formatYuan(audit.topUpCents) }}</span>
+        </div>
+        <p class="audit-formula">
+          守恒律：所有钱包 + 在途 == 充值总额。支付和结算都只是账户之间搬运，退款是「在途 →
+          买家」、钱还在系统里，所以退款额不参与守恒。
+        </p>
+      </div>
     </section>
 
     <h2 class="section-title">流水 · 共 {{ total }} 笔</h2>
@@ -261,6 +287,51 @@ onMounted(load)
   font-size: 12px;
   color: var(--muted-foreground);
   line-height: 1.6;
+}
+
+/* ===== 对账条 ===== */
+.audit {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.audit-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.audit.bad .audit-line {
+  color: var(--el-color-danger);
+}
+
+.audit-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.audit-detail {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-formula {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted-foreground);
+  opacity: 0.85;
 }
 
 .section-title {
