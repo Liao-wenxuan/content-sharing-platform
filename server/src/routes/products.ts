@@ -25,12 +25,19 @@ function parseProductId(raw: unknown): number | null {
 
 /**
  * 金额校验：**必须是非负整数**。
- * 传 12.5 会被拒绝而不是被四舍五入 —— 金额上的"帮忙"比报错危险得多。
+ *
+ * 这里特意不能直接 `parseInt`：parseInt('8900.5') 会截断成 8900 静默通过 ——
+ * 那正是注释里说要避免的「金额上的帮忙」，比报错危险得多。
+ * 所以字符串必须整串都是数字才收，负号、小数点、指数一律拒绝。
  */
 function parsePrice(raw: unknown): number | null {
-  const n = typeof raw === 'number' ? raw : parseInt(String(raw))
-  if (!Number.isInteger(n) || n < 0) return null
-  return n
+  if (typeof raw === 'number') {
+    return Number.isSafeInteger(raw) && raw >= 0 ? raw : null
+  }
+  const s = String(raw ?? '').trim()
+  if (!/^\d+$/.test(s)) return null
+  const n = Number(s)
+  return Number.isSafeInteger(n) ? n : null
 }
 
 function parseImages(raw: unknown): string | null {
