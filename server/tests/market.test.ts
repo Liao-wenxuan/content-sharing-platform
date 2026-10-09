@@ -178,6 +178,20 @@ describe('商品：权限', () => {
   })
 })
 
+describe('商品列表分页', () => {
+  it('带 hasMore，和订单列表保持一致', async () => {
+    for (let i = 0; i < 3; i++) await mkProduct(sellerToken, { title: `分页商品${i}` })
+
+    const first = await request(app).get('/api/products?page=1&pageSize=2')
+    expect(first.body.pagination.hasMore).toBe(true)
+
+    const second = await request(app).get('/api/products?page=2&pageSize=2')
+    // 一共 3 件，第二页取走 2 件之后就没有了
+    expect(second.body.pagination.hasMore).toBe(false)
+    expect(second.body.pagination.total).toBe(3)
+  })
+})
+
 describe('购物车', () => {
   it('同一件商品只占一行，再加是改数量', async () => {
     const p = await mkProduct(sellerToken)

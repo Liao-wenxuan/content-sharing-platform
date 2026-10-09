@@ -129,7 +129,13 @@ router.get('/', optionalAuth, (req: Request, res: Response) => {
       .prepare(`${PUBLIC_SELECT} WHERE ${where} ORDER BY ${orderBy} LIMIT @limit OFFSET @offset`)
       .all(params) as any[]
 
-    res.json({ list: rows.map(toProduct), pagination: { page, pageSize, total } })
+    // hasMore 和 orders / wallet 的列表保持一致。
+    // 之前这里只返回 total，导致客户端要么多拉一页拿回空列表，
+    // 要么猜「total > 已加载数」—— 两边算法一改就会不一致
+    res.json({
+      list: rows.map(toProduct),
+      pagination: { page, pageSize, total, hasMore: offset + rows.length < total }
+    })
   } catch (err: any) {
     console.error('[Product List Error]', err)
     res.status(500).json({ message: err.message || '加载商品失败' })
