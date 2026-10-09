@@ -21,5 +21,13 @@ export const FOLDER_NAME_MAX_LENGTH = 20
 /** 单用户收藏夹上限：再多就只是「分类过细」，不是「整理」 */
 export const FOLDER_MAX_COUNT = 50
 
+/**
+ * 浏览记录最多保留多少条
+ *
+ * 定 200 的理由：正常人一天刷不到 200 篇，保留一天半的量足够"回看"用；
+ * 再多就没人翻了，纯占存储。真正要挡的是脚本无节制地灌这张表。
+ */
+export const VIEW_HISTORY_LIMIT = 200
+
 // 默认端口
 export const DEFAULT_PORT = 3000

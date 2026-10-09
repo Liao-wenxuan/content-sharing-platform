@@ -292,4 +292,30 @@ export function initSchema(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_notifications_unread
        ON notifications(user_id, read_at)`
   )
+
+  // ===== 浏览记录 =====
+  // 「最近看过什么」。复合主键 (user_id, post_id) 而不是自增 id：
+  // 重复看同一篇不该产生第二行，而是把 viewed_at 顶上去 ——
+  // 这和关注、收藏是同一套「幂等互动」的建模思路。
+  //
+  // **为什么 viewed_at 用毫秒而不是默认的 CURRENT_TIMESTAMP**：
+  // CURRENT_TIMESTAMP 只有秒级。用户连续点开两篇笔记完全可能落在同一秒里，
+  // 而「保留最新 N 条」必须能分出先后 —— 同一秒的行排序是不确定的，
+  // 限长就变成「随机删掉几条」。strftime 的 %f 给出毫秒，顺序才稳定。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS view_history (
+      user_id INTEGER NOT NULL,
+      post_id INTEGER NOT NULL,
+      viewed_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      PRIMARY KEY (user_id, post_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+    )
+  `)
+
+  // 列表按 (user_id, viewed_at DESC) 分页，限长时也走这个顺序
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_view_history_user
+       ON view_history(user_id, viewed_at DESC)`
+  )
 }
