@@ -135,6 +135,10 @@ async function createOrder() {
   try {
     const order = await ordersApi.create(activeSellerId.value)
     orderId.value = order.id
+    // 服务端下单时会清掉这位卖家在车里的行，客户端必须跟着刷新。
+    // 不刷的话用户关掉对话框会看到还在车里的商品，再点一次结算就是
+    // 「购物车里没有这位卖家的商品」409 —— 一个自己制造、自己又不解释的错。
+    await load()
   } catch (err: any) {
     payError.value = err?.response?.data?.message || '下单失败'
     // 下单失败多半是库存被别人买走了，服务端已经把车里的行留着，
