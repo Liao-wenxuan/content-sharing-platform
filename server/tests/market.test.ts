@@ -59,6 +59,10 @@ beforeEach(() => {
   db.prepare('DELETE FROM wallet_transactions').run()
   db.prepare('DELETE FROM wallets').run()
   db.prepare('DELETE FROM products').run()
+  // 在途账本也得清。不清的话上一轮压着的钱会留在在途里，
+  // 守恒律的断言会在第二轮变成「为什么突然差了 12850」
+  db.prepare('DELETE FROM transit_transactions').run()
+  db.prepare('DELETE FROM transit_accounts').run()
 })
 
 function mkProduct(token: string, over: Record<string, unknown> = {}) {
@@ -731,5 +735,284 @@ describe('钱包', () => {
     expect(results.filter((r) => r.status === 200)).toHaveLength(1)
     expect(results.filter((r) => r.status === 402)).toHaveLength(1)
     expect(walletBalance(buyerId)).toBe(200)
+  })
+})
+
+// ===================================================================
+// 在途资金
+//
+// 这一节是为了钉一条守恒律：
+//   **所有钱包余额 + 在途余额 == 充值总额 - 退款总额**
+//
+// 之前没有在途这笔账，买家付了钱、卖家零收入，
+// 差多少都说不清楚（实测差 12850 分，正是那笔净流出）。
+// 「余额是缓存、流水是权威」这句话当时是不成立的 —— 账本身就不平。
+// ===================================================================
+
+describe('在途资金与账目守恒', () => {
+  const transitBalance = () =>
+    (db.prepare('SELECT COALESCE(SUM(balance_cents), 0) AS s FROM transit_accounts').get() as any)
+      .s ?? 0
+
+  const audit = async () =>
+    (await request(app).get('/api/wallet/audit').set('Authorization', `Bearer ${buyerToken}`)).body
+
+  /** 跑一遍完整流程：下单 → 支付 → （可选）发货 → （可选）收货 */
+  async function placeAndPay(
+    opts: { price?: number; token?: string; sellerToken?: string; sellerIdNum?: number } = {}
+  ) {
+    const {
+      price = 3000,
+      token = buyerToken,
+      sellerToken: st = sellerToken,
+      sellerIdNum = sellerId
+    } = opts
+    const p = await mkProduct(st, { stock: 10, priceCents: price })
+    await request(app)
+      .post('/api/cart')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ productId: p.body.id, quantity: 1 })
+    const order = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sellerId: sellerIdNum })
+    const paid = await request(app)
+      .post(`/api/orders/${order.body.id}/pay`)
+      .set('Authorization', `Bearer ${token}`)
+    return { orderId: order.body.id, product: p, paid }
+  }
+
+  it('支付后钱进在途，卖家余额仍是 0', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+
+    const { paid } = await placeAndPay({ price: 3000 })
+    expect(paid.status).toBe(200)
+
+    // 买家被扣了
+    expect(walletBalance(buyerId)).toBe(47000)
+    // 但卖家一分钱没拿到
+    expect(walletBalance(sellerId)).toBe(0)
+    // 钱压在在途里，正好等于订单金额
+    expect(transitBalance()).toBe(3000)
+  })
+
+  it('确认收货才结算给卖家，在途归零', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+
+    await request(app)
+      .post(`/api/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+
+    // 发货了钱还在途：货在路上，钱也还在路上
+    expect(transitBalance()).toBe(3000)
+    expect(walletBalance(sellerId)).toBe(0)
+
+    await request(app)
+      .post(`/api/orders/${orderId}/confirm`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    expect(walletBalance(sellerId)).toBe(3000)
+    expect(transitBalance()).toBe(0)
+  })
+
+  it('卖家收到的货款在自己的流水里，且是 sale_income', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+    await request(app)
+      .post(`/api/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+    await request(app)
+      .post(`/api/orders/${orderId}/confirm`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    const w = await request(app).get('/api/wallet').set('Authorization', `Bearer ${sellerToken}`)
+    expect(w.body.list[0].reason).toBe('sale_income')
+    expect(w.body.list[0].deltaCents).toBe(3000)
+    expect(w.body.list[0].balanceAfterCents).toBe(3000)
+    expect(w.body.list[0].refOrderId).toBe(orderId)
+  })
+
+  it('退款走的是在途，不是从卖家账里扣', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+
+    // 关键场景：卖家已经收货，钱进了卖家账户
+    await request(app)
+      .post(`/api/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+    await request(app)
+      .post(`/api/orders/${orderId}/confirm`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    expect(walletBalance(sellerId)).toBe(3000)
+
+    // 已完成是终态，不能退款 —— 所以这条退款测试必须用还没结算的订单
+    const blocked = await request(app)
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    expect(blocked.status).toBe(409)
+    // 被拒时一分钱都不该动
+    expect(walletBalance(sellerId)).toBe(3000)
+    expect(walletBalance(buyerId)).toBe(47000)
+  })
+
+  it('退款：钱原路退回买家，卖家分文未动', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+
+    await request(app)
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    expect(walletBalance(buyerId)).toBe(50000)
+    expect(walletBalance(sellerId)).toBe(0)
+    expect(transitBalance()).toBe(0)
+  })
+
+  it('退款退不回来从别人账上扣的钱（卖家全程没经手）', async () => {
+    // 「从卖家扣回」这种实现下，卖家把余额花掉就会扣不动。
+    // 在途资金让退款只依赖在途，而退款只能发生在结算之前，
+    // 所以这个坑根本不存在 —— 这条用例就是把那个不变量钉死。
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+    await request(app)
+      .post(`/api/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+
+    await request(app)
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    expect(walletBalance(buyerId)).toBe(50000)
+    expect(transitBalance()).toBe(0)
+  })
+
+  it('守恒律：支付过程中总量不变', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+
+    let a = await audit()
+    expect(a.balanced).toBe(true)
+    expect(a.diffCents).toBe(0)
+    expect(a.transitCents).toBe(3000)
+
+    await request(app)
+      .post(`/api/orders/${orderId}/ship`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+    expect((await audit()).balanced).toBe(true)
+
+    await request(app)
+      .post(`/api/orders/${orderId}/confirm`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    a = await audit()
+    expect(a.balanced).toBe(true)
+    expect(a.transitCents).toBe(0)
+  })
+
+  it('守恒律：多笔订单 + 部分退款，账依然平', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 200000 })
+
+    const a1 = await placeAndPay({ price: 3000 })
+    const a2 = await placeAndPay({ price: 7000 })
+    expect((await audit()).balanced).toBe(true)
+
+    // 一笔走完整个流程到结算
+    await request(app)
+      .post(`/api/orders/${a1.orderId}/ship`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+    await request(app)
+      .post(`/api/orders/${a1.orderId}/confirm`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    // 另一笔退款
+    await request(app)
+      .post(`/api/orders/${a2.orderId}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    const a = await audit()
+    expect(a.balanced).toBe(true)
+    expect(a.transitCents).toBe(0)
+    expect(walletBalance(sellerId)).toBe(3000)
+    expect(walletBalance(buyerId)).toBe(200000 - 3000)
+  })
+
+  it('取消未支付订单不影响钱（在途本来就没有这笔）', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+    // 先退款清掉在途，再看取消对账有没有影响
+    await request(app)
+      .post(`/api/orders/${orderId}/refund`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    const p = await mkProduct(sellerToken, { stock: 5, priceCents: 1000 })
+    await request(app)
+      .post('/api/cart')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ productId: p.body.id, quantity: 1 })
+    const o = await request(app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ sellerId })
+    await request(app)
+      .post(`/api/orders/${o.body.id}/cancel`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+
+    // 取消一个从没付过钱的订单，钱包和在途都不该被动过
+    expect((await audit()).balanced).toBe(true)
+    expect(transitBalance()).toBe(0)
+  })
+
+  it('对账接口自己就把差额说清楚，不只是报一个 false', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+
+    const a = await audit()
+    expect(a.balanced).toBe(true)
+    expect(a.topUpCents).toBe(50000)
+    expect(a.expectedCents).toBe(50000)
+    expect(a.actualCents).toBe(50000)
+  })
+
+  it('在途流水能查到买家和卖家是谁', async () => {
+    await request(app)
+      .post('/api/wallet/topup')
+      .set('Authorization', `Bearer ${buyerToken}`)
+      .send({ amountCents: 50000 })
+    const { orderId } = await placeAndPay({ price: 3000 })
+
+    const a = await audit()
+    const hold = a.transit.find((t: any) => t.kind === 'hold')
+    expect(hold.refOrderId).toBe(orderId)
+    expect(hold.buyerId).toBe(buyerId)
+    expect(hold.sellerId).toBe(sellerId)
+    expect(hold.deltaCents).toBe(3000)
   })
 })
