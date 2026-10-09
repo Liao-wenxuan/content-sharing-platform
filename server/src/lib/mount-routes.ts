@@ -9,6 +9,7 @@ import uploadsRouter from '../routes/uploads'
 import conversationsRouter from '../routes/conversations'
 import notificationsRouter from '../routes/notifications'
 import topicsRouter from '../routes/topics'
+import viewHistoryRouter from '../routes/viewHistory'
 
 /**
  * 统一挂载所有 API 路由
@@ -29,6 +30,7 @@ export function mountApiRouters(app: Express): void {
   app.use('/api/posts', likesRouter) // 共享 /api/posts 前缀
   app.use('/api/posts', commentsRouter) // 同上
   app.use('/api/posts', favoritesRouter) // 收藏 + 收藏夹（/api/posts/me/...）
+  app.use('/api/posts', viewHistoryRouter) // 浏览记录（:postId/view + /me/view-history）
   app.use('/api/users', usersRouter)
   app.use('/api/uploads', uploadsRouter)
   app.use('/api/conversations', conversationsRouter)

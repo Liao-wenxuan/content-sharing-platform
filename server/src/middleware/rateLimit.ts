@@ -48,3 +48,19 @@ export const uploadLimiter = makeLimiter({
   limit: 30,
   message: '上传过于频繁，请稍后再试'
 })
+
+/**
+ * 浏览记录专用：1 分钟 200 次
+ *
+ * 为什么要单独一档：翻一篇笔记就写一次，这是**正常使用频率**而不是"互动"。
+ * 套用 writeLimiter（20/min）的话，逛得稍快一点就开始丢记录 ——
+ * 而丢记录这件事用户完全无感，只会让浏览记录莫名少几条，没法排查。
+ *
+ * 上限还是要有：这是个登录后可写的接口，不设闸等于开着。
+ * 200/min 对真人来说是几十倍的余量，对脚本来说已经是噪音了。
+ */
+export const viewLimiter = makeLimiter({
+  windowMs: 60 * 1000,
+  limit: 200,
+  message: '浏览过于频繁，请稍后再试'
+})
