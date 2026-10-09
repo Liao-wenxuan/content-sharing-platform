@@ -213,11 +213,6 @@ async function copyXhsId() {
   }
 }
 
-// ===== 浏览记录 / 钱包 占位 =====
-function onPlaceholderClick(feature: string) {
-  ElMessage.info(`${feature}功能即将上线，敬请期待`)
-}
-
 // ===== 未登录占位态 =====
 // 路由层已放行 /profile/me，未登录时不再跳转登录页，
 // 而是展示「登录后查看我的主页」占位 + 登录入口。
@@ -588,13 +583,10 @@ const emptyHint = computed(() => {
           <el-card shadow="never" class="side-card">
             <template #header><span class="side-title">常用功能</span></template>
             <div class="side-actions">
-              <el-button class="side-btn" :icon="Plus" @click="onPlaceholderClick('发布')">
+              <el-button class="side-btn" :icon="Plus" @click="router.push('/publish')">
                 发布新笔记
               </el-button>
-              <el-button class="side-btn" @click="onPlaceholderClick('浏览记录')">
-                浏览记录
-              </el-button>
-              <el-button class="side-btn" @click="onPlaceholderClick('钱包')">钱包</el-button>
+              <el-button class="side-btn" @click="router.push('/history')">浏览记录</el-button>
             </div>
           </el-card>
 
