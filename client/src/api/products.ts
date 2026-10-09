@@ -41,11 +41,11 @@ export interface ProductListQuery {
 }
 
 /**
- * 商品列表的分页。
+ * 商品列表的结果。
  *
- * 服务端的商品列表没返回 hasMore（只有 page/pageSize/total），
- * 这里按 total 补一个 —— total 是权威值，这个换算是确定的，
- * 不属于「客户端自己编数据」。
+ * hasMore 由服务端给（和 orders / wallet 一致）——
+ * 客户端自己按 total 推的话，两边的翻页算法一改就会对不上，
+ * 症状是「加载更多」按钮要么不出现、要么一直出现。
  */
 export interface ProductListResult {
   list: Product[]
