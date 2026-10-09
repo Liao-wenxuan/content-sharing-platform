@@ -27,6 +27,21 @@ const count = computed(() => cart.value.count)
 const totalCents = computed(() => cart.value.totalCents)
 const list = computed(() => cart.value.list)
 
+/**
+ *  这一行现在能不能拿去结算。
+ *
+ * 服务端已经把结论算好放在 `unavailable` 里了，理论上直接用它就够。
+ * 这里**再算一遍**是刻意的：unavailable 和 status/stock 是两个独立字段，
+ * 只要它们有一处不一致（老版本留下的数据、以后加的字段忘了同步），
+ * 界面就会放行一个注定 409 的结算 —— 用户填完一堆东西才被告知失败，
+ * 比一开始就置灰糟糕得多。
+ *
+ * 成本是三个布尔判断，收益是把「不一致」从「用户踩到」变成「测试能发现」。
+ */
+function isPayable(item: CartItem): boolean {
+  return !item.unavailable && item.status === 'on_sale' && item.stock >= item.quantity
+}
+
 export function useCart() {
   async function load() {
     const p = (async () => {
@@ -94,7 +109,7 @@ export function useCart() {
    * 组内小计也是重新加出来的 —— 购物车接口的 totalCents 是**整车**合计，
    * 拆成多组之后每一组的合计服务端没给。这里加的是服务端已经算好的
    * subtotalCents（不是拿单价乘数量），所以不会引入新的算错风险。
-   * 组的顺序按首次出现，保持稳定，不随勾选变化。
+   * 组的顺序跟着服务端返回的行走（它按加入时间倒序排），不额外排序。
    */
   const groups = computed<
     {
@@ -116,9 +131,9 @@ export function useCart() {
       sellerNickname: items[0].sellerNickname,
       items,
       subtotalCents: items.reduce((sum, it) => sum + it.subtotalCents, 0),
-      payableCount: items.filter((it) => !it.unavailable).length
+      payableCount: items.filter(isPayable).length
     }))
   })
 
-  return { cart, list, count, totalCents, groups, load, add, setQuantity, remove, clear }
+  return { cart, list, count, totalCents, groups, isPayable, load, add, setQuantity, remove, clear }
 }
