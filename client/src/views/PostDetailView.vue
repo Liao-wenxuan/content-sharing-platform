@@ -13,6 +13,7 @@ import { ElMessage } from 'element-plus'
 import { Star, ChatDotRound, Collection, ArrowLeft, Plus } from '@element-plus/icons-vue'
 import { postsApi, type Post } from '@/api/posts'
 import { commentsApi, type Comment } from '@/api/comments'
+import { viewHistoryApi } from '@/api/viewHistory'
 // 置顶排序和回复分组是纯逻辑，抽出来单独测；
 // 排序规则必须和后端 routes/comments.ts 的 ORDER BY 一致，
 // 两边不一致的话用户刷新一下顺序就变了
@@ -166,6 +167,14 @@ async function loadPost() {
   await loadComments()
   await loadFavorite()
   await loadAuthorRelation()
+
+  // 记浏览放最后：它是纯后台行为，失败了就失败了。
+  // 不 await、不 catch —— 用户在看笔记，打断他一条"记录失败"是本末倒置，
+  // 而丢一条浏览记录本来就无感、也没法排查。
+  // 游客不发这个请求：浏览记录是登录后才有的东西。
+  if (auth.isLoggedIn) {
+    void viewHistoryApi.record(id).catch(() => {})
+  }
 }
 
 async function loadComments() {
