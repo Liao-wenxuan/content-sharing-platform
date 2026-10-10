@@ -13,10 +13,12 @@
  *   关注流不显示内容频道栏 —— 订阅流按时间排，再按话题筛一遍没有意义
  */
 import { ref, computed, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { postsApi, type Post } from '@/api/posts'
 import { useHomeTabsStore } from '@/stores/homeTabs'
 import { useAuthStore } from '@/stores/auth'
+import { useFeed } from '@/composables/useFeed'
 import PostMasonry from '@/components/PostMasonry.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -28,12 +30,44 @@ const auth = useAuthStore()
 /** 关注流 = 发现页的 channel=follow 视图 */
 const isFollowFeed = computed(() => route.query.channel === 'follow')
 
+/**
+ * 「推荐」频道走个性化推荐流，其余频道仍是时间倒序。
+ *
+ * 刻意不把推荐铺到所有频道上：小红书的频道是**用户主动圈定的主题**，
+ * 在「美食」频道里塞一篇你收藏过的健身笔记，用户会认为频道坏了。
+ * 只有「推荐」这个频道本身没有主题约束，才是画像该起作用的地方。
+ */
+const isRecommended = computed(() => !isFollowFeed.value && homeTabs.category === 'recommend')
+
+/**
+ * 推荐流的装饰（理由 + 不感兴趣）只在登录态出现。
+ *
+ * 游客也走推荐流，但那是**冷启动**：没有任何画像，
+ * 每条理由只可能是「刚刚发布」或「最近很火」——
+ * 同一句话在整屏重复十二遍，零信息量，只是噪声。
+ * 而「不感兴趣」对游客更糟：点了会拿到 401 或者被弹去登录页，
+ * 一个点下去只会把人踢走的按钮，不如不给。
+ */
+const showFeedMeta = computed(() => isRecommended.value && auth.isLoggedIn)
+
+const feed = useFeed(() => homeTabs.category)
+
 const posts = ref<Post[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const errorMsg = ref('')
 const page = ref(1)
 const hasMore = ref(false)
+
+// 当前这一屏到底渲染哪一路数据。三个来源（推荐 / 关注 / 其它频道）
+// 在模板里混着写 if 会让「加载态」出现三种真相，合成一个 computed 才收得住。
+const visiblePosts = computed(() => (isRecommended.value ? feed.posts.value : posts.value))
+const visibleLoading = computed(() => (isRecommended.value ? feed.loading.value : loading.value))
+const visibleError = computed(() => (isRecommended.value ? feed.errorMsg.value : errorMsg.value))
+const visibleLoadingMore = computed(() =>
+  isRecommended.value ? feed.loadingMore.value : loadingMore.value
+)
+const visibleHasMore = computed(() => (isRecommended.value ? feed.hasMore.value : hasMore.value))
 
 // 频道（对齐小红书首页频道栏）
 const channels = [
@@ -52,6 +86,9 @@ const channels = [
 ]
 
 async function loadFeed(reset: boolean) {
+  // 推荐流走自己的会话，不能进这条时间序的加载路径
+  if (isRecommended.value) return feed.reload()
+
   if (reset) {
     page.value = 1
     posts.value = []
@@ -83,9 +120,25 @@ function reload() {
 }
 
 async function loadMore() {
+  if (isRecommended.value) return feed.loadMore()
   if (loadingMore.value || !hasMore.value) return
   page.value++
   await loadFeed(false)
+}
+
+/**
+ * 不感兴趣。
+ *
+ * 必须先拦未登录：反馈是**按用户**存进服务端的，
+ * 游客点了会拿到 401 然后回滚 —— 白白闪一下，比直接引导登录差得多。
+ */
+function onDismiss(postId: number) {
+  if (!auth.isLoggedIn) {
+    ElMessage.info('登录后才能调整推荐')
+    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  void feed.dismiss(postId)
 }
 
 onMounted(() => loadFeed(true))
@@ -114,12 +167,16 @@ watch(isFollowFeed, () => loadFeed(true))
       <p class="follow-sub">你关注的人发布的新笔记</p>
     </div>
 
-    <EmptyState v-if="loading && posts.length === 0" variant="loading" title="正在加载笔记..." />
+    <EmptyState
+      v-if="visibleLoading && visiblePosts.length === 0"
+      variant="loading"
+      title="正在加载笔记..."
+    />
 
     <EmptyState
-      v-else-if="errorMsg"
+      v-else-if="visibleError"
       variant="error"
-      :title="errorMsg"
+      :title="visibleError"
       action="重试"
       @action="reload"
     />
@@ -127,13 +184,15 @@ watch(isFollowFeed, () => loadFeed(true))
     <template v-else>
       <!-- 关注流空态要给出下一步：没登录就登录，已登录就去发现页找人关注 -->
       <el-empty
-        v-if="posts.length === 0"
+        v-if="visiblePosts.length === 0"
         :description="
           isFollowFeed
             ? auth.isLoggedIn
               ? '你关注的人还没有发过笔记'
               : '登录后查看你关注的人的更新'
-            : '这个频道还没有内容'
+            : isRecommended
+              ? '还没有可以推荐的内容'
+              : '这个频道还没有内容'
         "
       >
         <el-button v-if="!isFollowFeed" type="primary" @click="router.push('/publish')">
@@ -149,11 +208,29 @@ watch(isFollowFeed, () => loadFeed(true))
         <el-button v-else type="primary" plain @click="router.push('/')"> 去发现页看看 </el-button>
       </el-empty>
 
-      <PostMasonry v-else :posts="posts" />
+      <!-- 推荐理由 + 不感兴趣只在登录后的推荐流出现 -->
+      <PostMasonry
+        v-else
+        :posts="visiblePosts"
+        :reasons="showFeedMeta ? feed.reasons.value : undefined"
+        :dismissable="showFeedMeta"
+        @dismiss="onDismiss"
+      />
 
-      <div v-if="posts.length > 0" class="pager">
-        <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
+      <div v-if="visiblePosts.length > 0" class="pager">
+        <template v-if="visibleHasMore">
+          <el-button :loading="visibleLoadingMore" @click="loadMore">加载更多</el-button>
+          <!-- 「换一批」必须新建会话而不是重新拉第一页 -->
+          <el-button v-if="isRecommended" plain :loading="visibleLoading" @click="feed.reshuffle()">
+            换一批
+          </el-button>
+        </template>
         <span v-else class="no-more">— 已经到底了 —</span>
+      </div>
+
+      <!-- 推荐流的解释入口：让人知道「推荐」不是随机的，也能改 -->
+      <div v-if="isRecommended && visiblePosts.length > 0" class="feed-note">
+        <router-link to="/interest" class="feed-note-link">这些推荐是怎么来的？</router-link>
       </div>
     </template>
   </div>
@@ -249,5 +326,23 @@ watch(isFollowFeed, () => loadFeed(true))
 .no-more {
   color: var(--muted-foreground);
   font-size: 13px;
+}
+
+/* ===== 推荐流的解释入口 ===== */
+.feed-note {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 30px;
+}
+
+.feed-note-link {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out-expo);
+}
+
+.feed-note-link:hover {
+  color: var(--accent);
 }
 </style>

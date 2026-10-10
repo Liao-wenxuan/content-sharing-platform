@@ -9,7 +9,7 @@
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Star, VideoPlay } from '@element-plus/icons-vue'
+import { Star, VideoPlay, Close } from '@element-plus/icons-vue'
 import type { Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import {
@@ -24,7 +24,13 @@ const props = defineProps<{
   posts: Post[]
   /** 关键词：命中片段会高亮（搜索页传，首页不传） */
   highlight?: string
+  /** postId → 推荐理由。推荐流专用，搜索页不传就不渲染任何东西 */
+  reasons?: Record<number, string>
+  /** 是否显示「不感兴趣」按钮。只有推荐流该有，搜索结果不该有 */
+  dismissable?: boolean
 }>()
+
+const emit = defineEmits<{ dismiss: [postId: number] }>()
 
 const { formatTime } = useRelativeTime()
 
@@ -102,6 +108,30 @@ function segments(text: string) {
             所以命中标签时在封面左上角挂一个标签角标。
           -->
           <span v-if="tagMatched(item.post)" class="tag-badge"># {{ item.post.topicTag }}</span>
+
+          <!--
+            推荐理由（只有推荐流会传 reasons）。
+            放在封面上而不是标题下面，是因为它回答的是「为什么你会看到这条」，
+            而用户滑过一张卡片时眼睛先落在图上 —— 贴图的短句才读得到。
+          -->
+          <span v-if="props.reasons?.[item.post.id]" class="reason-badge">
+            {{ props.reasons[item.post.id] }}
+          </span>
+
+          <!--
+            不感兴趣。hover 才显形：常驻会变成视觉噪声，
+            而且它是个**破坏性**操作，不该和「点进去看」抢同等的视觉权重。
+            .prevent 挡住 router-link 的跳转，.stop 冒泡出去。
+          -->
+          <button
+            v-if="dismissable"
+            type="button"
+            class="dismiss-btn"
+            :aria-label="`不感兴趣：${item.post.content.slice(0, 20)}`"
+            @click.prevent.stop="emit('dismiss', item.post.id)"
+          >
+            <el-icon><component :is="Close" /></el-icon>
+          </button>
         </div>
 
         <!-- 标题：两行截断，命中关键词高亮 -->
@@ -254,6 +284,64 @@ function segments(text: string) {
   top: 8px;
   color: #fff;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+/* 推荐理由：贴底的小胶囊，不遮挡主体内容 */
+.reason-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 16px);
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+  不感兴趣按钮：
+  - 默认 opacity 0，hover 卡片才显形
+  - 聚焦时也显形，否则键盘用户永远看不到这个操作
+*/
+.dismiss-btn {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out-expo);
+}
+
+.card:hover .dismiss-btn,
+.dismiss-btn:focus-visible {
+  opacity: 1;
+}
+
+.dismiss-btn:hover {
+  background: var(--accent);
+}
+
+/* 只动 transform / opacity / color / border-color，不碰 layout 属性 */
+.dismiss-btn:hover {
+  transform: scale(1.08);
 }
 
 /* ===== 标题 ===== */
