@@ -3,7 +3,7 @@ import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
 import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
-import { POST_CONTENT_MAX_LENGTH } from '../constants'
+import { POST_CONTENT_MAX_LENGTH, CATEGORY_LABEL, isContentCategory } from '../constants'
 
 const router = Router()
 
@@ -80,46 +80,14 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
 
     // 2. 解析过滤参数（防 SQL 注入：白名单枚举）
     const ALLOWED_CHANNELS = ['discover', 'follow', 'ya'] as const
-    // 频道值对齐前端首页频道栏（推荐/穿搭/美食/...），最终落到 topic_tag 上过滤
-    const ALLOWED_CATEGORIES = [
-      'recommend',
-      'outfit',
-      'food',
-      'beauty',
-      'movie',
-      'workplace',
-      'emotion',
-      'home',
-      'game',
-      'travel',
-      'fitness',
-      'video'
-    ] as const
     const channelParam = String(req.query.channel || 'discover')
+    // 频道白名单和中文标签表共用 constants.ts —— 推荐流也要用同一份，
+    // 抄一份的话前端加了频道这里忘了改，这个接口就永远查不到那个话题
     const categoryParam = String(req.query.category || '')
     const channel = (ALLOWED_CHANNELS as readonly string[]).includes(channelParam)
       ? channelParam
       : 'discover'
-    const category = (ALLOWED_CATEGORIES as readonly string[]).includes(categoryParam)
-      ? categoryParam
-      : ''
-
-    // 频道 key → 库里存的话题标签文案。
-    // 接口层用稳定的英文 key，存储层用中文标签，以后加频道只改这一处。
-    const CATEGORY_LABEL: Record<string, string> = {
-      recommend: '推荐',
-      outfit: '穿搭',
-      food: '美食',
-      beauty: '彩妆',
-      movie: '影视',
-      workplace: '职场',
-      emotion: '情感',
-      home: '家居',
-      game: '游戏',
-      travel: '旅行',
-      fitness: '健身',
-      video: '视频'
-    }
+    const category = isContentCategory(categoryParam) ? categoryParam : ''
 
     // 3. 拼 WHERE
     const conditionsSql: string[] = []
@@ -139,7 +107,7 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
     if (category && category !== 'recommend') {
       // 简化映射：category 落到 topic_tag 上过滤（真实项目应建专门的 category 表）
       conditionsSql.push('p.topic_tag = ?')
-      conditionParams.push(CATEGORY_LABEL[category] || category)
+      conditionParams.push(CATEGORY_LABEL[category])
     }
     const whereClause = conditionsSql.length ? `WHERE ${conditionsSql.join(' AND ')}` : ''
 
