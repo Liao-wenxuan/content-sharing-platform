@@ -46,6 +46,15 @@ interface Item {
   value?: string
   /** 是否渲染 ElSwitch（仅「深色模式」用） */
   switchable?: boolean
+  /**
+   * 有值就渲染成**真的能跳**的入口。
+   *
+   * 之前这一栏全是「即将上线」的 toast —— 一个被人点得到、
+   * 点下去只会得到一句「快了」的按钮，比不放更糟：
+   * 它在教用户这个站点的按钮有一半是假的。
+   * 有真实页面的项走路由，没有的先从菜单里拿掉。
+   */
+  route?: string
 }
 
 interface Group {
@@ -68,7 +77,8 @@ const groups: Group[] = [
     title: '内容与外观',
     items: [
       { key: 'storage', label: '存储空间', icon: Coin, value: '1.94 GB' },
-      { key: 'content', label: '内容偏好调节', icon: Operation },
+      // 兴趣画像：推荐流凭什么这么排、屏蔽了谁，都能在这里看到并撤销
+      { key: 'content', label: '内容偏好调节', icon: Operation, route: '/interest' },
       { key: 'address', label: '收货地址', icon: Location },
       { key: 'widget', label: '添加小组件', icon: Grid },
       { key: 'minor', label: '未成年人模式', icon: Opportunity, value: '未开启' },
@@ -115,6 +125,10 @@ function onItemClick(item: Item) {
     router.push('/')
     return
   }
+  if (item.route) {
+    router.push(item.route)
+    return
+  }
   // 大部分菜单项业务未实现，给用户友好提示而不是静默无反应
   toast.show(`「${item.label}」即将上线`)
 }
@@ -145,7 +159,7 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
             <el-switch v-if="item.switchable" :model-value="isDark" @change="toggleTheme" />
 
             <el-button v-else link class="item-action" @click="onItemClick(item)">
-              {{ item.key === 'logout' ? '' : '设置' }}
+              {{ item.key === 'logout' ? '' : item.route ? '查看' : '设置' }}
             </el-button>
           </li>
         </ul>
