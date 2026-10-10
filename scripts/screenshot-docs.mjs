@@ -343,10 +343,16 @@ let orderId = 0
   console.log(`  商品已发布 id=${productId}`)
 
   const auth = { Authorization: `Bearer ${token}` }
-  await page.request.post(`${API}/api/wallet/topup`, { headers: auth, data: { amountCents: 300000 } })
+  await page.request.post(`${API}/api/wallet/topup`, {
+    headers: auth,
+    data: { amountCents: 300000 }
+  })
   await page.request.post(`${API}/api/cart`, { headers: auth, data: { productId, quantity: 2 } })
 
-  const order = await page.request.post(`${API}/api/orders`, { headers: auth, data: { sellerId: myId } })
+  const order = await page.request.post(`${API}/api/orders`, {
+    headers: auth,
+    data: { sellerId: myId }
+  })
   if (order.ok()) orderId = (await order.json()).id
   const pay = await page.request.post(`${API}/api/orders/${orderId}/pay`, { headers: auth })
   console.log(`  下单 ${orderId} 支付 ${pay.status()}`)
@@ -361,7 +367,10 @@ let orderId = 0
   if (other.ok()) {
     const { list } = await other.json()
     for (const p of list.filter((x) => x.sellerId !== myId).slice(0, 2)) {
-      await page.request.post(`${API}/api/cart`, { headers: auth, data: { productId: p.id, quantity: 1 } })
+      await page.request.post(`${API}/api/cart`, {
+        headers: auth,
+        data: { productId: p.id, quantity: 1 }
+      })
     }
   }
 }
@@ -431,6 +440,35 @@ if (commentPostId) {
 } else {
   issues.push('没有可评论的自有笔记，跳过评论区截图')
 }
+
+// ---------- 推荐流：必须排在 seedRelationships() 之后 ----------
+// 画像来自收藏 / 关注 / 点赞，顺序反了的话兴趣页会是一排 0 权重，
+// 推荐流也只剩「刚刚发布」一种理由 —— 截出来完全看不出这是个推荐系统。
+console.log('\n[4] 推荐流')
+
+// 先制造一条负反馈，兴趣页的「已屏蔽」区块才有东西可展示。
+// 空态证明不了「屏蔽可以被撤销」这个本页最关键的设计。
+const recoFirst = await page.request
+  .get(`${API}/api/feed?limit=1`, { headers: { Authorization: `Bearer ${token}` } })
+  .then((r) => (r.ok() ? r.json() : null))
+if (recoFirst?.items?.length) {
+  await page.request.post(`${API}/api/feed/feedback`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { postId: recoFirst.items[0].post.id, action: 'not_interested' }
+  })
+}
+
+await goto('/', '.masonry .card')
+// 悬停第一张卡：不悬停的话「不感兴趣」按钮是透明的（默认 opacity: 0），
+// 截出来只有一排理由角标，看不出这个卡片可以被推开
+await page.locator('a.card').first().hover()
+await page.waitForTimeout(400)
+await shot('26-feed-recommend', '推荐流 · 每条带推荐理由，hover 出现「不感兴趣」', 'jpeg')
+
+// 兴趣画像页。等 .bar-row 而不是等根容器 —— 根容器首帧就在，条形要等接口
+await goto('/interest', '.interest')
+await page.locator('.bar-row').first().waitFor({ state: 'visible', timeout: 10000 })
+await shot('27-interest', '兴趣画像 · 话题/作者权重 + 行为信号 + 屏蔽可撤销', 'jpeg')
 
 await browser.close()
 
