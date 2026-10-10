@@ -502,4 +502,58 @@ export function initSchema(db: Database.Database): void {
     `CREATE INDEX IF NOT EXISTS idx_transit_tx_order
        ON transit_transactions(ref_order_id, id)`
   )
+
+  // ===== 推荐流的负反馈 =====
+  // 「不感兴趣」必须落库而不能只放在前端：它同时影响**候选集**（这篇不再出现）
+  // 和**画像**（同话题的权重往下压），这两个作用跨会话、跨设备，
+  // 只有存在服务端才算数。
+  //
+  // action 用 CHECK 枚举：拼错一个值不会报错，只会让「不喜欢这个作者」
+  // 永远既不是 not_author 也不是别的，屏蔽静默失效。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS post_feedback (
+      user_id INTEGER NOT NULL,
+      post_id INTEGER NOT NULL,
+      action TEXT NOT NULL CHECK (action IN ('not_interested', 'not_author')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      PRIMARY KEY (user_id, post_id, action)
+    )
+  `)
+
+  // 「我屏蔽了哪些作者」不需要单独建表 —— 从 not_author 的行 JOIN posts
+  // 就能取到作者。少一张表就少一处需要同步的地方。
+
+  // ===== 推荐流的排序快照 =====
+  // 为什么要快照：推荐分是「算出来的」，而算它的兴趣画像会随着用户的
+  // 新行为（又点赞了一篇美食）实时变化。于是同一个列表，第 1 页和第 2 页
+  // 是两次独立计算的结果 —— 中间插进来一篇新笔记，它可能把某篇已经
+  // 在第 1 页出现过的挤到第 2 页之前，于是 offset 分页**同时漏掉和重复**。
+  // 用 id 或分数做 keyset 游标也没用，因为分数本身会漂。
+  //
+  // 唯一稳的解法是：算一次，把 (post_id, score, rank) 冻住，翻页只读快照。
+  // 这也顺带解决了「同一屏里两篇笔记分数一样时排序随机」的抖动。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS feed_sessions (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER,                        -- 游客会话为 NULL
+      category TEXT NOT NULL DEFAULT 'recommend',
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      expires_at INTEGER NOT NULL             -- 毫秒时间戳，过期由惰性清理删掉
+    )
+  `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS feed_session_items (
+      session_id TEXT NOT NULL,
+      rank INTEGER NOT NULL,                  -- 从 1 开始；翻页游标 = 已读到的最后一个 rank
+      post_id INTEGER NOT NULL,
+      score REAL NOT NULL,
+      reason TEXT,                            -- 可解释推荐：为什么推给我
+      PRIMARY KEY (session_id, rank)
+    )
+  `)
+
+  // 清理过期会话时要按 expires_at 扫，不能按 session_id 前缀（那是随机 token）
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_feed_sessions_expiry ON feed_sessions(expires_at)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_feed_sessions_user ON feed_sessions(user_id, created_at)`)
 }
