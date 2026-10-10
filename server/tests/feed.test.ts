@@ -168,7 +168,32 @@ describe('打分：候选排序', () => {
     const followed = scoreCandidate(base, profile, now, null)
     const stranger = scoreCandidate(base, emptyProfile(), now, null)
     expect(followed.score).toBeGreaterThan(stranger.score)
-    expect(followed.reason).toBe('你关注了这位作者')
+  })
+
+  it('社交加成是「略微靠前」，不是「独占首屏」', () => {
+    const profile = emptyProfile()
+    profile.followedAuthors.add(base.authorId)
+    const followed = scoreCandidate(base, profile, now, null)
+    const stranger = scoreCandidate(base, emptyProfile(), now, null)
+    // 订阅内容已经有关注流单独承载了。
+    // 关注加成一旦盖过兴趣满级，发现流就会退化成一屏「你关注了这位作者」，
+    // 推荐理由随之失去信息量 —— 那样的话「推荐」两个字就不成立了
+    expect(followed.score - stranger.score).toBeLessThan(6)
+  })
+
+  it('关注理由只在它确实是最大项时出现', () => {
+    const profile = emptyProfile()
+    profile.followedAuthors.add(base.authorId)
+
+    // 一条很旧的老笔记：新鲜度已经衰减到接近 0，关注才是它露脸的原因
+    const old = Date.now() - 10 * 24 * 3_600_000
+    const s = scoreCandidate({ ...base, createdAt: old }, profile, now, null)
+    expect(s.reason).toBe('你关注了这位作者')
+
+    // 刚发的笔记说「刚刚发布」才是诚实的 ——
+    // 用户刚点的赞不该被一句「你关注了这位作者」盖过去
+    const fresh = scoreCandidate({ ...base, createdAt: now }, profile, now, null)
+    expect(fresh.reason).toBe('刚刚发布')
   })
 
   it('命中画像话题的排在前面，并给出理由', () => {
