@@ -17,6 +17,12 @@ Express :3000  ── better-sqlite3 ──► data.db (SQLite file)
 
 ## 数据模型
 
+> 下面是**内容域**的核心关系。完整表清单见 `server/src/lib/schema.ts`，
+> 那里每张表的注释都写了「为什么这么建」，比这里更详细。
+> 交易域（products / cart_items / orders / order_items / wallets /
+> wallet_transactions / transit_accounts / transit_transactions）
+> 见[市集一节](#市集与支付)。
+
 ```mermaid
 erDiagram
     users {
@@ -44,19 +50,70 @@ erDiagram
     }
     comments {
         int id PK
-        int user_id FK
         int post_id FK
-        text content "500 字以内"
+        int user_id FK
+        int parent_id "二级回复，无外键"
+        text content
+        text pinned_at "作者置顶"
         text created_at
     }
+    follows {
+        int follower_id PK
+        int followee_id PK
+        text created_at
+    }
+    favorites {
+        int user_id PK
+        int post_id PK
+        int folder_id FK "可空 = 未分类"
+        text created_at
+    }
+    post_feedback {
+        int user_id PK
+        int post_id PK
+        text action "not_interested / not_author"
+    }
+    feed_sessions {
+        text id PK "uuid"
+        int user_id "游客为 NULL"
+        int expires_at
+    }
+    feed_session_items {
+        text session_id PK
+        int rank PK "从 1 开始"
+        int post_id FK
+        real score
+        text reason
+    }
+    view_history {
+        int user_id PK
+        int post_id PK
+        text viewed_at "毫秒精度"
+    }
+
     users ||--o{ posts : "发布"
     users ||--o{ likes : "点赞"
     users ||--o{ comments : "评论"
     posts ||--o{ likes : "被点赞"
     posts ||--o{ comments : "被评论"
+    users ||--o{ follows : "关注"
+    users ||--o{ favorites : "收藏"
+    users ||--o{ view_history : "浏览过"
+    users ||--o{ post_feedback : "负反馈"
+    feed_sessions ||--o{ feed_session_items : "冻结的排序"
 ```
 
 外键 ON DELETE CASCADE：删除用户 / 帖子时关联点赞评论一并清掉。
+`better-sqlite3` 默认开启 `foreign_keys`，但 `db.ts` 里仍显式 `pragma` 了一次 ——
+依赖库的默认值不是可以赌的东西。
+
+### 三处「刻意不建外键」
+
+| 位置                         | 原因                                                                                                                                                                                      |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `comments.parent_id`         | `ALTER TABLE ADD COLUMN` 不支持加外键（外键只能在 CREATE TABLE 时声明），而表已存在。为一张老表做「新建 + 拷贝 + 改名」代价远大于收益。删父评论时是否级联删回复，本来就该由应用层显式决定 |
+| `order_items.product_id`     | 商品被删之后订单行必须留着，否则「我买过什么」的历史会跟着商品一起消失                                                                                                                    |
+| `feed_session_items.post_id` | 快照是一次性的；笔记被删之后 JOIN 自然查不到，读取时跳过并让游标照常前进                                                                                                                  |
 
 ## 请求流程：上传 + 发布
 
@@ -173,6 +230,33 @@ xhr.send(formData)
 
 倒过来会抛 InvalidStateError。
 
+## 市集与支付
+
+```
+买家  ──hold───▶  平台在途  ──settle──▶  卖家     （买家确认收货）
+                    │
+                    └──release─▶  买家          （退款，钱原路退回）
+```
+
+**守恒律：所有钱包余额 + 在途余额 == 充值总额。**
+`GET /api/wallet/audit` 和钱包页上那条对勾都是在算这条式子。
+
+为什么必须有「在途」这一层：常见做法「拍下即付款，钱直接给卖家」
+在这个项目里立刻崩 —— 买家付了 12850，卖家余额 +12850，账是平的，
+但买家退款就��**从卖家账里扣**。卖家一旦把余额花掉，这笔钱扣不回来，
+于是要么退款失败（业务上荒谬），要么允许卖家余额为负（违反 CHECK 约束）。
+
+退款只发生在结算之前（`completed` 和 `refunded` 都是终态），
+所以「退款退不回来」在设计上就不存在，不是靠兜底逻辑挡住的。
+
+在途独立成表而不是塞进 `wallets`：`wallets.user_id` 有
+`FOREIGN KEY REFERENCES users(id)`，写一个假的平台 user_id 要么被外键挡，
+要么得为绕过外键放松约束。而且用户钱包是「用户能花的钱」，
+在途是「用户碰不到的钱」—— 混一张表的话任何遍历 wallets
+算累计资产的代码都会把在途算进去。
+
+详见 `server/src/lib/transit.ts` 的文件头注释。
+
 ## 路线图
 
 - [x] 阶段 0：项目骨架（Vite + Vue 3 + TS，路由、Pinia、axios）
@@ -181,9 +265,20 @@ xhr.send(formData)
 - [x] 阶段 3：点赞 + 评论（后端 optional auth + 前端 reactive）
 - [x] 阶段 4：个人主页（banner + 头像 + tab + 编辑资料 modal）
 - [x] 阶段 5：图片上传（multer + Vite proxy + reactive 修复）
-- [x] **当前**：布局对齐小红书参考（BottomNav / ProfileView / MessagesView / MarketView 占位）
-- [x] 代码抛光：清理调试 log + 抽 constants + 文档
-- [ ] 后续（候选）：关注/粉丝、消息通知后端实现、收藏功能、搜索、市集（电商太大可拆项目）
+- [x] 阶段 6：桌面端重构（Element Plus + 三栏布局，取代移动端 BottomNav / 抽屉）
+- [x] 阶段 7：即时通讯（WS 1v1：乐观发送 / ack 收敛 / 多端同步 / 断线重连补发）
+- [x] 阶段 8：内容社区能力 —— 关注体系 / 收藏夹 / 通知中心 / 话题页 / 评论增强 / 通知偏好 / 浏览记录 / 搜索
+- [x] 阶段 9：市集（完整 C2C 交易链路 + 在途资金与全局对账）
+- [x] 阶段 10：**推荐流**（兴趣画像 + 打分 + 冻结快照翻页 + 负反馈与可解释）
+- [ ] 未做（诚实占位，不是遗漏）
+  - 笔记的「私密 / 合集」筛选：主页那两个 tab 点了是空态，界面上写明了
+  - 真实全文检索：现在是 `LIKE` + 索引友好匹配，十万级要换 FTS5 / ES
+  - 内容审核 / 举报
+
+> **刻意没做**：推荐流只作用在「推荐」频道，没有铺到每个频道 ——
+> 频道是用户主动圈定的主题，混排会被认为「频道坏了」。
+> 也没有做协同过滤 / 向量召回 —— 画像是可解释的规则模型，
+> 能说清「为什么推这条」，这比召回率更难被质疑。
 
 ## 关键文件索引
 
@@ -191,7 +286,9 @@ xhr.send(formData)
 | -------- | ------------------------------------------------------------------------------------------- |
 | 上传核心 | `client/src/views/PublishView.vue` / `server/src/routes/uploads.ts`                         |
 | 鉴权     | `client/src/api/request.ts` / `client/src/stores/auth.ts` / `server/src/middleware/auth.ts` |
-| 数据模型 | `server/src/lib/db.ts`                                                                      |
-| 路由     | `client/src/router/index.ts`                                                                |
+| 数据模型 | `server/src/lib/schema.ts`（全部 DDL，每张表带「为什么这么建」的注释）                      |
+| 路由     | `client/src/router/index.ts` / `server/src/lib/mount-routes.ts`（生产与测试挂同一份）       |
 | 全局常量 | `client/src/constants.ts` / `server/src/constants.ts`                                       |
-| 底部导航 | `client/src/components/BottomNav.vue`                                                       |
+| 导航     | `client/src/components/SideNav.vue`（左栏）+ `TopBar.vue`（顶栏）                           |
+| 推荐打分 | `server/src/lib/feed-score.ts`（纯函数）+ `feed-profile.ts`（画像）+ `feed.ts`（快照翻页）  |
+| 交易链路 | `server/src/lib/wallet.ts` / `transit.ts` + `server/src/routes/orders.ts`                   |
