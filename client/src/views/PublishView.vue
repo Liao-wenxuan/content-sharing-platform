@@ -27,8 +27,12 @@ import {
   UPLOAD_MAX_SIZE_MB,
   UPLOAD_MAX_SIZE_BYTES,
   UPLOAD_TIMEOUT_MS,
+  IMAGE_MAX_EDGE,
+  IMAGE_QUALITY,
   DEFAULT_API_BASE
 } from '@/constants'
+import { compressImage, compressSeries } from '@/utils/imageCompress'
+import { formatBytes, describeSavings } from '@/utils/image'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -42,15 +46,19 @@ const hotTopics = ref<TopicSummary[]>([])
 const submitting = ref(false)
 const errorMsg = ref('')
 
-// 待上传的图片：{ id, file, previewUrl, uploadedUrl, status, progress }
+// 待上传的图片
 interface PendingImage {
   id: number
   file: File
   previewUrl: string // 本地预览（URL.createObjectURL）
   uploadedUrl: string | null // 上传成功后服务器返回的 URL
-  status: 'pending' | 'uploading' | 'done' | 'error'
+  status: 'pending' | 'compressing' | 'uploading' | 'done' | 'error'
   progress: number // 0-100 上传进度
   errorMsg?: string // 上传失败时的提示
+  /** 压缩前的原始体积；0 = 没压过（GIF/SVG 等） */
+  originalSize: number
+  /** 压缩收益文案，例如「3.2 MB → 380 KB（-88%）」 */
+  savings?: string
 }
 const images = ref<PendingImage[]>([])
 let nextImgId = 1
@@ -58,6 +66,12 @@ let nextImgId = 1
 // 上传限制（client + server 防御性校验；值在 src/constants.ts）
 const MAX_IMAGES = UPLOAD_MAX_IMAGES
 const MAX_SIZE_MB = UPLOAD_MAX_SIZE_MB
+
+/** 本次发布一共省了多少 */
+const totalSavings = computed(() => {
+  const saved = images.value.reduce((sum, i) => sum + (i.originalSize - i.file.size), 0)
+  return saved > 0 ? formatBytes(saved) : ''
+})
 
 const allUploaded = computed(
   () => images.value.length === 0 || images.value.every((i) => i.status === 'done')
@@ -99,10 +113,13 @@ onUnmounted(() => {
 function handleUploadChange(uploadFile: UploadFile) {
   const file = uploadFile.raw
   if (!file) return
-  addFiles([file])
+  // 压缩是异步的，但不需要等它 —— 队列状态由 images 自己驱动，
+  // 用户看到的是「压缩中 → 上传中 → 已上传」这条进度链
+  void addFiles([file])
 }
 
-function addFiles(files: File[]) {
+/** 异步：先全部入队，再串行压缩 + 上传 */
+async function addFiles(files: File[]) {
   errorMsg.value = ''
   const remaining = MAX_IMAGES - images.value.length
   if (remaining <= 0) {
@@ -136,12 +153,50 @@ function addFiles(files: File[]) {
       previewUrl: URL.createObjectURL(file),
       uploadedUrl: null,
       status: 'pending',
-      progress: 0
+      progress: 0,
+      originalSize: 0
     })
     images.value.push(img)
-    // 选完立即上传（不等点发布按钮）
-    uploadImage(img)
   }
+
+  // 全部塞进列表之后再串行处理。
+  // ⚠️ 必须「先全部入队、再串行跑」，不能边选边压：
+  // 一次选 9 张图时，每张解码成 RGBA 约 48MB，
+  // 并发跑就是 432MB，移动端会在解码阶段直接崩（表现为「选完什么都没发生」）。
+  await compressSeries(images.value.slice(), (img) => prepareAndUpload(img))
+}
+
+/**
+ * 压缩 → 上传。
+ *
+ * 分两段而不是合成一步，是为了让用户看得见「到底卡在哪」：
+ * 一张 4000×3000 的照片压缩要几百毫秒，没有单独一段的话
+ * 进度条会先停在 0，用户以为没点上又选了一遍。
+ */
+async function prepareAndUpload(img: PendingImage) {
+  img.status = 'compressing'
+  img.errorMsg = undefined
+
+  try {
+    const result = await compressImage(img.file, {
+      maxEdge: IMAGE_MAX_EDGE,
+      quality: IMAGE_QUALITY
+    })
+    if (result.strategy === 'resized' || result.strategy === 'reencode') {
+      img.originalSize = result.originalSize
+      img.savings = describeSavings(result.originalSize, result.finalSize)
+      // 换了内容，预览图必须跟着换，否则用户看到的是「压缩前的图」
+      const oldUrl = img.previewUrl
+      img.file = new File([result.blob], img.file.name, { type: result.type })
+      img.previewUrl = URL.createObjectURL(result.blob)
+      URL.revokeObjectURL(oldUrl)
+    }
+  } catch {
+    // compressImage 内部已经保证不抛，这里只是最后一道保险：
+    // 压缩失败绝不能阻断发布
+  }
+
+  await uploadImage(img)
 }
 
 async function uploadImage(img: PendingImage) {
@@ -382,6 +437,15 @@ async function handleSubmit() {
                     :show-text="false"
                     class="image-progress"
                   />
+                  <!-- 压缩阶段没有可测的进度，所以用不确定态的进度条而不是假百分比 -->
+                  <el-progress
+                    v-else-if="img.status === 'compressing'"
+                    :percentage="50"
+                    :indeterminate="true"
+                    :stroke-width="4"
+                    :show-text="false"
+                    class="image-progress"
+                  />
 
                   <div class="image-status">
                     <el-tag v-if="img.status === 'done'" type="success" size="small" effect="plain">
@@ -395,10 +459,29 @@ async function handleSubmit() {
                     >
                       {{ img.errorMsg || '上传失败' }}
                     </el-tag>
+                    <el-tag
+                      v-else-if="img.status === 'compressing'"
+                      type="info"
+                      size="small"
+                      effect="plain"
+                    >
+                      压缩中
+                    </el-tag>
+                    <el-tag
+                      v-else-if="img.status === 'pending'"
+                      type="info"
+                      size="small"
+                      effect="plain"
+                    >
+                      排队中
+                    </el-tag>
                     <el-tag v-else type="info" size="small" effect="plain">
                       {{ img.progress }}%
                     </el-tag>
                   </div>
+
+                  <!-- 压缩收益：给用户看「省了多少」，而不是默默压掉 -->
+                  <span v-if="img.savings" class="image-savings">{{ img.savings }}</span>
                 </div>
 
                 <div class="image-actions">
@@ -439,10 +522,14 @@ async function handleSubmit() {
               ><el-icon><component :is="PictureFilled" /></el-icon> 发布须知</span
             >
           </template>
+          <template v-if="totalSavings">
+            <p class="savings-line">已自动压缩，本次发布共节省 {{ totalSavings }}</p>
+          </template>
+
           <ul class="tips-list">
             <li>正文最多 {{ POST_CONTENT_MAX_LENGTH }} 字，说清楚一件事就够了。</li>
             <li>最多上传 {{ MAX_IMAGES }} 张图片，单张不超过 {{ MAX_SIZE_MB }}MB。</li>
-            <li>图片会在选择后立即上传，全部上传完成才能发布。</li>
+            <li>图片会在选择后立即压缩并上传；GIF 和 SVG 原样上传（动画和矢量图过不了压缩）。</li>
             <li>话题标签建议只填一个，太多反而没人点。</li>
           </ul>
         </el-card>
@@ -516,6 +603,19 @@ async function handleSubmit() {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted-foreground);
+}
+
+/* 压缩收益：给正向反馈，而不是默默压掉 */
+.image-savings {
+  font-size: 11px;
+  color: var(--el-color-success);
+  font-variant-numeric: tabular-nums;
+}
+
+.savings-line {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--el-color-success);
 }
 
 /* ===== 热门话题快捷选择 ===== */
