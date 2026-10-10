@@ -40,9 +40,9 @@ function mkPost(id: number, content: string, topicTag: string | null = '美食')
   }
 }
 
-function mountMasonry(posts: Post[], highlight?: string) {
+function mountMasonry(posts: Post[], highlight?: string, extra: Record<string, unknown> = {}) {
   return mount(PostMasonry, {
-    props: { posts, highlight },
+    props: { posts, highlight, ...extra },
     global: { stubs }
   })
 }
@@ -91,6 +91,59 @@ describe('PostMasonry 渲染', () => {
   it('大小写不同也能命中话题角标', () => {
     const w = mountMasonry([mkPost(1, '一条笔记', 'Food')], 'food')
     expect(w.find('.tag-badge').exists()).toBe(true)
+  })
+})
+
+/**
+ * 推荐流专用：推荐理由 + 不感兴趣。
+ *
+ * 单独一个 describe 是因为这两个 prop 是**可选增强** ——
+ * 搜索页一个都不传。所以「不传时必须什么都没有」和「传了才对」同样重要：
+ * 只测传了的情况，会漏掉「搜索结果页莫名其妙冒出个 × 按钮」这种回归。
+ */
+describe('PostMasonry 推荐流增强', () => {
+  it('不传 reasons / dismissable 时保持干净', () => {
+    const w = mountMasonry([mkPost(1, '普通笔记')])
+    expect(w.find('.reason-badge').exists()).toBe(false)
+    expect(w.find('.dismiss-btn').exists()).toBe(false)
+  })
+
+  it('传了 reasons 就渲染理由', () => {
+    const w = mountMasonry([mkPost(1, '牛肉面')], undefined, {
+      reasons: { 1: '你常看「美食」' }
+    })
+    expect(w.find('.reason-badge').text()).toBe('你常看「美食」')
+  })
+
+  it('理由按 postId 对应，不会串到别的卡片上', () => {
+    const w = mountMasonry([mkPost(1, '第一条'), mkPost(2, '第二条')], undefined, {
+      reasons: { 2: '刚刚发布' }
+    })
+    const badges = w.findAll('.reason-badge')
+    expect(badges).toHaveLength(1)
+    expect(badges[0].text()).toBe('刚刚发布')
+  })
+
+  it('dismissable 才渲染不感兴趣按钮', () => {
+    const w = mountMasonry([mkPost(1, '笔记')], undefined, { dismissable: true })
+    expect(w.findAll('.dismiss-btn')).toHaveLength(1)
+  })
+
+  it('点了不感兴趣抛出对应 postId', async () => {
+    const w = mountMasonry([mkPost(7, '不想看')], undefined, { dismissable: true })
+    await w.find('.dismiss-btn').trigger('click')
+    expect(w.emitted('dismiss')?.[0]).toEqual([7])
+  })
+
+  it('按钮的 aria-label 说清楚是屏蔽哪一条', () => {
+    // 只用 aria-label 而不写可见文字，是为了让卡片视觉保持干净；
+    // 代价是读屏用户全靠这个 label，所以它必须带得下一点内容
+    const w = mountMasonry([mkPost(1, '这是一条很长很长的笔记标题需要被截断')], undefined, {
+      dismissable: true
+    })
+    const label = w.find('.dismiss-btn').attributes('aria-label') ?? ''
+    expect(label).toContain('不感兴趣')
+    expect(label.length).toBeGreaterThan('不感兴趣：'.length)
   })
 })
 

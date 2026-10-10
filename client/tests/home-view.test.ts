@@ -1,13 +1,21 @@
 /**
  * HomeView 组件测试
  *
- * 锁的是「发现 ⇄ 关注」这一个页面里的两套数据源不能串味：
+ * 锁的是「发现 ⇄ 关注」这一个页面里的两套数据源不能串味，
+ * 外加第三条数据源：**推荐流**。
  *
  * - 发现流按 category 查，关注流按 channel=follow 查，
  *   **关注流不传 category**：订阅流按时间排，再按话题筛一遍没有意义
  * - 关注流下频道栏根本不渲染（不是禁用，是不渲染）
  * - 切频道只重载发现流；在关注流里切频道不该触发任何请求
  * - 两边切换是独立数据源，必须整页重载而不是追加
+ * - **「推荐」频道走的是第三套数据源**（feedApi，带推荐分和理由），
+ *   其余频道才走时间序的 postsApi。三个来源混在一起最容易出的错是
+ *   「推荐频道其实调的是老接口」—— 页面照常出卡片，只是推荐没了。
+ *
+ * ⚠️ 下面 discover 那组用例一律先把 category 设成 'food' 再测。
+ * 默认的 'recommend' 已经不是时间序了，拿它去断言「按 category 拉取」
+ * 会得到一条看似合理、实际测的是另一条路径的用例 —— 而且它绿着。
  *
  * 这几条写错了都不会崩：页面照样出卡片，只是内容不对 ——
  * 用户看到「关注流里混进了别的频道的笔记」很难自己判断是 bug 还是推荐。
@@ -18,6 +26,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
 import { postsApi, type Post } from '@/api/posts'
+import { feedApi, type FeedItem } from '@/api/feed'
 import { useHomeTabsStore } from '@/stores/homeTabs'
 import { useAuthStore } from '@/stores/auth'
 import HomeView from '@/views/HomeView.vue'
@@ -26,6 +35,10 @@ vi.mock('@/api/posts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/posts')>()
   return { ...actual, postsApi: { getFeed: vi.fn() } }
 })
+
+vi.mock('@/api/feed', () => ({
+  feedApi: { get: vi.fn(), feedback: vi.fn() }
+}))
 
 /**
  * route 必须是 reactive：isFollowFeed 是个 computed，
@@ -40,6 +53,7 @@ vi.mock('vue-router', () => ({
 }))
 
 const getFeed = vi.mocked(postsApi.getFeed)
+const getReco = vi.mocked(feedApi.get)
 
 function mkPost(id: number, topicTag = '美食'): Post {
   return {
@@ -55,6 +69,21 @@ function mkPost(id: number, topicTag = '美食'): Post {
   }
 }
 
+function mkItem(id: number, reason: string | null = null): FeedItem {
+  return { rank: id, score: 10 - id, reason, post: mkPost(id) }
+}
+
+function recoOf(ids: number[], over: Record<string, unknown> = {}) {
+  return {
+    sessionId: 'sess-1',
+    category: 'recommend',
+    items: ids.map((id) => mkItem(id, `理由 ${id}`)),
+    nextCursor: null,
+    hasMore: false,
+    ...over
+  } as any
+}
+
 const stubs = {
   'el-skeleton': { template: '<div class="skeleton-stub" />' },
   'el-empty': {
@@ -66,13 +95,21 @@ const stubs = {
     template: '<button class="btn-stub" @click="$emit(\'click\')"><slot /></button>'
   },
   'el-tabs': { template: '<div class="tabs-stub"><slot /></div>' },
-  'el-tab-pane': { template: '<div class="tab-pane-stub" />' }
+  'el-tab-pane': { template: '<div class="tab-pane-stub" />' },
+  // 推荐流底部的「这些推荐是怎么来的？」是 router-link。
+  // vue-router 被整块 mock 掉了，这里得自己补一个 stub，
+  // 否则组件解析不到它会刷一串 warn（而且 warn 会盖掉真正的失败信息）
+  'router-link': { template: '<a class="router-link-stub"><slot /></a>' }
 }
 
+// reasons / dismissable 必须声明成 prop：
+// 不声明的话它们会作为 attribute 落到根元素上，虽然不影响断言，
+// 但会和「组件真的收到了这个 prop」分不清
 const PostMasonryStub = {
-  props: ['posts'],
+  props: ['posts', 'reasons', 'dismissable'],
   template:
-    '<div class="masonry"><div v-for="p in posts" :key="p.id" class="card">{{ p.id }}</div></div>'
+    '<div class="masonry" :data-dismissable="String(dismissable)">' +
+    '<div v-for="p in posts" :key="p.id" class="card">{{ p.id }}</div></div>'
 }
 
 const mounted: ReturnType<typeof mount>[] = []
@@ -93,18 +130,24 @@ beforeEach(() => {
     list: [mkPost(1), mkPost(2)],
     pagination: { page: 1, pageSize: 12, total: 2, hasMore: false }
   } as any)
+  getReco.mockResolvedValue(recoOf([1, 2]))
 })
 
 afterEach(() => {
   while (mounted.length) mounted.pop()!.unmount()
 })
 
-describe('HomeView 发现流', () => {
+describe('HomeView 发现流（时间序频道）', () => {
+  beforeEach(() => {
+    // 默认的 'recommend' 已经不是时间序了，见文件头
+    useHomeTabsStore().category = 'food'
+  })
+
   it('按当前 category 拉取，并渲染频道栏', async () => {
     const w = mountView()
     await flushPromises()
 
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'recommend' })
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'food' })
     expect(w.find('.channel-tabs').exists()).toBe(true)
     expect(w.findAll('.card')).toHaveLength(2)
   })
@@ -114,10 +157,10 @@ describe('HomeView 发现流', () => {
     await flushPromises()
     getFeed.mockClear()
 
-    useHomeTabsStore().category = 'food'
+    useHomeTabsStore().category = 'travel'
     await flushPromises()
 
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'food' })
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'travel' })
     // 换频道是换一批内容，不是往后追加
     expect(w.findAll('.card')).toHaveLength(2)
   })
@@ -140,7 +183,7 @@ describe('HomeView 发现流', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(getFeed).toHaveBeenLastCalledWith({ page: 2, pageSize: 12, category: 'recommend' })
+    expect(getFeed).toHaveBeenLastCalledWith({ page: 2, pageSize: 12, category: 'food' })
     expect(w.findAll('.card')).toHaveLength(2)
   })
 
@@ -162,6 +205,76 @@ describe('HomeView 发现流', () => {
     await flushPromises()
 
     expect(w.findAll('.card')).toHaveLength(1)
+  })
+})
+
+/**
+ * 第三条数据源：推荐流。
+ *
+ * 这里的断言重点是「走的是哪条路」，而不是「出了几张卡片」——
+ * 出错时的表现恰恰是卡片照样渲染、只是推荐没了。
+ */
+describe('HomeView 推荐流', () => {
+  it('「推荐」频道调 feedApi，而不是时间序的 getFeed', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    expect(getReco).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'recommend', sessionId: null })
+    )
+    expect(getFeed).not.toHaveBeenCalled()
+    expect(w.findAll('.card')).toHaveLength(2)
+  })
+
+  it('登录态：理由和不感兴趣都透给卡片', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.masonry').attributes('data-dismissable')).toBe('true')
+    expect(w.findComponent(PostMasonryStub).props('reasons')).toEqual({
+      1: '理由 1',
+      2: '理由 2'
+    })
+  })
+
+  it('未登录：装饰整个关掉', async () => {
+    useAuthStore().logout()
+    const w = mountView()
+    await flushPromises()
+
+    // 游客没有画像，理由只剩「刚刚发布」重复满屏；不感兴趣点了也只会把人踢走
+    expect(w.find('.masonry').attributes('data-dismissable')).toBe('false')
+    expect(w.findComponent(PostMasonryStub).props('reasons')).toBeUndefined()
+  })
+
+  it('切到别的频道退回时间序，切回来又走推荐', async () => {
+    mountView()
+    await flushPromises()
+
+    useHomeTabsStore().category = 'food'
+    await flushPromises()
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'food' })
+
+    useHomeTabsStore().category = 'recommend'
+    await flushPromises()
+    expect(getReco).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'recommend' }))
+  })
+
+  it('推荐流有「换一批」', async () => {
+    // 「换一批」和「加载更多」共用 v-if="visibleHasMore"：
+    // 到底了就只剩「已经到底了」，不该再给一个点了没反应的按钮
+    getReco.mockResolvedValue(recoOf([1, 2], { hasMore: true }))
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.findAll('.btn-stub').some((b) => b.text().includes('换一批'))).toBe(true)
+  })
+
+  it('到底之后不再显示「换一批」', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.findAll('.btn-stub').some((b) => b.text().includes('换一批'))).toBe(false)
   })
 })
 
@@ -202,11 +315,13 @@ describe('HomeView 关注流', () => {
     const w = mountView()
     await flushPromises()
     getFeed.mockClear()
+    getReco.mockClear()
 
     route.query = {}
     await flushPromises()
 
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'recommend' })
+    // category 是默认的 recommend，所以走的是推荐流而不是时间序
+    expect(getReco).toHaveBeenCalledWith(expect.objectContaining({ category: 'recommend' }))
     // 两边是独立数据源，必须整页重载而不是把关注流的卡片接在后面
     expect(w.findAll('.card')).toHaveLength(2)
     expect(w.find('.channel-tabs').exists()).toBe(true)
