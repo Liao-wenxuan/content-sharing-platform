@@ -14,6 +14,7 @@ import productsRouter from '../routes/products'
 import cartRouter from '../routes/cart'
 import ordersRouter from '../routes/orders'
 import walletRouter from '../routes/wallet'
+import feedRouter from '../routes/feed'
 
 /**
  * 统一挂载所有 API 路由
@@ -47,4 +48,7 @@ export function mountApiRouters(app: Express): void {
   app.use('/api/cart', cartRouter)
   app.use('/api/orders', ordersRouter)
   app.use('/api/wallet', walletRouter)
+  // 推荐流独占 /api/feed 前缀。它内部有 /profile 和 /feedback 这些字面量路由，
+  // 但没有 /:id 之类的通配，所以不存在顺序问题。
+  app.use('/api/feed', feedRouter)
 }
