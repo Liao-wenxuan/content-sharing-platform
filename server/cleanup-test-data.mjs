@@ -72,6 +72,16 @@ const tx = db.transaction((ids) => {
   db.prepare('DELETE FROM transit_transactions').run()
   db.prepare('DELETE FROM transit_accounts').run()
 
+  // 推荐流这三张表同理，都没有外键指向 users：
+  //  - feed_session_items / feed_sessions 的 user_id 只是普通列
+  //  - post_feedback 靠 (user_id, post_id, action) 复合主键，没有外键
+  // 不清的话，删掉账号之后库里还留着它的屏蔽记录和排序快照。
+  // 表现是「账号都没了，某篇笔记还在被屏蔽」，而且没人会去查库，
+  // 所以症状是下次跑 e2e 时推荐莫名其妙少一篇
+  db.prepare('DELETE FROM feed_session_items').run()
+  db.prepare('DELETE FROM feed_sessions').run()
+  db.prepare('DELETE FROM post_feedback').run()
+
   for (const id of ids) {
     db.prepare('DELETE FROM posts WHERE user_id = ?').run(id)
     db.prepare('DELETE FROM users WHERE id = ?').run(id)
@@ -81,6 +91,9 @@ tx(targets.map((t) => t.id))
 
 const audit = db.prepare('SELECT COALESCE(SUM(balance_cents), 0) AS s FROM transit_accounts').get()
 console.log(`在途已清零：剩余 ${audit.s} 分`)
+
+const feeds = db.prepare('SELECT COUNT(*) AS c FROM feed_sessions').get().c
+console.log(`推荐流快照已清空：剩余 ${feeds} 个会话`)
 
 const left = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c
 const withImg = db
