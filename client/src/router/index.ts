@@ -116,6 +116,14 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      // 兴趣画像：推荐流的可解释 + 可纠正入口。
+      // 不要求登录 —— 未登录时展示的是「为什么你现在没有画像」，
+      // 这本身也是对冷启动排序的解释，跳走反而更不诚实
+      path: '/interest',
+      name: 'interest',
+      component: () => import('@/views/InterestView.vue')
+    },
+    {
       // 404 catch-all：未知路径都进 NotFoundView
       // 用 pathMatch 拿到原始 path，便于未来诊断
       path: '/:pathMatch(.*)*',

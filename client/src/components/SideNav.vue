@@ -76,6 +76,10 @@ const activeMenu = computed(() => {
   // 笔记详情和搜索的入口不在侧栏，回落高亮「发现」保持连贯
   if (path.startsWith('/post')) return '/'
   if (path.startsWith('/search')) return '/'
+  // 兴趣画像的入口在「设置 → 内容偏好调节」，不在侧栏。
+  // 但从首页「这些推荐是怎么来的？」点进来时，侧栏要有个去处，
+  // 否则这一页侧栏全灭，用户不知道自己在哪
+  if (path.startsWith('/interest')) return '/settings'
   return path
 })
 
