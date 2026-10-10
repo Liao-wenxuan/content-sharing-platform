@@ -270,6 +270,7 @@ xhr.send(formData)
 - [x] 阶段 8：内容社区能力 —— 关注体系 / 收藏夹 / 通知中心 / 话题页 / 评论增强 / 通知偏好 / 浏览记录 / 搜索
 - [x] 阶段 9：市集（完整 C2C 交易链路 + 在途资金与全局对账）
 - [x] 阶段 10：**推荐流**（兴趣画像 + 打分 + 冻结快照翻页 + 负反馈与可解释）
+- [x] 阶段 11：**图片处理**（上传前 canvas 压缩 + EXIF 方向校正 + 隐私元数据剥离）
 - [ ] 未做（诚实占位，不是遗漏）
   - 笔记的「私密 / 合集」筛选：主页那两个 tab 点了是空态，界面上写明了
   - 真实全文检索：现在是 `LIKE` + 索引友好匹配，十万级要换 FTS5 / ES
@@ -279,6 +280,33 @@ xhr.send(formData)
 > 频道是用户主动圈定的主题，混排会被认为「频道坏了」。
 > 也没有做协同过滤 / 向量召回 —— 画像是可解释的规则模型，
 > 能说清「为什么推这条」，这比召回率更难被质疑。
+
+## 图片处理
+
+上传链路分三段：**压缩 → 上传 → 服务端落盘**，压缩发生在**前端**，
+因为后端拿到的已经是原始字节了 —— 用户在弱网下要先把 90MB 传上来才有得压，
+而痛点恰恰出在这一步。
+
+```
+选图 → compressSeries（串行）→ createImageBitmap → canvas 变换 → toBlob → XHR 上传
+                            ↑                                              ↑
+                      降级阶梯 [1, .75, .55]                          任何失败退回原图直传
+```
+
+**为什么串行**：12MP 图解码成 RGBA 约 48MB，一次选 9 张并发就是 432MB，
+移动端浏览器会在**解码阶段**直接崩（表现为「选完图什么都没发生」，连报错都没有）。
+
+**为什么剥离 EXIF**：手机竖拍的照片靠 `orientation` 告诉浏览器怎么摆正。
+原先的做法是 `createImageBitmap(file, { imageOrientation: 'none' })`，
+规格里这是「不要按 EXIF 摆正」，但**实测 Chromium 并不照做** ——
+源图 2000×3000 / orientation=6，两条解码路径都返回 3000×2000。
+于是 decoded 宽高已经是摆正后的尺寸，又叠一层自己的变换，结果是**转两次**。
+改成解码前用 `Blob.slice` 把 APP1 段**物理删掉**（零拷贝，只是两个视图），
+朝向着实由我们自己唯一负责。顺带把 GPS、机型这些隐私元数据一并去掉。
+
+分层：`utils/image.ts` 是纯函数（尺寸换算 / mime 决策 / EXIF 字节解析 / 朝向变换），
+在 jsdom 里一个字节不差地单测；`utils/imageCompress.ts` 是 canvas 那几步，
+jsdom 里测不了，靠 `scripts/image-smoke.mjs` 的真浏览器回归。
 
 ## 关键文件索引
 
@@ -291,4 +319,5 @@ xhr.send(formData)
 | 全局常量 | `client/src/constants.ts` / `server/src/constants.ts`                                       |
 | 导航     | `client/src/components/SideNav.vue`（左栏）+ `TopBar.vue`（顶栏）                           |
 | 推荐打分 | `server/src/lib/feed-score.ts`（纯函数）+ `feed-profile.ts`（画像）+ `feed.ts`（快照翻页）  |
+| 图片处理 | `client/src/utils/image.ts`（纯函数层）+ `imageCompress.ts`（canvas + 降级阶梯 + 串行）     |
 | 交易链路 | `server/src/lib/wallet.ts` / `transit.ts` + `server/src/routes/orders.ts`                   |
