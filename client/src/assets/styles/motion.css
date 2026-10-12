@@ -133,7 +133,6 @@
    放在这里而不是某个组件的 scoped 里：铃铛和会话列表的红点是同一套反馈，
    各自复制一份很快就会改得不一致。
    ============================================================ */
-
 /* 计数从 0 冒出来：一次短促的放大回落，余光就能捕捉到「多了一个」 */
 @keyframes sg-badge-pop {
   0% {
@@ -175,6 +174,56 @@
 }
 
 /* ============================================================
+   2.6 滚动入场
+   ------------------------------------------------------------
+   借鉴 Endfield Charge Plus 官网的 `.reveal`，但**顺序不能反**：
+
+     默认可见 → JS 确认动效可用 → 才锁隐藏态 → 进入视口后还原
+
+   如果把隐藏态写在默认样式里，那么 JS 加载失败、bundle 报错、
+   用户禁用 JS 的任何一种情况下，内容都会永久停在 opacity:0 ——
+   白屏，且控制台干干净净，属于最难排查的那一类故障。
+   ============================================================ */
+
+/* 默认态：可见。JS 不可用时页面照常工作，这就是降级 */
+.sg-reveal {
+  opacity: 1;
+  transform: none;
+}
+
+/* 只有 motion-ready（由 composable 在 IntersectionObserver 可用时才加）才锁隐藏 */
+.motion-ready .sg-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity var(--dur-medium) var(--ease-out-expo),
+    transform var(--dur-medium) var(--ease-out-expo);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.motion-ready .sg-reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/*
+  错峰封顶**不在这里做**。
+  早先写过 `:nth-child(n+7) { --reveal-delay: 360ms !important }`，
+  但封顶档数是 useReveal 的 maxStagger 参数 —— 同一个规则写两遍，
+  改了一处忘了另一处，动画就会在某个列表上莫名全卡住。
+  封顶统一在 JS 里算，CSS 只管「拿到多少延迟就等多少」。
+*/
+
+/* 图片加载过渡：骨架底色 → 真图交叉淡入 */
+.sg-img {
+  opacity: 0;
+  transition: opacity var(--dur-medium) var(--ease-out-expo);
+}
+.sg-img.is-loaded {
+  opacity: 1;
+}
+
+/* ============================================================
    3. Reduced motion —— 永远最后，且是兜底而不是可选
    B8：动效关掉后页面必须依然完整可用。
    用 0.01ms 而不是 0：某些浏览器不触发 transitionend（靠它做后续逻辑时会卡住），
@@ -188,6 +237,21 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* ⚠️ 最容易漏的一条：把隐藏态复位。
+     上面那条 `transition-duration: 0.01ms` 只让动画「瞬间结束」，
+     但 `.sg-reveal` 的终点是 `.is-revealed` 加出来的 —— 如果用户
+     在卡片入场前就把系统切到 reduced-motion，终点永远不会加上，
+     卡片就永久停在 opacity:0。
+     这里直接把隐藏态本身清掉，不依赖 JS 补 class。 */
+  .motion-ready .sg-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .sg-img {
+    opacity: 1 !important;
   }
 
   /* 下面这些是「靠动画本身传达信息」的，reduced-motion 下换成静态表达 */
