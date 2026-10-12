@@ -19,6 +19,7 @@ import {
   segmentByKeyword,
   avatarText
 } from '@/utils/masonry'
+import { useReveal } from '@/composables/useReveal'
 
 const props = defineProps<{
   posts: Post[]
@@ -52,6 +53,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
+/**
+ * 卡片错峰入场。
+ *
+ * 观察的是 `.masonry-col`（每列一个）而不是卡片本身：
+ * 瀑布流有 5 列、共 60+ 张卡，观察 60 个元素会让 IntersectionObserver
+ * 每帧做 60 次回调。列只有 5 个，代价可以忽略。
+ *
+ * `props.posts.length > 0` 是必需的 —— 空列表时挂观察器纯属浪费，
+ * 而且「有 0 张卡」这件事本身不需要任何入场动画来表达。
+ */
+useReveal(gridRef, () => props.posts.length > 0)
+
 const columns = computed(() => {
   const n = colCount.value
   const colWidth = (gridWidth.value - GAP * (n - 1)) / n
@@ -72,11 +85,27 @@ function tagMatched(post: Post): boolean {
 function segments(text: string) {
   return segmentByKeyword(text, props.highlight)
 }
+
+/**
+ * 图片是否已加载完成。
+ *
+ * 用 Set 而不是 Map/数组：只需要「在不在」这一个判断，
+ * 而且 Set 的 has 是 O(1) —— 瀑布流一次能挂 60 张卡。
+ *
+ * ⚠️ 这是一个**只增不减**的集合。翻很多页之后它会一直涨，
+ * 但它的上界是「用户看过的不同笔记数」，内存占用可以忽略；
+ * 真要清就得在 postId 消失时 remove，那反而容易漏。
+ */
+const loadedImages = ref(new Set<number>())
+
+function markImageLoaded(postId: number) {
+  loadedImages.value.add(postId)
+}
 </script>
 
 <template>
   <div ref="gridRef" class="masonry">
-    <div v-for="(col, ci) in columns" :key="ci" class="masonry-col">
+    <div v-for="(col, ci) in columns" :key="ci" class="masonry-col sg-reveal">
       <router-link
         v-for="item in col"
         :key="item.post.id"
@@ -87,9 +116,12 @@ function segments(text: string) {
         <div class="cover" :class="`ratio-${item.ratio}`">
           <img
             v-if="item.post.imageUrls?.length"
+            class="sg-img"
+            :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
             :src="item.post.imageUrls[0]"
             :alt="`${item.post.author?.nickname} 的笔记封面`"
             loading="lazy"
+            @load="markImageLoaded(item.post.id)"
           />
           <div v-else class="cover-blank">
             <span class="blank-tag"># {{ item.post.topicTag || '日常' }}</span>
