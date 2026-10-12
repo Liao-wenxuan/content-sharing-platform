@@ -27,6 +27,7 @@
     "test:market": "node scripts/market-smoke.mjs",
     "test:feed": "node scripts/feed-smoke.mjs",
     "test:image": "node scripts/image-smoke.mjs",
+    "test:reveal": "node scripts/reveal-smoke.mjs",
     "test:motion": "node scripts/motion-check.mjs"
   },
   "devDependencies": {
