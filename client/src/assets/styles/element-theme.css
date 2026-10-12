@@ -1,8 +1,9 @@
 /* ============================================================
- * Element Plus 主题映射（Flat + Outline）
+ * Element Plus 主题映射（工业 HUD · Flat + Outline）
  * ------------------------------------------------------------
- * 目标：把 Element Plus 默认的「圆角 + 阴影 + 蓝色」压回我们自己的
- *       设计语言 —— 纯色底 / 1px 描边 / 无阴影 / 小红书红 #ff2d55。
+ * 目标：把 Element Plus 默认的「圆角 + 阴影 + 蓝色」压回
+ *       参照项目的设计语言 —— 实心炭色面 / 1px 描边 / 无阴影 /
+ *       唯一彩色是黄绿 #c6ca4c。
  *
  * 为什么用 `html.dark` / `html:not(.dark)` 而不是 `:root`：
  *   Element Plus 自带的 `element-plus/theme-chalk/dark/css-vars.css`
@@ -17,113 +18,130 @@
 html.dark {
   color-scheme: dark;
 
-  /* 主色：小红书红 —— EP 靠 --el-color-primary + light-N 系列派生所有状态 */
-  --el-color-primary: #ff2d55;
-  --el-color-primary-light-3: #ff5c7a;
-  --el-color-primary-light-5: #ff8ca0;
-  --el-color-primary-light-7: #ffbdc8;
-  --el-color-primary-light-8: #ffced6;
-  --el-color-primary-light-9: #ffe7ec;
-  --el-color-primary-dark-2: #d91f42;
+  /*
+   * 主色：黄绿 #c6ca4c。
+   * light-N 派生值是「与白色按 N/10 混合」算出来的，不是手填 ——
+   * 手填这六个值最容易出现渐变断层（某一档突然跳一大截）。
+   * 换主色时用 `node .git/gen-el-vars.mjs <hex>` 重算。
+   */
+  --el-color-primary: #c6ca4c;
+  --el-color-primary-light-3: #d7da82;
+  --el-color-primary-light-5: #e3e5a6;
+  --el-color-primary-light-7: #eeefc9;
+  --el-color-primary-light-8: #f4f4db;
+  --el-color-primary-light-9: #f9faed;
+  --el-color-primary-dark-2: #9ea23d;
 
-  --el-color-success: #22c55e;
-  --el-color-warning: #f59e0b;
-  --el-color-danger: #ff453a;
-  --el-color-error: #ff453a;
-  --el-color-info: #8a8a8a;
+  --el-color-success: #3fb950;
+  --el-color-warning: #d29922;
+  --el-color-danger: #e5484d;
+  --el-color-error: #e5484d;
+  --el-color-info: var(--text-3);
 
-  /* 背景层级：page = 纯黑，overlay = 卡片面 */
-  --el-bg-color: #0b0b0b;
-  --el-bg-color-page: #000000;
-  --el-bg-color-overlay: #141414;
+  /* 背景层级：四级面，对应 token 的 surface-0..3 */
+  --el-bg-color: #1e1e20; /* 卡片面 */
+  --el-bg-color-page: #19191b; /* 页面底 */
+  --el-bg-color-overlay: #242426; /* 弹层：要比卡片更亮，否则弹窗「沉」进背景 */
 
-  /* 文字层级 */
-  --el-text-color-primary: #ffffff;
-  --el-text-color-regular: #d4d4d4;
-  --el-text-color-secondary: #8a8a8a;
-  --el-text-color-placeholder: #5c5c5c;
-  --el-text-color-disabled: #4d4d4d;
+  /*
+   * 文字：同一个白的三档透明度（rgba）。
+   * Element Plus 原生用的是纯灰（#d4d4d4 / #8a8a8a），
+   * 换成 rgba 之后层级靠透明度、不靠另一支灰 ——
+   * 换主题时不需要重算，也不会和背景失配。
+   */
+  --el-text-color-primary: rgba(255, 255, 255, 1);
+  --el-text-color-regular: rgba(255, 255, 255, 0.86);
+  --el-text-color-secondary: rgba(255, 255, 255, 0.62);
+  --el-text-color-placeholder: rgba(255, 255, 255, 0.42);
+  --el-text-color-disabled: rgba(255, 255, 255, 0.28);
 
-  /* 描边 */
-  --el-border-color: #262626;
-  --el-border-color-light: #262626;
-  --el-border-color-lighter: #1f1f1f;
-  --el-border-color-extra-light: #1a1a1a;
-  --el-border-color-dark: #333333;
-  --el-border-color-darker: #3d3d3d;
+  /* 描边三档 */
+  --el-border-color: #343438;
+  --el-border-color-light: #343438;
+  --el-border-color-lighter: #2a2a2d;
+  --el-border-color-extra-light: #2a2a2d;
+  --el-border-color-dark: #4a4a4f;
+  --el-border-color-darker: #55555a;
 
-  /* 填充（hover / 禁用底） */
-  --el-fill-color: #171717;
-  --el-fill-color-light: #141414;
-  --el-fill-color-lighter: #111111;
-  --el-fill-color-blank: #000000;
-  --el-fill-color-dark: #1f1f1f;
-  --el-fill-color-darker: #262626;
-  --el-fill-color-disabled: #171717;
+  /* 填充：hover / 禁用底，与 surface 阶梯对齐 */
+  --el-fill-color: #242426;
+  --el-fill-color-light: #2a2a2d;
+  --el-fill-color-lighter: #2b2b2e;
+  --el-fill-color-blank: #1e1e20;
+  --el-fill-color-dark: #2b2b2e;
+  --el-fill-color-darker: #343438;
+  --el-fill-color-disabled: #1e1e20;
 
-  --el-disabled-bg-color: #171717;
-  --el-disabled-text-color: #4d4d4d;
-  --el-disabled-border-color: #262626;
+  --el-disabled-bg-color: #1e1e20;
+  --el-disabled-text-color: rgba(255, 255, 255, 0.28);
+  --el-disabled-border-color: #2a2a2d;
 
-  --el-mask-color: rgba(0, 0, 0, 0.85);
-  --el-mask-color-extra-light: rgba(0, 0, 0, 0.35);
+  --el-mask-color: rgba(10, 10, 11, 0.8);
+  --el-mask-color-extra-light: rgba(10, 10, 11, 0.35);
 
   --el-box-shadow: none;
   --el-box-shadow-light: none;
   --el-box-shadow-lighter: none;
   --el-box-shadow-dark: none;
 
-  --el-border-radius-base: 8px;
-  --el-border-radius-small: 6px;
+  /* 圆角对齐 token 的离散档位 */
+  --el-border-radius-base: 7px; /* 小控件 */
+  --el-border-radius-small: 4px; /* 徽章 / 计数 */
+  --el-border-radius-round: 999px; /* 胶囊 */
   --el-font-size-base: 14px;
+  --el-font-size-small: 13px;
+  --el-font-size-extra-small: 12px;
+  --el-font-size-large: 16px;
+  --el-font-size-medium: 16px;
 }
 
 /* ---------- 浅色 ---------- */
 html:not(.dark) {
   color-scheme: light;
 
-  --el-color-primary: #ff2d55;
-  --el-color-primary-light-3: #ff5c7a;
-  --el-color-primary-light-5: #ff8ca0;
-  --el-color-primary-light-7: #ffbdc8;
-  --el-color-primary-light-8: #ffced6;
-  --el-color-primary-light-9: #ffe7ec;
-  --el-color-primary-dark-2: #d91f42;
+  /* 浅色底上同一个黄绿只有 1.7:1 对比度，必须用它的暗态 */
+  --el-color-primary: #7d8220;
+  --el-color-primary-light-3: #a4a863;
+  --el-color-primary-light-5: #bec190;
+  --el-color-primary-light-7: #d8dabc;
+  --el-color-primary-light-8: #e5e6d2;
+  --el-color-primary-light-9: #f2f3e9;
+  --el-color-primary-dark-2: #64681a;
 
-  --el-color-success: #16a34a;
-  --el-color-warning: #d97706;
-  --el-color-danger: #dc2626;
-  --el-color-error: #dc2626;
-  --el-color-info: #6b6b6b;
+  --el-color-success: #1a7f37;
+  --el-color-warning: #9a6700;
+  --el-color-danger: #c62f33;
+  --el-color-error: #c62f33;
+  --el-color-info: var(--text-3);
 
   --el-bg-color: #ffffff;
-  --el-bg-color-page: #ffffff;
+  --el-bg-color-page: #ecece8;
   --el-bg-color-overlay: #ffffff;
 
-  --el-text-color-primary: #111111;
-  --el-text-color-regular: #333333;
-  --el-text-color-secondary: #666666;
-  --el-text-color-placeholder: #a3a3a3;
-  --el-text-color-disabled: #c0c0c0;
+  --el-text-color-primary: rgba(17, 17, 17, 1);
+  --el-text-color-regular: rgba(17, 17, 17, 0.86);
+  --el-text-color-secondary: rgba(17, 17, 17, 0.62);
+  --el-text-color-placeholder: rgba(17, 17, 17, 0.42);
+  --el-text-color-disabled: rgba(17, 17, 17, 0.28);
 
-  --el-border-color: #ebebeb;
-  --el-border-color-light: #ebebeb;
-  --el-border-color-lighter: #f0f0f0;
-  --el-border-color-extra-light: #f5f5f5;
-  --el-border-color-dark: #d9d9d9;
-  --el-border-color-darker: #c0c0c0;
+  --el-border-color: #d8d8d2;
+  --el-border-color-light: #d8d8d2;
+  --el-border-color-lighter: #e6e6e1;
+  --el-border-color-extra-light: #e6e6e1;
+  --el-border-color-dark: #b4b4ac;
+  --el-border-color-darker: #9a9a92;
 
-  --el-fill-color: #f0f0f0;
-  --el-fill-color-light: #f5f5f5;
-  --el-fill-color-lighter: #fafafa;
+  --el-fill-color: #f4f4f0;
+  --el-fill-color-light: #f0f0ec;
+  --el-fill-color-lighter: #f6f6f3;
   --el-fill-color-blank: #ffffff;
-  --el-fill-color-dark: #ebebeb;
-  --el-fill-color-darker: #e0e0e0;
-  --el-fill-color-disabled: #f5f5f5;
+  --el-fill-color-dark: #e6e6e1;
+  --el-fill-color-darker: #d8d8d2;
+  --el-fill-color-disabled: #f4f4f0;
 
-  --el-disabled-bg-color: #f5f5f5;
-  --el-disabled-text-color: #c0c0c0;
-  --el-disabled-border-color: #ebebeb;
+  --el-disabled-bg-color: #f4f4f0;
+  --el-disabled-text-color: rgba(17, 17, 17, 0.28);
+  --el-disabled-border-color: #e6e6e1;
 
   --el-mask-color: rgba(0, 0, 0, 0.45);
   --el-mask-color-extra-light: rgba(0, 0, 0, 0.2);
@@ -133,13 +151,18 @@ html:not(.dark) {
   --el-box-shadow-lighter: none;
   --el-box-shadow-dark: none;
 
-  --el-border-radius-base: 8px;
-  --el-border-radius-small: 6px;
+  --el-border-radius-base: 7px;
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 999px;
   --el-font-size-base: 14px;
+  --el-font-size-small: 13px;
+  --el-font-size-extra-small: 12px;
+  --el-font-size-large: 16px;
+  --el-font-size-medium: 16px;
 }
 
 /* ============================================================
- * Flat + Outline 全局校正
+ * 组件校正
  * Element Plus 不少组件用 box-shadow 模拟描边（输入框 / 按钮），
  * 这里统一换成真正的 1px 描边，并抹掉阴影。
  * ============================================================ */
@@ -149,6 +172,10 @@ html:not(.dark) {
 .el-select__wrapper {
   box-shadow: 0 0 0 1px var(--el-border-color) inset;
   border-radius: var(--el-border-radius-base);
+  background-color: var(--el-fill-color-blank);
+  transition:
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .el-input__wrapper:hover,
@@ -166,23 +193,31 @@ html:not(.dark) {
   font-family: var(--font-sans);
 }
 
-/* 卡片：纯色底 + 描边，无阴影 */
+/* 卡片：实心面 + 描边，无阴影 */
 .el-card {
-  background-color: var(--el-bg-color-overlay);
+  background-color: var(--el-bg-color);
   border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-md, 10px);
   box-shadow: none;
 }
 
 .el-card__header,
 .el-card__body {
-  border-color: var(--el-border-color);
+  border-color: var(--el-border-color-lighter);
+  padding: var(--sp-4, 16px) var(--sp-5, 20px);
 }
 
-/* 弹层 */
+/* 卡片标题：小标题档，不再是 18px 这种零散值 */
+.el-card__header .el-card__header {
+  font-size: var(--fs-md, 16px);
+}
+
+/* 弹层：要比卡片面更亮，否则弹窗「沉」进背景里看不出来边界 */
 .el-popper.is-light,
 .el-select__popper.el-popper {
   background: var(--el-bg-color-overlay);
   border: 1px solid var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
 }
 
 .el-popper.is-light .el-popper__arrow::before {
@@ -192,7 +227,6 @@ html:not(.dark) {
 
 .el-popper.is-light .el-popper__arrow::after {
   background: var(--el-bg-color-overlay);
-  border-color: var(--el-border-color);
 }
 
 /* 表格：去掉默认竖线和 hover 灰底 */
@@ -210,6 +244,10 @@ html:not(.dark) {
   background-color: transparent;
 }
 
+.el-table__row:hover > td.el-table__cell {
+  background-color: var(--el-fill-color-light);
+}
+
 /* 菜单：透明底，无高亮块背景 */
 .el-menu {
   background-color: transparent;
@@ -223,6 +261,12 @@ html:not(.dark) {
 
 .el-menu-item.is-active {
   color: var(--el-color-primary);
+}
+
+/* 选中态：左描边（参照项目的「唯一彩色用在状态上」） */
+.el-menu-item.is-active {
+  border-left: 2px solid var(--el-color-primary);
+  padding-left: calc(var(--sp-3, 12px) - 2px);
 }
 
 .el-menu-item:hover,
@@ -239,6 +283,40 @@ html:not(.dark) {
   background-color: var(--el-border-color-lighter);
 }
 
+/* 标签：胶囊 + 描边，不实心 */
+.el-tag {
+  border-radius: var(--el-border-radius-round);
+  font-weight: 500;
+}
+
+/* 分段控件：参照项目的语言切换滑块 */
+.el-radio-group {
+  background: var(--el-fill-color-lighter);
+  border-radius: var(--el-border-radius-base);
+  padding: 3px;
+}
+
+.el-radio-button__inner {
+  border: none !important;
+  border-radius: var(--el-border-radius-small) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--el-text-color-secondary);
+  font-weight: 500;
+}
+
+.el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: var(--el-color-primary) !important;
+  color: var(--accent-foreground, #19191b) !important;
+  box-shadow: none !important;
+}
+
+/* 开关：内嵌进面板的控件，不要太圆 */
+.el-switch {
+  --el-switch-on-color: var(--el-color-primary);
+  --el-switch-off-color: var(--el-fill-color-darker);
+}
+
 /* 描述列表 / 空状态跟随主题 */
 .el-descriptions {
   --el-descriptions-item-bordered-label-background: var(--el-fill-color-light);
@@ -248,12 +326,26 @@ html:not(.dark) {
   color: var(--el-text-color-secondary);
 }
 
-/* 骨架屏：深色下别太刺眼 */
+/* 骨架屏：低对比呼吸，不做成会动的光带（那是「很忙」的视觉噪音） */
 .el-skeleton__item {
-  background: linear-gradient(
-    90deg,
-    var(--el-fill-color) 25%,
-    var(--el-fill-color-light) 37%,
-    var(--el-fill-color) 63%
-  );
+  background: var(--el-fill-color);
+  opacity: 0.7;
+}
+
+/* 按钮：主按钮 hover 变暗（黄绿提亮会溢出到看不清字） */
+.el-button--primary:not(.is-disabled):hover {
+  background-color: var(--accent-dim, #9ea23d);
+  border-color: var(--accent-dim, #9ea23d);
+}
+
+/* 次要 / 文字按钮：描边语言 */
+.el-button--default:not(.is-disabled):hover {
+  background-color: var(--el-fill-color-light);
+  border-color: var(--el-border-color-dark);
+}
+
+/* 链接：强调色，不要下划线（Flat 语言里下划线太重） */
+.el-link {
+  text-decoration: none;
+  font-weight: 500;
 }

@@ -1,109 +1,197 @@
 /* ============================================================
- * Design System — 小红书移动端对齐（Flat + Outline）
+ * Design System — 终末地工业 HUD 风格（Flat + Outline）
  * ------------------------------------------------------------
- * 设计语言参考小红书 App 移动端：
- *   纯色底（无渐变光斑）· 满幅出血图 · 描边胶囊 · 红色仅用于强调
+ * 设计语言参考 zmd-charge（终端 HUD）：
+ *   纯色底（无渐变光斑）· 层级靠描边 · 文字靠透明度分层 ·
+ *   唯一彩色是黄绿强调色
+ *
+ * 照抄了参照项目 HudTheme.axaml 的三条核心原则：
+ *   1. 胶囊/卡片是实心深炭色，**不用渐变**
+ *   2. 文字纯白，层级靠 **Opacity** 而不是另一支灰
+ *   3. 整个界面只有一个彩色：强调色。其余全是中性灰阶
+ *
+ * 为什么背景不是纯黑（#000）而是 #19191B：
+ *   强调色 #c6ca4c 是中亮度黄绿，在纯黑上对比度只有 3.5:1，
+ *   达不到 WCAG AA 的 4.5:1（正文）/ 3:1（大字）。
+ *   换成暖炭色 #19191B 之后对比度到 5.4:1 —— 参照项目本身
+ *   也是这么做的（它没选纯黑）。
  *
  * 关键 token：
- *   --background  页面纯色底（dark: #000 / light: #fff）
- *   --card        卡片底 = 与页面同色（小红书不用卡片底，靠间距分组）
- *   --border      1px 描边（胶囊/输入框/分隔线）
- *   --accent      小红书红 #ff2d55（关注按钮 / 话题标签 / 选中态）
- *   --chip-*      信息元数据胶囊
- * =========================================================== */
+ *   --accent   黄绿 #c6ca4c（唯一彩色：关注 / 选中 / 强调）
+ *   --surface-* 四级面（page / 1 / 2 / 3），靠明度差分层级
+ *   --text-1/2/3 同一个白的三档透明度，不引入新的灰
+ *   --radius-*  离散圆角档位，每个尺寸都有存在理由
+ *   --fs-*      6 档字号，11~16 不再挤成一团（见下）
+ * ============================================================ */
 
 :root {
-  /* —— 基础 token（dark 纯黑底）—— */
-  --background: #000000; /* 纯黑底 — 对齐小红书 */
-  --foreground: #ffffff; /* 白字 */
-  --card: #000000; /* 卡片=页面同色，靠间距分组而非卡片底 */
+  /* —— 中性面：四级，靠明度差分而不是阴影 —— */
+  --background: #19191b; /* 页面底（暖炭，抬高强调色对比度） */
+  --surface-1: #1e1e20; /* 卡面：比页面亮一档 */
+  --surface-2: #242426; /* 面板：卡面之上 */
+  --surface-3: #2b2b2e; /* 交互底：分段控件 / hover */
+  --card: #1e1e20;
   --card-foreground: #ffffff;
-  --popover: #1a1a1a;
+
+  /* 兼容旧 token 名 —— 指向新的面 */
+  --popover: #242426;
   --popover-foreground: #ffffff;
-  --muted: #171717; /* 次级面（胶囊底 / hover） */
-  --muted-foreground: #8a8a8a; /* 辅助文字灰 */
-  --primary: #ffffff;
-  --primary-foreground: #000000;
-  --secondary: #1a1a1a;
+  --muted: #242426;
+  --secondary: #2b2b2e;
   --secondary-foreground: #ffffff;
-  --accent: #ff2d55; /* 小红书红 */
-  --accent-foreground: #ffffff;
-  --destructive: #ff453a;
+  --primary: #ffffff;
+  --primary-foreground: #19191b;
+
+  /* —— 描边：三档够用，不搞一套完整灰阶 —— */
+  --border: #343438; /* 常规描边 */
+  --border-soft: #2a2a2d; /* 分隔线（比 border 更弱） */
+  --border-strong: #4a4a4f; /* hover / 强调描边 */
+  --input: #1e1e20;
+  --ring: rgba(198, 202, 76, 0.55);
+
+  /* —— 强调色：全站唯一彩色 —— */
+  --accent: #c6ca4c;
+  --accent-foreground: #19191b; /* 强调色上的文字 = 底色，保证对比 */
+  --accent-dim: #a8ad3c; /* 强调色的暗态（hover 反而变暗） */
+  --accent-muted: rgba(198, 202, 76, 0.12); /* 强调色 12% 作背景 */
+
+  --destructive: #e5484d;
   --destructive-foreground: #ffffff;
 
-  --border: #262626; /* 描边灰 — 胶囊 / 输入框 / 分隔线 */
-  --input: #1a1a1a;
-  --ring: rgba(255, 45, 85, 0.5);
+  /* —— 文字：同一个白的三档透明度 ——
+     这是从参照项目抄来的最重要的一条。
+     灰阶是独立的一支颜色，调色板要多维护几支、换主题要重算；
+     透明度是同一个白的三档，天然不会和背景失配。 */
+  --foreground: #ffffff;
+  --text-1: rgba(255, 255, 255, 1); /* 主 */
+  --text-2: rgba(255, 255, 255, 0.62); /* 次级 */
+  --text-3: rgba(255, 255, 255, 0.42); /* 辅助 / 禁用 */
+  --muted-foreground: rgba(255, 255, 255, 0.62); /* 兼容旧名 */
+  --text-on-accent: #19191b;
 
-  /* —— 保留旧玻璃 token 名以兼容现有组件（已降级为平面描边）—— */
-  --glass-bg: transparent;
-  --glass-bg-strong: #000000;
-  --glass-bg-weak: transparent;
-  --glass-border: #262626;
-  --glass-border-dk: #1f1f1f;
-  --glass-highlight: transparent;
-  --glass-blur: 20px;
-  --glass-shadow: none;
-  --glass-shadow-light: none;
+  /* —— 圆角：离散档位，每个都有理由 ——
+     参照项目实测：10px(面板,×9) / 8px / 7px(小控件) / 4.5px(徽章) / 1.5px(细条)
+     胶囊用 999px（全圆），卡片与面板用 10px。 */
+  --radius-xs: 4px; /* 徽章 / 计数 */
+  --radius-sm: 7px; /* 小控件：按钮 / 输入框 */
+  --radius-md: 10px; /* 卡片 / 面板 */
+  --radius-lg: 14px; /* 大容器 */
+  --radius-full: 999px; /* 胶囊 / 头像 */
+  --radius: 10px; /* 兼容旧名 → md */
 
-  /* —— 信息元数据胶囊（地点 / 活动 / 搜索）—— */
-  --chip-bg: transparent;
-  --chip-border: #2f2f2f;
-  --chip-text: #b0b0b0;
+  /* —— 字号：6 档 ——
+     原来 11/12/13/14/15/16 六档挤在 6px 内，区分度不足，
+     视觉上分辨不出；而 18/19px 是零散出现的。
+     现在按「角色」分档，档与档之间至少差 2px。 */
+  --fs-2xs: 11px; /* 标签 / 角标 */
+  --fs-xs: 12px; /* 元信息 / 时间 */
+  --fs-sm: 13px; /* 辅助正文 */
+  --fs-base: 14px; /* 正文（基准） */
+  --fs-md: 16px; /* 小标题 */
+  --fs-lg: 20px; /* 页标题 */
+  --fs-xl: 24px; /* 大数字 / 空态 */
+  --fs-display: 32px; /* 展示型数字 */
 
-  --radius: 0.5rem;
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', 'PingFang SC', 'Hiragino Sans GB',
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'HarmonyOS Sans SC',
     'Microsoft YaHei', sans-serif;
+  /* 数字等宽：价格、计数、ID 这类要对齐的场景 */
+  --font-numeric: 'Inter', 'SF Mono', ui-monospace, 'JetBrains Mono', monospace;
+
+  /* —— 间距：4px 基准 —— */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
 
   /* —— 桌面三栏布局尺寸 —— */
   --side-nav-width: 216px;
   --top-bar-height: 60px;
   --content-max-width: 1080px;
 
+  /* —— 阴影：工业 HUD 是「发光」不是「投影」，默认全无 —— */
   --shadow-sm: none;
   --shadow: none;
   --shadow-md: none;
   --shadow-lg: none;
+
+  /* —— 信息元数据胶囊 —— */
+  --chip-bg: transparent;
+  --chip-border: #3a3a3e;
+  --chip-text: var(--text-2);
+
+  /* —— 保留旧玻璃 token 名以兼容现有组件（已降级为平面描边）—— */
+  --glass-bg: transparent;
+  --glass-bg-strong: #1e1e20;
+  --glass-bg-weak: transparent;
+  --glass-border: #343438;
+  --glass-border-dk: #2a2a2d;
+  --glass-highlight: transparent;
+  --glass-blur: 0px;
+  --glass-shadow: none;
+  --glass-shadow-light: none;
 }
 
 /* ============================================================
- * Light Theme — 纯白底 + 描边
+ * Light Theme — 米白底 + 同样靠描边分层
+ * 不是纯白：纯白上 #c6ca4c 的对比度只有 1.7:1，完全不可用。
  * ============================================================ */
 :root:not(.dark) {
-  --background: #ffffff;
-  --foreground: #111111;
+  --background: #ecece8;
+  --surface-1: #ffffff;
+  --surface-2: #f4f4f0;
+  --surface-3: #e6e6e1;
   --card: #ffffff;
   --card-foreground: #111111;
   --popover: #ffffff;
   --popover-foreground: #111111;
-  --muted: #f5f5f5;
-  --muted-foreground: #666666;
+  --muted: #f4f4f0;
+  --secondary: #e6e6e1;
+  --secondary-foreground: #111111;
   --primary: #111111;
   --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #111111;
-  --destructive: #dc2626;
-  --border: #ebebeb;
-  --input: #f5f5f5;
-  --ring: rgba(255, 45, 85, 0.4);
 
-  --glass-bg: transparent;
-  --glass-bg-strong: #ffffff;
-  --glass-bg-weak: transparent;
-  --glass-border: #e0e0e0;
-  --glass-border-dk: #f0f0f0;
-  --glass-highlight: transparent;
-  --glass-shadow: none;
+  --border: #d8d8d2;
+  --border-soft: #e6e6e1;
+  --border-strong: #b4b4ac;
+  --input: #ffffff;
+  --ring: rgba(154, 158, 34, 0.5);
 
-  --chip-bg: transparent;
-  --chip-border: #e5e5e5;
-  --chip-text: #8a8a8a;
+  /* 浅色底下同一个黄绿会看不清，改用它的暗态 */
+  --accent: #7d8220;
+  --accent-dim: #676b19;
+  --accent-muted: rgba(125, 130, 32, 0.12);
+  --accent-foreground: #ffffff;
+
+  --destructive: #c62f33;
+
+  --foreground: #111111;
+  --text-1: rgba(17, 17, 17, 1);
+  --text-2: rgba(17, 17, 17, 0.62);
+  --text-3: rgba(17, 17, 17, 0.42);
+  --muted-foreground: rgba(17, 17, 17, 0.62);
+  --text-on-accent: #ffffff;
+
+  --chip-border: #cfcfc8;
+  --chip-text: var(--text-2);
 
   --shadow-sm: none;
   --shadow: none;
   --shadow-md: none;
   --shadow-lg: none;
+
+  --glass-bg: transparent;
+  --glass-bg-strong: #ffffff;
+  --glass-bg-weak: transparent;
+  --glass-border: #d8d8d2;
+  --glass-border-dk: #e6e6e1;
+  --glass-highlight: transparent;
+  --glass-shadow: none;
+  --glass-shadow-light: none;
 }
 
 /* ============================================================
@@ -123,11 +211,11 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--fs-base);
+  line-height: 1.6;
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease;
+    background-color 0.28s var(--ease-out-expo, ease),
+    color 0.28s var(--ease-out-expo, ease);
   /*
    * 不要给 html/body 加 overflow-x: hidden。
    * 它会让 body 变成滚动容器，导致 SideNav / TopBar 的 position: sticky
@@ -142,11 +230,6 @@ body {
   z-index: 1;
 }
 
-/*
- * 原本这里有「液态玻璃背景 stage」（#app::before 光斑渐变 + #app::after 网格纹理）。
- * 小红书移动端是纯色底，没有光斑/网格 —— 已移除，页面回归纯黑/纯白。
- */
-
 /* ============================================================
  * 全局链接
  * ============================================================ */
@@ -156,7 +239,7 @@ a {
 }
 
 /* ============================================================
- * 滚动条
+ * 滚动条：细、无轨道，hover 才变亮
  * ============================================================ */
 ::-webkit-scrollbar {
   width: 8px;
@@ -166,36 +249,39 @@ a {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: var(--border-soft);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
+  background: var(--border-strong);
 }
 
-/* ============================================================
- * 图片：dark 模式自动降亮（防白底刺眼）
- * ============================================================ */
+/*
+ * 图片在深色下不做降亮。
+ * 原先的 `.dark img { opacity: 0.92 }` 是为纯黑底 + 白图刺眼准备的；
+ * 换成暖炭底 + 四级面之后，内容图才是主体，
+ * 统一压到 92% 会让所有封面图集体发灰，反而降低了对比。
+ */
 .dark img:not([src*='.svg']) {
-  opacity: 0.92;
+  opacity: 1;
 }
 
 /* ============================================================
- * 描边 Utility Classes（小红书风格：1px 描边 + 纯色底，无模糊无阴影）
+ * Utility Classes
  * ============================================================ */
 
-/* 描边卡（用于需要明确边界的区域） */
+/* 描边卡：需要明确边界的区域 */
 .glass {
-  background: var(--card);
+  background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
 }
 
-/* 描边胶囊（信息元数据 / 标签 / 按钮） */
+/* 描边胶囊：信息元数据 / 标签 / 按钮 */
 .glass-pill {
   background: var(--chip-bg);
   border: 1px solid var(--chip-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--chip-text);
 }
 
@@ -203,26 +289,32 @@ a {
 .glass-input {
   background: var(--input);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--foreground);
 }
 .glass-input:focus {
   outline: none;
   border-color: var(--accent);
-  background: var(--card);
+  background: var(--surface-1);
 }
 
-/* 主行动按钮：小红书红实心 */
+/* 主行动按钮：全站唯一实心彩色 */
 .btn-accent {
   background: var(--accent);
   color: var(--accent-foreground);
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
+/*
+ * hover 变暗而不是变亮。
+ * 黄绿已经很亮了，hover 时提亮会溢出到看不清白字；
+ * 压暗一档反而更「沉」，和工业面板的质感一致。
+ */
 .btn-accent:hover {
-  filter: brightness(1.08);
+  background: var(--accent-dim);
 }
 .btn-accent:disabled {
   opacity: 0.4;
@@ -234,15 +326,25 @@ a {
   background: transparent;
   color: var(--foreground);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 .btn-outline:hover {
-  background: var(--muted);
+  background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
-/* 话题标签：小红书红 */
+/* 话题标签 / 强调文字 */
 .tag-topic {
   color: var(--accent);
   font-size: inherit;
+}
+
+/* 数字等宽：价格、计数、ID */
+.tnum {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
 }
