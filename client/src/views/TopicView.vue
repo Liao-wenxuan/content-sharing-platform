@@ -193,7 +193,7 @@ watch(
   width: 132px;
   height: 88px;
   flex-shrink: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--muted);
 }
@@ -207,7 +207,7 @@ watch(
 
 .topic-name {
   margin: 0;
-  font-size: 26px;
+  font-size: var(--fs-display);
   font-weight: 600;
   color: var(--foreground);
   line-height: 1.2;
@@ -221,7 +221,7 @@ watch(
 
 .topic-stat {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -235,7 +235,7 @@ watch(
 }
 
 .related-label {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   margin-right: 2px;
 }
@@ -245,9 +245,9 @@ watch(
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--foreground);
   cursor: pointer;
@@ -267,7 +267,7 @@ watch(
 }
 
 .related-count {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -280,7 +280,7 @@ watch(
 }
 
 .no-more {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 </style>

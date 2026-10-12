@@ -90,7 +90,7 @@ const glyph = computed(() => props.icon ?? (isError.value ? '⚠️' : '📭'))
 
 .hint {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   max-width: 360px;
   line-height: 1.6;

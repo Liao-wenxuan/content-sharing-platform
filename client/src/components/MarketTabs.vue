@@ -82,7 +82,7 @@ onMounted(() => {
 .tab {
   position: relative;
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 500;
   color: var(--muted-foreground);
   text-decoration: none;
@@ -115,10 +115,10 @@ onMounted(() => {
   height: 18px;
   padding: 0 5px;
   margin-left: 4px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: #fff;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 600;
   line-height: 18px;
   text-align: center;

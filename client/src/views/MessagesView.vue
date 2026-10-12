@@ -399,7 +399,7 @@ watch(activeCategory, (cat) => {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: var(--fs-display);
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
@@ -408,7 +408,7 @@ watch(activeCategory, (cat) => {
 
 .page-subtitle {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -421,7 +421,7 @@ watch(activeCategory, (cat) => {
 }
 
 .msg-tabs :deep(.el-tabs__item) {
-  font-size: 16px;
+  font-size: var(--fs-md);
 }
 
 /* ===== 双栏 ===== */
@@ -444,11 +444,11 @@ watch(activeCategory, (cat) => {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .card-sub {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   margin-left: 10px;
 }
@@ -474,12 +474,12 @@ watch(activeCategory, (cat) => {
 /* 整行可点 → 必须有 hover 和 focus-visible，否则没人知道能点 */
 .activity-item:hover {
   background: var(--muted);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .activity-item.unread {
   background: color-mix(in srgb, var(--accent) 6%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .activity-open {
@@ -495,7 +495,7 @@ watch(activeCategory, (cat) => {
 .activity-open:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .mention {
@@ -534,7 +534,7 @@ watch(activeCategory, (cat) => {
 .avatar {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 14px;
+  font-size: var(--fs-base);
   flex-shrink: 0;
 }
 
@@ -544,7 +544,7 @@ watch(activeCategory, (cat) => {
 }
 
 .activity-text {
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.6;
   word-break: break-word;
 }
@@ -555,7 +555,7 @@ watch(activeCategory, (cat) => {
 }
 
 .activity-date {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -590,18 +590,18 @@ watch(activeCategory, (cat) => {
 }
 
 .switch-label {
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .switch-hint {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
   line-height: 1.4;
 }
 
 .prefs-note {
   margin: 12px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.5;
   color: var(--muted-foreground);
 }
@@ -630,12 +630,12 @@ watch(activeCategory, (cat) => {
 }
 
 .suggest-name {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 
 .suggest-hint {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
   margin-top: 2px;
   overflow: hidden;
@@ -648,7 +648,7 @@ watch(activeCategory, (cat) => {
   margin-left: 0;
   padding: 0;
   height: auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 /* ===== 顶层 Tab（通知 / 聊天）===== */
@@ -657,7 +657,7 @@ watch(activeCategory, (cat) => {
 }
 
 .top-tabs :deep(.el-tabs__item) {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 

@@ -178,24 +178,24 @@ async function handleSubmit() {
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   background: var(--accent);
   color: #fff;
   font-weight: 700;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   margin-bottom: 12px;
 }
 
 .brand-name {
   margin: 0 0 4px;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .brand-slogan {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -216,7 +216,7 @@ async function handleSubmit() {
 }
 
 .login-form :deep(.el-form-item__label) {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 500;
 }
 

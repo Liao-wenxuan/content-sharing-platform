@@ -254,14 +254,14 @@ onMounted(load)
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .subtitle {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -273,13 +273,13 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .hint {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--accent);
 }
@@ -310,7 +310,7 @@ onMounted(load)
 
 .folder-icon {
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: var(--fs-lg);
   color: var(--muted-foreground);
 }
 
@@ -320,13 +320,13 @@ onMounted(load)
 }
 
 .folder-name {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
 }
 
 .folder-count {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -348,7 +348,7 @@ onMounted(load)
 }
 
 .post-text {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -357,7 +357,7 @@ onMounted(load)
 
 .post-meta {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 </style>

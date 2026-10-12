@@ -356,27 +356,27 @@ onMounted(refresh)
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .count {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 400;
   color: var(--muted-foreground);
 }
 
 .subtitle {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 /* ===== 卖家分组 ===== */
 .group {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   margin-bottom: 16px;
   overflow: hidden;
 }
@@ -390,14 +390,14 @@ onMounted(refresh)
 }
 
 .seller-name {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--foreground);
   text-decoration: none;
 }
 
 .group-meta {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -424,7 +424,7 @@ onMounted(refresh)
   width: 68px;
   height: 68px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--muted);
   display: flex;
@@ -440,7 +440,7 @@ onMounted(refresh)
 }
 
 .thumb-fallback {
-  font-size: 24px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: var(--muted-foreground);
   opacity: 0.6;
@@ -452,7 +452,7 @@ onMounted(refresh)
 }
 
 .row-title {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
   text-decoration: none;
   display: block;
@@ -463,14 +463,14 @@ onMounted(refresh)
 
 .row-price {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .row-warn {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--el-color-danger);
 }
 
@@ -482,9 +482,11 @@ onMounted(refresh)
 }
 
 .subtotal {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text-1);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
   min-width: 70px;
   text-align: right;
@@ -502,37 +504,39 @@ onMounted(refresh)
 
 .foot-note {
   margin-right: auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
 .foot-total {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .foot-total strong {
-  font-size: 18px;
-  color: var(--accent);
+  font-size: var(--fs-lg);
+  color: var(--text-1);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 
 .grand-total {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   text-align: right;
 }
 
 .grand-total strong {
-  font-size: 16px;
+  font-size: var(--fs-md);
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .hint {
   margin-left: 6px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 /* ===== 结算对话框 ===== */
@@ -541,7 +545,7 @@ onMounted(refresh)
   justify-content: space-between;
   align-items: baseline;
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -556,9 +560,11 @@ onMounted(refresh)
 }
 
 .amount {
-  font-size: 24px;
+  font-size: var(--fs-xl);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text-1);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 
@@ -575,8 +581,8 @@ onMounted(refresh)
   justify-content: space-between;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-base);
 }
 
 .method.active {
@@ -590,9 +596,9 @@ onMounted(refresh)
 }
 
 .method-tag {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   padding: 2px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: #fff;
 }
@@ -603,26 +609,26 @@ onMounted(refresh)
 
 .pay-balance {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .pay-warn {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--el-color-danger);
 }
 
 .pay-note {
   margin: 12px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.6;
   color: var(--muted-foreground);
 }
 
 .pay-error {
   margin: 8px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--el-color-danger);
 }
 </style>

@@ -316,7 +316,7 @@ onMounted(load)
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
@@ -328,7 +328,7 @@ onMounted(load)
 
 .total-line {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -340,7 +340,7 @@ onMounted(load)
 
 .order {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   margin-bottom: 14px;
   overflow: hidden;
 }
@@ -354,7 +354,7 @@ onMounted(load)
 }
 
 .order-no {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -375,7 +375,7 @@ onMounted(load)
 .item-title {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
   text-decoration: none;
   overflow: hidden;
@@ -384,12 +384,12 @@ onMounted(load)
 }
 
 .item-qty {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .item-sub {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
   min-width: 64px;
@@ -406,19 +406,21 @@ onMounted(load)
 }
 
 .time {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
 .amount {
   margin-right: auto;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .amount strong {
-  font-size: 17px;
-  color: var(--accent);
+  font-size: var(--fs-lg);
+  color: var(--text-1);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 

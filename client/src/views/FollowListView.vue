@@ -199,7 +199,7 @@ watch([activeTab, targetId], () => load(true))
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
@@ -212,7 +212,7 @@ watch([activeTab, targetId], () => load(true))
 
 .subtitle {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -249,7 +249,7 @@ watch([activeTab, targetId], () => load(true))
 }
 
 .row-name {
-  font-size: 15px;
+  font-size: var(--fs-md);
   color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -258,7 +258,7 @@ watch([activeTab, targetId], () => load(true))
 
 .row-meta {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 

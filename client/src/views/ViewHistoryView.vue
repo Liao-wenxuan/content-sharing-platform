@@ -163,20 +163,20 @@ onMounted(load)
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .total {
-  font-size: 15px;
+  font-size: var(--fs-md);
   color: var(--muted-foreground);
   font-weight: 400;
 }
 
 .subtitle {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -187,7 +187,7 @@ onMounted(load)
 }
 
 .no-more {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 </style>

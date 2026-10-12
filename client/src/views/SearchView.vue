@@ -211,7 +211,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-bottom: 20px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -239,7 +239,7 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .history-list {
@@ -250,11 +250,11 @@ onMounted(() => {
 
 .history-tag {
   cursor: pointer;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
 
 .hint {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   margin: 0;
 }
@@ -268,6 +268,6 @@ onMounted(() => {
 
 .no-more {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 </style>

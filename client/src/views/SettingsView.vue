@@ -224,7 +224,7 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: var(--fs-display);
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
@@ -233,7 +233,7 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 
 .page-subtitle {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -247,7 +247,7 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 
 .group-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .item-list {
@@ -269,18 +269,18 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 
 .item-icon {
   color: var(--muted-foreground);
-  font-size: 16px;
+  font-size: var(--fs-md);
   flex-shrink: 0;
 }
 
 .item-label {
   flex: 1;
-  font-size: 14px;
+  font-size: var(--fs-base);
   cursor: default;
 }
 
 .item-value {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -291,7 +291,7 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 
 /* ===== 账号摘要 ===== */
 .account-card :deep(.el-descriptions) {
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .legal {
@@ -304,7 +304,7 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 .legal-link {
   padding: 0;
   height: auto;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 /* ===== 危险操作 ===== */
@@ -321,13 +321,13 @@ const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
 }
 
 .danger-title {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
 .danger-hint {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   line-height: 1.6;
 }

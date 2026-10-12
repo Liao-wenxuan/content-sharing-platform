@@ -265,7 +265,7 @@ watch(isFollowFeed, () => loadFeed(true))
   height: 44px;
   padding: 0 4px;
   margin: 0 20px;
-  font-size: 16px;
+  font-size: var(--fs-md);
   color: var(--foreground);
   opacity: 0.62;
 }
@@ -305,14 +305,14 @@ watch(isFollowFeed, () => loadFeed(true))
 
 .follow-title {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   color: var(--foreground);
 }
 
 .follow-sub {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -325,7 +325,7 @@ watch(isFollowFeed, () => loadFeed(true))
 
 .no-more {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 /* ===== 推荐流的解释入口 ===== */
@@ -337,7 +337,7 @@ watch(isFollowFeed, () => loadFeed(true))
 
 .feed-note-link {
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   text-decoration: none;
   transition: color var(--dur-fast) var(--ease-out-expo);
 }

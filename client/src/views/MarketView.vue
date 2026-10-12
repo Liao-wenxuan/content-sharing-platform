@@ -354,14 +354,14 @@ onMounted(load)
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .subtitle {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -389,7 +389,7 @@ onMounted(load)
 
 .card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
   background: var(--background);
@@ -432,7 +432,7 @@ onMounted(load)
 
 .card-title {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 500;
   color: var(--foreground);
   line-height: 1.4;
@@ -449,26 +449,38 @@ onMounted(load)
   gap: 6px;
 }
 
+/*
+ * 价格用**白色而不是强调色**。
+ *
+ * 一屏 10 个商品，如果每个价格都是黄绿，那么真正需要强调的
+ * 「发布商品」按钮和选中态就被淹没了 ——
+ * 强调色一旦用来显示数据，就不再是强调色。
+ *
+ * 加上 tabular-nums 是因为价格要能对齐着扫：
+ * 一排 ¥128.50 / ¥45.00 / ¥268.00 等宽才能看出位数差异。
+ */
 .price {
-  font-size: 17px;
+  font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text-1);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 
 .sold-out {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
 }
 
 .low-stock {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: #b45309;
 }
 
 .seller {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   display: flex;
   gap: 4px;
@@ -486,7 +498,7 @@ onMounted(load)
 }
 
 .no-more {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -505,14 +517,14 @@ onMounted(load)
   width: 120px;
   height: 90px;
   border: 1px dashed var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   cursor: pointer;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .cover-upload img {
@@ -527,7 +539,7 @@ onMounted(load)
 
 .form-error {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--el-color-danger);
 }
 

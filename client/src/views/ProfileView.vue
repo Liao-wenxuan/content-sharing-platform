@@ -676,7 +676,7 @@ const emptyHint = computed(() => {
 /* ===== 封面 ===== */
 .cover {
   height: 200px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: linear-gradient(120deg, var(--muted), var(--secondary));
   margin-bottom: 20px;
@@ -722,7 +722,7 @@ const emptyHint = computed(() => {
 .avatar {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 26px;
+  font-size: var(--fs-display);
   flex-shrink: 0;
 }
 
@@ -739,7 +739,7 @@ const emptyHint = computed(() => {
 
 .nickname {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -749,7 +749,7 @@ const emptyHint = computed(() => {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -762,13 +762,13 @@ const emptyHint = computed(() => {
   display: flex;
   gap: 20px;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .stat b {
   color: var(--foreground);
-  font-size: 15px;
+  font-size: var(--fs-md);
   margin-right: 3px;
   font-variant-numeric: tabular-nums;
 }
@@ -842,7 +842,7 @@ const emptyHint = computed(() => {
 }
 
 .content-tabs :deep(.el-tabs__item) {
-  font-size: 15px;
+  font-size: var(--fs-md);
 }
 
 /* ===== 笔记栅格 ===== */
@@ -904,13 +904,13 @@ const emptyHint = computed(() => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .content {
   margin: 10px 12px 8px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -925,7 +925,7 @@ const emptyHint = computed(() => {
   align-items: center;
   gap: 12px;
   padding: 0 12px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -951,7 +951,7 @@ const emptyHint = computed(() => {
 
 .side-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .side-actions {
@@ -986,7 +986,7 @@ const emptyHint = computed(() => {
 .avatar-sm {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   flex-shrink: 0;
 }
 
@@ -996,7 +996,7 @@ const emptyHint = computed(() => {
 }
 
 .suggest-name {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1004,7 +1004,7 @@ const emptyHint = computed(() => {
 }
 
 .suggest-count {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
   margin-top: 2px;
 }

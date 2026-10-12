@@ -671,11 +671,11 @@ watch(
 .back-btn {
   padding: 0;
   height: auto;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .page-title {
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0;
@@ -720,7 +720,7 @@ watch(
 .avatar {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 16px;
+  font-size: var(--fs-md);
   flex-shrink: 0;
 }
 
@@ -730,12 +730,12 @@ watch(
 }
 
 .author-nick {
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
 .author-time {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   margin-top: 2px;
 }
@@ -748,7 +748,7 @@ watch(
 .image-section {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .main-image {
@@ -777,7 +777,7 @@ watch(
   flex-shrink: 0;
   padding: 0;
   border: 2px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
   background: var(--muted);
@@ -810,7 +810,7 @@ watch(
 
 .content {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;
@@ -835,7 +835,7 @@ watch(
   align-items: center;
   gap: 5px;
   margin-left: auto;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -857,7 +857,7 @@ watch(
 
 .comment-title {
   margin: 0 0 14px;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
@@ -871,7 +871,7 @@ watch(
   align-items: center;
   gap: 6px;
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -888,7 +888,7 @@ watch(
 
 .comment-error {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--destructive);
 }
 
@@ -914,7 +914,7 @@ watch(
 .avatar-sm {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   flex-shrink: 0;
 }
 
@@ -930,18 +930,18 @@ watch(
 }
 
 .comment-author {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
 }
 
 .comment-time {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
 }
 
 .comment-text {
   margin: 4px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.6;
   word-break: break-word;
 }
@@ -949,11 +949,11 @@ watch(
 /* ===== 置顶标记 ===== */
 .pinned-tag {
   padding: 1px 6px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.5;
   color: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 /* ===== 评论操作条 ===== */
@@ -969,7 +969,7 @@ watch(
   align-items: center;
   gap: 3px;
   padding: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   background: none;
   border: none;
@@ -993,7 +993,7 @@ watch(
 .mini-action:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 /* ===== 二级回复 ===== */
@@ -1003,7 +1003,7 @@ watch(
 
 .reply-toggle {
   padding: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--accent);
   background: none;
   border: none;
@@ -1013,7 +1013,7 @@ watch(
 .reply-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .reply-list {
@@ -1032,7 +1032,7 @@ watch(
 .avatar-xs {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   flex-shrink: 0;
 }
 

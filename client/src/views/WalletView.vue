@@ -255,14 +255,14 @@ onMounted(load)
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .balance-card {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 20px;
   background: var(--muted);
   margin-bottom: 24px;
@@ -270,13 +270,13 @@ onMounted(load)
 
 .balance-label {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .balance-value {
   margin: 4px 0 8px;
-  font-size: 32px;
+  font-size: var(--fs-display);
   font-weight: 700;
   color: var(--foreground);
   font-variant-numeric: tabular-nums;
@@ -284,7 +284,7 @@ onMounted(load)
 
 .balance-note {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   line-height: 1.6;
 }
@@ -300,7 +300,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: #16a34a;
 }
@@ -321,14 +321,14 @@ onMounted(load)
   gap: 14px;
   flex-wrap: wrap;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .audit-formula {
   margin: 10px 0 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   line-height: 1.7;
   color: var(--muted-foreground);
   opacity: 0.85;
@@ -336,7 +336,7 @@ onMounted(load)
 
 .section-title {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--foreground);
 }
@@ -344,7 +344,7 @@ onMounted(load)
 .tx-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .tx-table th {
@@ -397,7 +397,7 @@ onMounted(load)
 }
 
 .no-more {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -409,14 +409,14 @@ onMounted(load)
 
 .topup-note {
   margin: 10px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.6;
   color: var(--muted-foreground);
 }
 
 .topup-error {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--el-color-danger);
 }
 </style>

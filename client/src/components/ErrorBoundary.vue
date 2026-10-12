@@ -81,14 +81,14 @@ function reset() {
 
 h2 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .message {
   margin: 0 0 20px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   word-break: break-word;
 }
@@ -99,7 +99,7 @@ h2 {
   border: none;
   border-radius: var(--radius);
   padding: 10px 24px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;

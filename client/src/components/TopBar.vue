@@ -503,7 +503,7 @@ function onOutsideClick(e: MouseEvent) {
   padding: 6px;
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 8px 28px rgb(0 0 0 / 28%);
 }
 
@@ -529,7 +529,7 @@ function onOutsideClick(e: MouseEvent) {
 
 .group-title {
   padding: 8px 10px 4px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--muted-foreground);
   letter-spacing: 0.02em;
@@ -542,10 +542,10 @@ function onOutsideClick(e: MouseEvent) {
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -566,7 +566,7 @@ function onOutsideClick(e: MouseEvent) {
 
 .row-icon {
   flex-shrink: 0;
-  font-size: 15px;
+  font-size: var(--fs-md);
   color: var(--muted-foreground);
 }
 
@@ -575,18 +575,18 @@ function onOutsideClick(e: MouseEvent) {
   flex-shrink: 0;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   background: var(--muted);
 }
 
 .row-avatar {
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
 
 .row-count {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -613,7 +613,7 @@ function onOutsideClick(e: MouseEvent) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -635,7 +635,7 @@ function onOutsideClick(e: MouseEvent) {
 
 .bell-badge :deep(.el-badge__content) {
   transform: translate(50%, -50%);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   /* keyframes 在全局 motion.css（会话列表的红点共用同一套反馈） */
   animation: sg-badge-pop var(--dur-standard) var(--spring-snappy);
 }
@@ -646,10 +646,10 @@ function onOutsideClick(e: MouseEvent) {
   gap: 8px;
   padding: 4px 8px 4px 4px;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-family: inherit;
   cursor: pointer;
   transition: background 0.15s;
@@ -668,7 +668,7 @@ function onOutsideClick(e: MouseEvent) {
 }
 
 .arrow {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 </style>

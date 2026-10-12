@@ -214,7 +214,7 @@ function markImageLoaded(postId: number) {
 .card {
   display: block;
   color: inherit;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   /* 键盘用户也要看到「这里能点进去」的邀请，和 hover 同一套反馈 */
   transition: background-color var(--dur-fast) var(--ease-out-expo);
 }
@@ -230,7 +230,7 @@ function markImageLoaded(postId: number) {
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--muted);
 }
 
@@ -280,7 +280,7 @@ function markImageLoaded(postId: number) {
 }
 
 .blank-tag {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   padding: 0 14px;
   text-align: center;
@@ -291,8 +291,8 @@ function markImageLoaded(postId: number) {
   right: 8px;
   top: 8px;
   padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
 }
@@ -303,8 +303,8 @@ function markImageLoaded(postId: number) {
   left: 8px;
   top: 8px;
   padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   color: #fff;
   background: var(--accent);
@@ -325,8 +325,8 @@ function markImageLoaded(postId: number) {
   bottom: 8px;
   max-width: calc(100% - 16px);
   padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   line-height: 1.6;
   color: #fff;
@@ -353,7 +353,7 @@ function markImageLoaded(postId: number) {
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(4px);
@@ -379,7 +379,7 @@ function markImageLoaded(postId: number) {
 /* ===== 标题 ===== */
 .title {
   margin: 10px 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.45;
   color: var(--foreground);
   display: -webkit-box;
@@ -422,12 +422,12 @@ function markImageLoaded(postId: number) {
 .avatar {
   background: var(--muted);
   color: var(--foreground);
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   flex-shrink: 0;
 }
 
 .nickname {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -438,7 +438,7 @@ function markImageLoaded(postId: number) {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -447,7 +447,7 @@ function markImageLoaded(postId: number) {
 .time {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
   opacity: 0.7;
 }

@@ -243,14 +243,14 @@ onMounted(() => {
 
 .page-title {
   margin: 0;
-  font-size: 26px;
+  font-size: var(--fs-display);
   font-weight: 700;
   color: var(--foreground);
 }
 
 .page-subtitle {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -267,14 +267,14 @@ onMounted(() => {
 }
 
 .card-hint {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--muted-foreground);
 }
 
 .empty-line {
   padding: 10px 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -294,7 +294,7 @@ onMounted(() => {
 }
 
 .bar-label {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -313,7 +313,7 @@ a.bar-label.author:hover {
 
 .bar-track {
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--muted);
   overflow: hidden;
 }
@@ -321,13 +321,13 @@ a.bar-label.author:hover {
 .bar-fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--accent);
   transition: width var(--dur-standard) var(--ease-out-expo);
 }
 
 .bar-value {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -335,7 +335,7 @@ a.bar-label.author:hover {
 
 .bar-hint {
   grid-column: 2 / -1;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   opacity: 0.75;
 }
@@ -369,7 +369,7 @@ a.bar-label.author:hover {
 
 .muted-title {
   color: var(--foreground);
-  font-size: 14px;
+  font-size: var(--fs-base);
   text-decoration: none;
 }
 
@@ -378,7 +378,7 @@ a.bar-label.author:hover {
 }
 
 .muted-author {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -389,20 +389,20 @@ a.bar-label.author:hover {
 
 .guest-title {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .guest-sub {
   margin: 8px 0 16px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
 .foot-note {
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   opacity: 0.8;
 }

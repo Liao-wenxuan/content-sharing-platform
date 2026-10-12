@@ -294,14 +294,14 @@ watch(activeId, () => {
 
 .discover-head h2 {
   margin: 0 0 6px;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .discover-head p {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -330,7 +330,7 @@ watch(activeId, () => {
   gap: 4px;
   padding: 22px 12px 18px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   text-align: center;
   transition:
@@ -346,7 +346,7 @@ watch(activeId, () => {
 
 .discover-name {
   margin-top: 8px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
   color: var(--foreground);
   max-width: 100%;
@@ -356,7 +356,7 @@ watch(activeId, () => {
 }
 
 .discover-hint {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -366,7 +366,7 @@ watch(activeId, () => {
   padding: 40px 0;
   text-align: center;
   color: var(--muted-foreground);
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .chat {
@@ -396,7 +396,7 @@ watch(activeId, () => {
 }
 
 .list-title {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 700;
 }
 
@@ -407,8 +407,8 @@ watch(activeId, () => {
   margin: 0 12px 10px;
   padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -437,11 +437,11 @@ watch(activeId, () => {
   padding: 24px 16px;
   text-align: center;
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .list-hint .sub {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   opacity: 0.7;
 }
 
@@ -458,7 +458,7 @@ watch(activeId, () => {
   align-items: center;
   gap: 10px;
   padding: 10px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -504,19 +504,19 @@ watch(activeId, () => {
 }
 
 .peer-name {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
 .conv-time {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
 }
 
 .conv-last {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -550,12 +550,12 @@ watch(activeId, () => {
 }
 
 .head-name {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
 .head-state {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -604,7 +604,7 @@ watch(activeId, () => {
 .bubble {
   max-width: 62%;
   padding: 9px 13px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--background);
 }
@@ -623,7 +623,7 @@ watch(activeId, () => {
 
 .bubble-text {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -632,7 +632,7 @@ watch(activeId, () => {
 .bubble-meta {
   display: block;
   margin-top: 3px;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   opacity: 0.65;
 }
 
@@ -641,7 +641,7 @@ watch(activeId, () => {
   align-items: center;
   gap: 3px;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
 }
 
@@ -653,7 +653,7 @@ watch(activeId, () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   padding-left: 4px;
 }
@@ -767,13 +767,13 @@ watch(activeId, () => {
 
 .empty-title {
   margin: 8px 0 0;
-  font-size: 15px;
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 
 .empty-sub {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 </style>

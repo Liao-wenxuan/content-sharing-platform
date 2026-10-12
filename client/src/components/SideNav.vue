@@ -149,11 +149,11 @@ function handleCommand(command: string) {
 .brand-mark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: #fff;
   font-weight: 700;
-  font-size: 15px;
+  font-size: var(--fs-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -161,7 +161,7 @@ function handleCommand(command: string) {
 }
 
 .brand-name {
-  font-size: 16px;
+  font-size: var(--fs-md);
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--foreground);
@@ -176,21 +176,39 @@ function handleCommand(command: string) {
 .nav-menu :deep(.el-menu-item) {
   height: 42px;
   line-height: 42px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin-bottom: 2px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 500;
-  color: var(--foreground);
+  color: var(--text-2);
+  transition:
+    background-color var(--dur-fast) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo);
 }
 
+/*
+ * 选中态用「左描边 + 强调色文字」，不靠底色。
+ *
+ * 底色方案（原来 var(--muted)）的问题：一行 42px 高、宽 184px 的块，
+ * 填满底色后视觉重量太大，7 个菜单项里只要有一个选中，
+ * 整个侧栏的重心就歪了。参照项目用的是 2px 的竖条 ——
+ * 更轻，而且「在这里」这件事比「这一块亮了」更明确。
+ */
 .nav-menu :deep(.el-menu-item.is-active) {
-  background: var(--muted);
+  background: var(--surface-2);
   color: var(--accent);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .nav-menu :deep(.el-menu-item:hover) {
-  background: var(--muted);
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+
+/* 选中项 hover 时不要把强调色冲掉 */
+.nav-menu :deep(.el-menu-item.is-active:hover) {
+  color: var(--accent);
 }
 
 /* ===== 底部 ===== */
@@ -202,7 +220,7 @@ function handleCommand(command: string) {
 .footer-tip {
   margin: 0;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
   line-height: 1.6;
 }

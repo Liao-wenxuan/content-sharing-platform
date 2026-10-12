@@ -549,7 +549,7 @@ async function handleSubmit() {
 }
 
 .page-title {
-  font-size: 28px;
+  font-size: var(--fs-display);
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
@@ -558,7 +558,7 @@ async function handleSubmit() {
 
 .page-subtitle {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
@@ -587,7 +587,7 @@ async function handleSubmit() {
 
 .form-card :deep(.el-form-item__label) {
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
 }
 
@@ -600,21 +600,21 @@ async function handleSubmit() {
 }
 
 .upload-count {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 400;
   color: var(--muted-foreground);
 }
 
 /* 压缩收益：给正向反馈，而不是默默压掉 */
 .image-savings {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--el-color-success);
   font-variant-numeric: tabular-nums;
 }
 
 .savings-line {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--el-color-success);
 }
 
@@ -629,7 +629,7 @@ async function handleSubmit() {
 }
 
 .hot-label {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -638,9 +638,9 @@ async function handleSubmit() {
   align-items: center;
   gap: 5px;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--foreground);
   cursor: pointer;
@@ -666,7 +666,7 @@ async function handleSubmit() {
 }
 
 .hot-count {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
@@ -687,7 +687,7 @@ async function handleSubmit() {
 
 .upload-text {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
 }
 
@@ -698,7 +698,7 @@ async function handleSubmit() {
 
 .upload-hint {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
 
@@ -718,14 +718,14 @@ async function handleSubmit() {
   gap: 12px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .image-preview {
   width: 56px;
   height: 56px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
   background: var(--muted);
 }
@@ -737,7 +737,7 @@ async function handleSubmit() {
 
 .image-name {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -777,13 +777,13 @@ async function handleSubmit() {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .tips-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.9;
   color: var(--muted-foreground);
 }

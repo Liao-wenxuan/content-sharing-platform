@@ -318,7 +318,7 @@ watch(() => props.id, load)
 
 .main-cover {
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--muted);
   display: flex;
@@ -352,7 +352,7 @@ watch(() => props.id, load)
   width: 64px;
   height: 64px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
@@ -365,7 +365,7 @@ watch(() => props.id, load)
 
 .title {
   margin: 0 0 10px;
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 600;
   color: var(--foreground);
   line-height: 1.4;
@@ -373,15 +373,17 @@ watch(() => props.id, load)
 
 .price {
   margin: 0 0 4px;
-  font-size: 28px;
+  font-size: var(--fs-display);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text-1);
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 
 .stock-line {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -389,7 +391,7 @@ watch(() => props.id, load)
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--foreground);
   text-decoration: none;
   margin-bottom: 14px;
@@ -401,7 +403,7 @@ watch(() => props.id, load)
   border-radius: 50%;
   background: var(--muted);
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -410,7 +412,7 @@ watch(() => props.id, load)
 
 .desc {
   margin: 0 0 18px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.7;
   color: var(--foreground);
   white-space: pre-wrap;
@@ -425,14 +427,14 @@ watch(() => props.id, load)
 
 .owner-panel {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   padding: 14px;
   background: var(--muted);
 }
 
 .owner-hint {
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -444,7 +446,7 @@ watch(() => props.id, load)
 
 .notice {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
@@ -460,7 +462,7 @@ watch(() => props.id, load)
 
 .form-error {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--el-color-danger);
 }
 
