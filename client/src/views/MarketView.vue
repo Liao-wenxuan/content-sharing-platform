@@ -21,6 +21,7 @@ import { yuanToCents, formatYuan } from '@/utils/money'
 import { useAuthStore } from '@/stores/auth'
 import MarketTabs from '@/components/MarketTabs.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import { useReveal } from '@/composables/useReveal'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -37,6 +38,20 @@ const loadingMore = ref(false)
 const errorMsg = ref('')
 const keyword = ref('')
 const sort = ref<ProductSort>('new')
+
+/**
+ * 商品网格的错峰入场。
+ *
+ * 和首页瀑布流不同，这里是**一行 4~5 个卡片的规整网格**，
+ * 所以错峰步长给到 45ms（瀑布流是 60ms），上限 8 档 = 360ms ——
+ * 再多的话一屏 20 个商品全部依次亮起来，用户会以为在排队加载。
+ *
+ * ⚠️ 翻页时新追加的商品也会被 observe 到并重放入场动画。
+ * 这**不是** bug 而是想要的效果：向下滚动时「又来了几张新卡」
+ * 正好被动画表达出来；如果新卡直接静止出现，反倒显得是补丁。
+ */
+const gridRef = ref<HTMLElement | null>(null)
+useReveal(gridRef, () => products.value.length > 0, 8)
 
 async function load() {
   loading.value = true
@@ -221,11 +236,11 @@ onMounted(load)
     />
 
     <template v-else>
-      <ul class="grid">
+      <ul ref="gridRef" class="grid">
         <li
           v-for="p in products"
           :key="p.id"
-          class="card"
+          class="card sg-reveal"
           @click="router.push(`/market/product/${p.id}`)"
         >
           <div class="cover">
