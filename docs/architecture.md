@@ -271,6 +271,7 @@ xhr.send(formData)
 - [x] 阶段 9：市集（完整 C2C 交易链路 + 在途资金与全局对账）
 - [x] 阶段 10：**推荐流**（兴趣画像 + 打分 + 冻结快照翻页 + 负反馈与可解释）
 - [x] 阶段 11：**图片处理**（上传前 canvas 压缩 + EXIF 方向校正 + 隐私元数据剥离）
+- [x] 阶段 12：**滚动入场**（IntersectionObserver 错峰 + 三层降级防线 + 逐帧 e2e 验证）
 - [ ] 未做（诚实占位，不是遗漏）
   - 笔记的「私密 / 合集」筛选：主页那两个 tab 点了是空态，界面上写明了
   - 真实全文检索：现在是 `LIKE` + 索引友好匹配，十万级要换 FTS5 / ES
@@ -308,16 +309,48 @@ xhr.send(formData)
 在 jsdom 里一个字节不差地单测；`utils/imageCompress.ts` 是 canvas 那几步，
 jsdom 里测不了，靠 `scripts/image-smoke.mjs` 的真浏览器回归。
 
+## 动效
+
+动效分三层，各自有明确的职责边界：
+
+```
+motion.css          时长 token（5 档）/ 曲线字典（5 条 + linear 弹簧）/ 交互态 / reduced-motion 兜底
+  ↑
+useReveal.ts        滚动入场：IntersectionObserver + 错峰档位 + 降级守卫
+  ↑
+组件                 只负责给元素加 .sg-reveal，不含任何判断逻辑
+```
+
+**阶梯选择：全部 rung 1（纯 CSS），不引 GSAP / Framer / @vueuse/motion。**
+这是桌面端产品应用，动效是「状态反馈」不是「叙事编排」；
+拆解参照的官网 60 行原生代码也没用任何动画库。
+
+**降级顺序是这套体系里唯一会造成功能性事故的地方**：
+
+```
+默认可见  →  JS 确认动效可用  →  才锁隐藏态  →  进入视口后还原
+```
+
+反过来写的话，JS 加载失败、bundle 报错、用户禁用 JS 的任何一种情况下，
+内容都会永久停在 `opacity: 0` —— 白屏，且控制台干净。
+三层防线：CSS 顺序 + JS 的 `typeof IntersectionObserver` 守卫 +
+单测与 e2e 双重钉死（e2e 用 `addInitScript` 在任何页面脚本之前抹掉这个 API）。
+
+`prefers-reduced-motion` 除了全局的 `transition-duration: 0.01ms`，
+还额外复位隐藏态本身 —— 因为 `.sg-reveal` 的终点是 JS 加的 class，
+光让 transition 瞬间结束并不会设置终点。
+
 ## 关键文件索引
 
-| 关注点   | 文件                                                                                        |
-| -------- | ------------------------------------------------------------------------------------------- |
-| 上传核心 | `client/src/views/PublishView.vue` / `server/src/routes/uploads.ts`                         |
-| 鉴权     | `client/src/api/request.ts` / `client/src/stores/auth.ts` / `server/src/middleware/auth.ts` |
-| 数据模型 | `server/src/lib/schema.ts`（全部 DDL，每张表带「为什么这么建」的注释）                      |
-| 路由     | `client/src/router/index.ts` / `server/src/lib/mount-routes.ts`（生产与测试挂同一份）       |
-| 全局常量 | `client/src/constants.ts` / `server/src/constants.ts`                                       |
-| 导航     | `client/src/components/SideNav.vue`（左栏）+ `TopBar.vue`（顶栏）                           |
-| 推荐打分 | `server/src/lib/feed-score.ts`（纯函数）+ `feed-profile.ts`（画像）+ `feed.ts`（快照翻页）  |
-| 图片处理 | `client/src/utils/image.ts`（纯函数层）+ `imageCompress.ts`（canvas + 降级阶梯 + 串行）     |
-| 交易链路 | `server/src/lib/wallet.ts` / `transit.ts` + `server/src/routes/orders.ts`                   |
+| 关注点   | 文件                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| 上传核心 | `client/src/views/PublishView.vue` / `server/src/routes/uploads.ts`                              |
+| 鉴权     | `client/src/api/request.ts` / `client/src/stores/auth.ts` / `server/src/middleware/auth.ts`      |
+| 数据模型 | `server/src/lib/schema.ts`（全部 DDL，每张表带「为什么这么建」的注释）                           |
+| 路由     | `client/src/router/index.ts` / `server/src/lib/mount-routes.ts`（生产与测试挂同一份）            |
+| 全局常量 | `client/src/constants.ts` / `server/src/constants.ts`                                            |
+| 导航     | `client/src/components/SideNav.vue`（左栏）+ `TopBar.vue`（顶栏）                                |
+| 推荐打分 | `server/src/lib/feed-score.ts`（纯函数）+ `feed-profile.ts`（画像）+ `feed.ts`（快照翻页）       |
+| 图片处理 | `client/src/utils/image.ts`（纯函数层）+ `imageCompress.ts`（canvas + 降级阶梯 + 串行）          |
+| 动效体系 | `client/src/assets/styles/motion.css`（token + reduced-motion 兜底）+ `composables/useReveal.ts` |
+| 交易链路 | `server/src/lib/wallet.ts` / `transit.ts` + `server/src/routes/orders.ts`                        |

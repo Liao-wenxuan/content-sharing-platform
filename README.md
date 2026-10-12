@@ -102,6 +102,24 @@
 > 不是依赖 `createImageBitmap` 的 `imageOrientation` 选项 —— 详见下面的
 > 「EXIF 朝向」一行。
 
+### 滚动入场：错峰 / 完成 / 降低动效
+
+| 错峰进行中                                      | 完成态                                       |
+| ----------------------------------------------- | -------------------------------------------- |
+| ![错峰](docs/screenshots/29-reveal-stagger.png) | ![完成](docs/screenshots/30-reveal-done.png) |
+
+> 左边截在动画中途：delay 为 0 的第一张卡已经亮起，最后几张还在暗处，
+> 一屏 11 件商品是**依次浮现**而不是「啪」地一起出现。
+> 右边是完成态。
+>
+> 这套效果借鉴自 [Endfield Charge Plus 官网](https://zmd-bar.x-neko.com/) 的滚动入场，
+> 但**没有照搬**：位移从源站的 35px 降到 24px（源站动的是整段大标题，
+> 本项目的卡片才 200px 高），错峰步长按列表形态分档（瀑布流 60ms / 规整网格 45ms）。
+>
+> 拍这张图时顺带验证了一件事：`30-reveal-done.png` 和
+> `31-reveal-reduced.png`（系统开启「减少动态效果」）**字节数完全相同** ——
+> 降级之后渲染结果和正常完成态一模一样，没有残留、没有半透明、没有错位。
+
 ### 消息与设置
 
 | 消息中心                                      | 设置                                      |
@@ -193,7 +211,7 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，388 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，396 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
 cd server && npm test        # 后端单测（vitest + supertest，355 条）
 
@@ -209,6 +227,7 @@ npm run test:comment         # 评论增强：两级回复 / 点赞持久化 / �
 npm run test:history        # 浏览记录：进详情页自动记一笔 / 重复看不重复 / 游客不记 / 清空（21 断言）
 npm run test:market         # 市集：发布 → 加购 → 下架 → 下单 → 支付 → 发货 → 收货 → 退款 → 全局对账（54 断言，双上下文）
 npm run test:feed           # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（29 断言）
+npm run test:reveal         # 滚动入场：逐帧证明动效在推进 / reduced-motion 真的停 / 没有 IntersectionObserver 不白屏（14 断言）
 npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 落盘文件比原图小（15 断言）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
 npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
@@ -249,6 +268,7 @@ content-sharing-platform/
 │  │  │                          # useNotifications（模块级单例 + WS 覆盖而非 +1）/ useFollow / useFavorite（乐观更新 + 失败回滚）
 │  │  │                          # useTheme / useSearchHistory / useRelativeTime / useCart（市集共用购物车，模块级单例 + 按 sellerId 分组）
 │  │  │                          # useFeed（推荐会话：游标翻页 + 本地去重 + 屏蔽先本地生效、失败回滚到原下标）
+│  │  │                          # useReveal（滚动错峰入场：默认可见的降级顺序 + 档位封顶）
 │  │  ├─ api/                    # request.ts（axios 实例 + 拦截器 + getOrNull）/ auth / posts（含点赞）/ uploads
 │  │  │                          # comments / follows / favorites / notifications / topics / conversations / wsProtocol（WS 协议的前端镜像）
 │  │  │                          # 市集四个：products / cart / orders / wallet —— 与服务端 routes 一一对应，字段名照抄不改
@@ -261,7 +281,7 @@ content-sharing-platform/
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
 │  │  ├─ router/                 # Vue Router 配置（19 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，25 文件 388 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，26 文件 396 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
 │  │  ├─ image.test.ts           # 图片纯函数（40 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
 │  │  ├─ websocket-machine.test.ts  # 握手语义 / 退避重连 / 4401 / 心跳保活
@@ -313,7 +333,7 @@ content-sharing-platform/
 │  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边 + 11 件商品（含 1 件下架演示）+ 各 2000 元余额，幂等，DB_PATH 与后端一致）
 │  └─ uploads/                   # multer 落地目录（.gitignore）
 │
-├─ scripts/                      # Playwright 自动化 + 文档配图生成（29 个）
+├─ scripts/                      # Playwright 自动化 + 文档配图生成（31 个）
 │  ├─ ensure-schema.mjs          # e2e 前置：先打一个必然碰库的接口把懒建表触发出来，再校验表在
 │  ├─ desktop-smoke.mjs          # 桌面端登录态全流程回归（40+ 断言，含零 console error 断言）
 │  ├─ follow-smoke.mjs           # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮（28 断言）
@@ -326,6 +346,8 @@ content-sharing-platform/
 │  ├─ feed-smoke.mjs            # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（29 断言）
 │  ├─ image-smoke.mjs           # 图片压缩：真 canvas 压下去 / EXIF 摆正后宽高交换 / 落盘文件比原图小（15 断言）
 │  ├─ image-shot.mjs            # 发布页压缩界面的配图（大图省 80%、小图不显示假收益）
+│  ├─ reveal-smoke.mjs          # 滚动入场：逐帧采样证明动效在推进 / 降级不白屏（14 断言）
+│  ├─ reveal-shot.mjs           # 动效配图：错峰中途 / 完成 / 降低动效 三态对比
 │  ├─ search-smoke.mjs           # 搜索功能回归（24 断言）
 │  ├─ chat-smoke.mjs             # 即时通信回归（20 断言，多端同步 / 断线重连补发）
 │  ├─ motion-check.mjs           # 逐帧采样证明动效真的在推进，且 reduced-motion 下真的停
@@ -384,6 +406,9 @@ content-sharing-platform/
 | **EXIF 朝向：物理剥离而不是加解码选项**        | 摆正照片原本靠 `createImageBitmap(file, { imageOrientation: 'none' })` 拿原始像素 —— 规格里是这么定义的，但**实测 Chromium 不认**：源图 2000×3000 / orientation=6，bitmap 直接返回 3000×2000，也就是已经被摆正过了。再叠自己的变换就成了**转两次**：竖图被转成横图、横图又被转成竖图，页面上还不报任何错。改成解码前用 `Blob.slice` 把 APP1 段**物理删掉**，朝向着实由我们自己唯一负责，两条解码路径（bitmap / `<img>`）语义从此一致。剥离是零拷贝的（只是两个视图），顺带把 GPS、机型这些隐私元数据也一并去掉 | 「规格写了但实现不保证」的选项不能拿来做正确性前提 —— 那等于把 bug 交给用户的浏览器版本决定。这个 bug 的恶劣之处在于它**不报错**：页面渲染正常、接口正常，只是图的角度不对 |
 | **压缩失败绝不能阻断发布**                     | `compressImage` 无论走哪条路径都保证返回一个非空 Blob。降级阶梯 `[1, 0.75, 0.55]` 应对 `toBlob` 在 iOS 上返回 `null` 而不是抛异常；任何异常都退回原图直传                                                                                                                                                                                                                                                                                                                                                      | 压缩是**优化**，不是功能的前置条件。对用户来说「图片压缩失败」和「发不出笔记」是同一件事，而后者是这个产品里最不能接受的结果                                               |
 | **串行不是风格，是内存决定的**                 | 一次选 9 张图必须串行压缩：12MP 图解码成 RGBA 约 48MB，并发就是 432MB，移动端浏览器会在**解码阶段**直接崩（表现为「选完图什么都没发生」）。每张之间 `setTimeout(0)` 让出主线程，保证进度条能刷新、用户点「移除」能立刻响应                                                                                                                                                                                                                                                                                     | 这个限制在开发机上完全看不出来 —— 桌面 Chrome 有几 G 可用，串不串都一样快                                                                                                  |
+| **入场动画的降级顺序不能反**                   | 滚动入场的 CSS 顺序是「**默认可见 → JS 确认可用 → 才锁隐藏态**」。反过来写（默认 `opacity: 0`）的话，JS 加载失败、bundle 报错、用户禁用 JS 的任何一种情况下，内容都会永久停在隐藏态 —— **白屏，而且控制台干干净净**。降级路径用 `IntersectionObserver` 存在性判断 + e2e 里 `delete window.IntersectionObserver` 双重钉住                                                                                                                                                                                       | 这是动效里唯一会造成**功能性事故**（而不是"不够好看"）的地方。其余动效坏了最多丑，这一处坏了是页面没了                                                                     |
+| **reduced-motion 必须复位隐藏态**              | 全局兜底用 `transition-duration: 0.01ms`，但这**只让动画瞬间结束**，而 `.sg-reveal` 的终点是 JS 加的 `.is-revealed` —— 用户在卡片入场前切到 reduced-motion 的话，这个 class 永远不会加上。所以额外写一条「把隐藏态本身清掉」，不依赖 JS 补 class                                                                                                                                                                                                                                                               | 这是 `prefers-reduced-motion` 最常见的漏项：动画确实停了，但内容也没了。两条一起做才既尊重设置又不丢内容                                                                   |
+| **动效参数按列表形态分档**                     | 错峰步长瀑布流 60ms、规整网格 45ms，封顶档数 6 / 8。观察对象选**列**而不是卡片：瀑布流 5 列但 60+ 张卡，观察 60 个元素会让 IntersectionObserver 每帧跑 60 次回调。封顶逻辑统一放 JS 算，没写在 CSS 的 `:nth-child(n+7)` 上                                                                                                                                                                                                                                                                                     | 封顶档数是参数，同一规则写两遍必然改漏一处，而症状是「某个列表的动画莫名全卡住」这种极难定位的问题                                                                         |
 
 ### 后端
 

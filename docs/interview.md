@@ -18,7 +18,7 @@
 > 以及**上传前的图片压缩与 EXIF 方向校正**。
 > 最花时间的是**用 `ws` 库手写的 WebSocket 1v1 实时聊天**——多端同步、已读回执、
 > 正在输入、断线重连补偿都自己实现了，没用 Socket.IO。
-> 工程上配了 743 条单元测试、覆盖率当 CI 门禁，还有一套 Playwright 端到端回归。
+> 工程上配了 751 条单元测试、覆盖率当 CI 门禁，还有一套 Playwright 端到端回归。
 
 ### 简历上怎么写（3~5 条，别写多）
 
@@ -41,9 +41,9 @@
   `createImageBitmap` 的 `imageOrientation` 选项，实测 Chromium 并不照做，导致图被转了两次；
   压缩**串行**执行（12MP 图 RGBA 约 48MB，9 张并发约 432MB 会让移动端解码直接崩），
   且**任何失败都退回原图直传**。
-- 建立 **743 条单元测试**（后端 355 / 前端 388，覆盖 WS 状态机、乐观发送 ack 收敛、
+- 建立 **751 条单元测试**（后端 355 / 前端 396，覆盖 WS 状态机、乐观发送 ack 收敛、
   金额换算、EXIF 字节流 fuzz、推荐流不变量等），前端覆盖率门槛写入 CI 配置，跌破即红；
-  另有 **12 套 Playwright 回归脚本**，其中压缩那一套用**噪点造图 + 落盘文件比原图小**
+  另有 **13 套 Playwright 回归脚本**，其中压缩那一套用**噪点造图 + 落盘文件比原图小**
   证明压缩真的发生了，而不是拿页面上的「-80%」当证据。
 - 搭建三 job 并行 CI（typecheck / test / lint），并提供 **`docker compose up` 一键起全栈**
   （多阶段构建 + nginx 反代 `/api` `/uploads` `/ws`）。
@@ -760,7 +760,7 @@ e2e 里专门验了这一点：关掉「赞和收藏」后，点赞不 +1 但关
 
 ### Q：为什么前端也要写组件测试？纯函数测试不够吗？
 
-**我做的**：743 条单测（后端 355 / 前端 388），前端里有 200 条左右是
+**我做的**：751 条单测（后端 355 / 前端 396），前端里有 200 条左右是
 composable 和组件级的（最早全是纯函数）。
 
 **为什么纯函数不够**：这个项目里最容易出错的几个点都不是纯函数：
@@ -1312,7 +1312,187 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 > 在 jsdom 里一个字节不差地单测；canvas 那几步放 `utils/imageCompress.ts`，
 > 靠真浏览器 e2e。把它们写在一起，等于把唯一能测的那部分也变成测不了。
 
-## 8. 挑战性问题的准备
+## 8. 动效（滚动入场与降级纪律）
+
+### Q：这个项目的动效是从哪来的？自己设计的吗？
+
+> 大部分是自己设计的 —— `motion.css` 里的五档时长和五条曲线是这个项目一开始就有的。
+> 但后来我拆解了 [Endfield Charge Plus 官网](https://zmd-bar.x-neko.com/)（一个状态栏工具的官网），
+> 发现它的**滚动入场**有一个我们没有的东西，而且它的降级纪律比很多商业站都严格。
+>
+> 我抄的是**结构**，不是数值 —— 而且我先抓了它的 `style.css` 和 `app.js` 源码做核实，
+> 而不是照着二手的拆解文章照搬。核实的结果和那份文章有出入（见下一条）。
+
+### Q：那个站的动效有什么值得学的？
+
+> 它的 `style.css` 有 33KB，但 `@keyframes` **只有 1 个**（一个箭头呼吸），
+> 其余全是 `transition`。动效代码不到 15 行。
+>
+> 真正值得学的是两点：
+>
+> **① 入场动画的降级顺序**。
+> CSS 写的是「默认 `opacity: 1`，隐藏态只挂在 `body.motion-ready` 下」，
+> 而 `motion-ready` 是 JS 确认动效可用之后才加的。
+> 也就是说 —— **JS 没跑起来时，内容是可见的**。
+>
+> **② 循环动画的克制**。那个箭头 2 秒一个周期，只位移 5px。
+> 周期长、幅度小，传达的是「呼吸感」而不是「催促感」。
+> 做快做大的循环动画会立刻变成干扰源，这是最常见的翻车点。
+
+### Q：你核实的时候发现什么和资料对不上的地方？
+
+> 有一处。那份拆解说它定义了三条缓动曲线 `--ease` / `--smooth` / `--back`，
+> 并且「每条都有明确分工」。
+>
+> 我把 CSS 全文抓下来统计，`cubic-bezier` **只出现了 1 次**，
+> `var(--ease)` 只被引用 3 次，`--smooth` 和 `--back` 在 CSS 里**根本不存在**。
+>
+> 后来在 `app.js` 里才找到它们 —— 是 JS 侧的字符串常量，
+> 通过 Web Animations API 的 `easing: 'back'` 用。
+>
+> 所以「三条曲线有明确分工」这个说法，把 CSS 和 JS 两套东西混在一起讲了。
+> 这不影响它做得好（JS 那边确实三条都在用），但如果照着去 CSS 里找，
+> 或者直接以为「站点一定定义了这些变量可以复用」，就会扑空。
+>
+> **教训**：参考二手拆解时，要自己去抓一遍源码。
+> 拆解文章会漏掉「这条规则其实在另一个文件里」这种边界。
+
+### Q：那为什么没把它的三条曲线搬过来？
+
+> 我们项目已经有五条曲线了，而且它们是围绕**这个产品的语义**分的：
+> `--ease-out-expo` 用于入场（快进慢停）、`--ease-in-out-quart` 用于可循环动画、
+> `--ease-out-back` 用于按压反馈、`linear()` 原生弹簧用于小按钮。
+>
+> 源站的三条是围绕**它的品牌调性**分的。再加三条不是增强，是让
+> 「陌生人五分钟内读懂这套动效体系」的成本变高。
+>
+> 曲线和时长是**资产**，但资产的价值在于一致而不是数量。
+> 要做的是往现有体系里补**缺失的能力**，不是往里堆参数。
+
+### Q：滚动入场具体怎么实现的？
+
+> `IntersectionObserver` + CSS transition，零依赖，大约 120 行（含注释）。
+>
+> ```js
+> new IntersectionObserver(
+>   (entries) => {
+>     for (const e of entries) {
+>       if (!e.isIntersecting) continue
+>       e.target.classList.add('is-revealed')
+>       observer.unobserve(e.target) // 只触发一次
+>     }
+>   },
+>   { threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
+> )
+> ```
+>
+> 三个数值不是随手填的：
+>
+> - **阈值 0.08**：卡片很小，露出 8% 就触发。等它露出一半反而更慢
+> - **位移 24px**（源站 35px）：源站动的是整段大标题，
+>   我们动的是 200px 高的卡片，位移太大整个画面在「飘」。
+>   **位移幅度应该和元素尺寸成反比**
+> - **错峰封顶 6 档**：首屏 12 张卡全错开是 0.72s，
+>   最后一张会让用户以为没加载完。「等」和「慢」在这里是同一件事
+
+### Q：观察的是卡片还是列？
+
+> 列。
+>
+> 瀑布流有 5 列、60 多张卡。观察 60 个元素的话，
+> IntersectionObserver 每帧要跑 60 次回调；
+> 观察 5 个列容器，代价可以忽略 —— 效果还完全一样，因为列本身就是一整块。
+
+### Q：入场动画怎么保证不白屏？
+
+> 三层：
+>
+> **① CSS 顺序**。默认可见，隐藏态只挂在 `.motion-ready` 下，
+> 而 `.motion-ready` 由 composable 在 `IntersectionObserver` 可用时才加。
+>
+> **② JS 守卫**。`typeof IntersectionObserver === 'undefined'` 时直接 return，
+> 根本不加那个 class。
+>
+> **③ 测试钉死**。单测里 `delete window.IntersectionObserver` 之后断言
+> `motion-ready` **没有**被加上；e2e 里用 `addInitScript` 在任何页面脚本之前
+> 抹掉这个 API，然后断言**每一列的 opacity 都是 1**。
+>
+> 这三层缺一不可。第一层是设计，第二层是实现，第三层是**防止有人后来改坏**。
+>
+> 顺带说一句：我写完单测之后做了一次**变异测试** ——
+> 把守卫那行删掉，确认测试真的会红。
+> 测试绿了但抓不住 bug，等于没写。
+
+### Q：`prefers-reduced-motion` 怎么处理的？
+
+> 这里有个很隐蔽的坑。全局兜底是 `transition-duration: 0.01ms`，
+> 看起来万事大吉 —— 动画「瞬间结束」了。
+>
+> 但 `.sg-reveal` 的**终点是 JS 加的 `.is-revealed`**。
+> 如果用户在卡片入场**之前**就把系统切到 reduced-motion，
+> 这个 class 永远不会加上，而 `0.01ms` 的 transition 只让动画快速跑完，
+> **终点根本没被设置过** —— 卡片就永久停在 `opacity: 0`。
+>
+> 所以额外写了一条：**直接把隐藏态本身清掉**，
+> 不依赖 JS 补 class：
+>
+> ```css
+> @media (prefers-reduced-motion: reduce) {
+>   .motion-ready .sg-reveal {
+>     opacity: 1 !important;
+>     transform: none !important;
+>   }
+> }
+> ```
+>
+> 这是 `prefers-reduced-motion` 最常见的漏项：
+> **动画确实停了，但内容也没了**。
+> 两条一起做，才既尊重用户的系统设置、又不弄丢内容。
+>
+> 验证方式是截图对比：正常完成态和 reduced-motion 下的
+> 两张 PNG **字节数完全相同** —— 降级之后渲染结果一模一样，
+> 没有残留、没有半透明、没有错位。
+
+### Q：为什么错峰封顶要写在 JS 里？
+
+> 因为封顶档数是 `useReveal` 的一个参数（瀑布流 6 档、市集 8 档）。
+>
+> 我一开始写的是 CSS 的 `:nth-child(n+7) { --reveal-delay: 360ms !important }`，
+> 后来发现这是**同一个规则写两遍**：档数写在 JS 参数里，封顶写在 CSS 选择器里。
+> 改了一处忘了另一处，症状是「某个列表的动画莫名全卡住」——
+> 这种问题在页面上完全看不出因果关系。
+>
+> 改成全部在 JS 里算，CSS 只管「拿到多少延迟就等多少」。
+
+### Q：为什么不引入 GSAP？
+
+> 项目原本就定了 rung 1（纯 CSS），我重新确认了一次这个决定。
+>
+> 拆解那个站之后我特意检查了它的页面资源：
+> `style.css` / `app.js` / `i18n.js` / `downloads.js`，**没有任何动画库**。
+> 它 60 行原生代码做出的效果，引库换不来收益。
+>
+> 而且 GSAP 只在两种情况下才值得：时间轴编排（多条动画按精确时间点咬合）、
+> 或者 `ScrollTrigger` 那种滚动进度驱动。我们两个都不需要。
+> `@vueuse/motion` 倒是 Vue 生态的对应物，但同理 —— 现在这套 CSS 已经够，
+> 加一个库会让 bundle 涨、让陌生人读代码的成本变高。
+
+### Q：没抄它的哪些东西？
+
+> 三样，都是**不适合工作型应用**的：
+>
+> **滚动视差**。它做得很克制（系数 0.1、上限 60px），但那是宣传页，
+> 用户是「逛」的心态。内容社区的用户是反复滚动查看内容，
+> 视差会持续消耗注意力。
+>
+> **6 秒循环的 HUD 演示动画**。那是**产品演示**，目的是让访客几秒内理解产品形态。
+> 搬进应用里，用户会以为程序卡住了。可以抄它的**结构**（分阶段推进），
+> 但必须改成事件驱动 —— 每个阶段由真实状态变化触发，而不是无限循环。
+>
+> **大面积 sticky 长滚动**。这类结构在移动端和触控板上体验很差，
+> 而且那个站自己在 `reduced-motion` 里也把它降级成了普通布局。
+
+## 9. 挑战性问题的准备
 
 ### Q：你这个项目没上线，怎么证明它真的能用？
 
@@ -1421,7 +1601,7 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 
 ---
 
-## 9. 一分钟自检清单
+## 10. 一分钟自检清单
 
 面试前确认这 67 条能不看文档说出来：
 
@@ -1504,51 +1684,62 @@ Conventional Commits 校验（subject ≤ 72 字符）。
 - [ ] 为什么不统一转 JPEG（透明背景会变黑；PNG 的 quality 本来就无效）
 - [ ] 为什么「压完反而更大」要退回原图，以及放行条件为什么是两条同时成立
 - [ ] 怎么证明压缩真的发生了（噪点造图 + 落盘文件比原图小）
+- [ ] 滚动入场的降级顺序为什么是「默认可见 → JS 确认 → 才锁隐藏」
+- [ ] 反过来写会怎样（JS 失败 = 白屏且控制台干净）
+- [ ] `prefers-reduced-motion` 为什么必须**额外**复位隐藏态（终点是 JS 加的 class）
+- [ ] 位移幅度为什么要和元素尺寸成反比（源站 35px → 本项目 24px）
+- [ ] 为什么观察列而不是卡片（60 个元素 vs 5 个的回调成本）
+- [ ] 错峰封顶为什么写在 JS 而不是 `:nth-child(n+7)`
+- [ ] 变异测试：删掉守卫后测试真的会红吗
+- [ ] 拆解二手资料时为什么要自己抓源码（那条资料把 CSS 和 JS 的曲线混为一谈）
 
 ---
 
 ## 附：关键文件索引
 
-| 想讲什么                      | 去哪看                                                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
-| WS 帧协议                     | `server/src/ws/protocol.ts` + `client/src/api/wsProtocol.ts`                                            |
-| 多端同步                      | `server/src/ws/hub.ts`                                                                                  |
-| 握手 / 心跳 / 重连 / 离线补偿 | `server/src/ws/server.ts` + `client/src/composables/useWebSocket.ts`                                    |
-| 乐观发送 + ack 收敛           | `client/src/composables/useChat.ts`                                                                     |
-| 搜索注入防护                  | `server/src/routes/posts.ts`（`/search` 与 `/search/suggest`）                                          |
-| 关注关系建模                  | `server/src/lib/schema.ts`（`follows`）+ `server/src/routes/users.ts`                                   |
-| 关注按钮的乐观更新            | `client/src/composables/useFollow.ts` + `client/tests/use-follow.test.ts`                               |
-| 收藏夹建模                    | `server/src/lib/schema.ts`（`favorites` / `favorite_folders`）+ `server/src/routes/favorites.ts`        |
-| 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                           |
-| 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                         |
-| 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                            |
-| 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue`        |
-| 二级回复 / 置顶的取舍         | `server/src/routes/comments.ts` + `client/src/utils/comments.ts`（排序规则必须前后端一致）              |
-| 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                           |
-| 浏览记录：限长与毫秒时间戳    | `server/src/routes/viewHistory.ts` + `server/src/lib/schema.ts`（`view_history`）                       |
-| 交易表结构（快照 / CHECK）    | `server/src/lib/schema.ts`（`products` / `orders` / `order_items` / `wallets` / `wallet_transactions`） |
-| 订单状态机                    | `server/src/routes/orders.ts`（`ALLOWED_TRANSITIONS` + 条件 UPDATE）                                    |
-| 余额变动与账本流水            | `server/src/lib/wallet.ts`（加钱扣钱都和写流水成对出现）                                                |
-| **在途资金与守恒律**          | `server/src/lib/transit.ts`（hold / settle / release + `auditLedger`）+ `schema.ts` 的两张在途表        |
-| 卖家的钱什么时候到账          | `server/src/routes/orders.ts` 的 `transition()`（`completed` 才 settle，`refunded` 走 release）         |
-| 金额换算与严格性              | `client/src/utils/money.ts` + `client/tests/money.test.ts`                                              |
-| **推荐打分（纯函数）**        | `server/src/lib/feed-score.ts`（热度 log 压缩 / 新鲜度半衰期 / 兴趣归一化 / 推荐理由）                  |
-| **兴趣画像怎么算出来**        | `server/src/lib/feed-profile.ts`（五类行为 × 30 天半衰期；SQLite 时间必须按 UTC 解析）                  |
-| **排序快照与游标翻页**        | `server/src/lib/feed.ts`（`createSession` 冻结 + `readSessionPage` 的 rank 游标）+ `schema.ts` 的两张表 |
-| **推荐流的不变量测试**        | `server/tests/feed.test.ts`（翻页不重不漏 / 快照是冻的 / 屏蔽两层生效）                                 |
-| **推荐流的可解释与可纠正**    | `client/src/views/InterestView.vue` + `client/src/composables/useFeed.ts`（屏蔽先本地生效、失败回滚）   |
-| **EXIF 字节解析（纯函数）**   | `client/src/utils/image.ts`（`findExifSegment` 手写 APP1/TIFF 遍历 + 绝不抛异常）                       |
-| **剥离 EXIF 再解码**          | `client/src/utils/imageCompress.ts` 的 `stripExif`（`Blob.slice` 零拷贝拼回，方向只由我们自己负责）     |
-| **降级阶梯与串行处理**        | `client/src/utils/imageCompress.ts`（`RETRY_LADDER = [1, 0.75, 0.55]` + `compressSeries`）              |
-| **压缩没收益就退回原图**      | `client/src/utils/image.ts`（`PASSTHROUGH_MAX_BYTES` + `planOutputSize` 的「永不放大」）                |
-| **压缩真的发生的硬证据**      | `scripts/image-smoke.mjs`（噪点造图 + 落盘文件比原图小）                                                |
-| **三套数据源不串味**          | `client/src/views/HomeView.vue` 的 `visiblePosts` 等 computed + `client/tests/home-view.test.ts`        |
-| 购物车按卖家分组              | `client/src/composables/useCart.ts` + `client/tests/use-cart.test.ts`                                   |
-| 结算两步与不可结算行          | `client/src/views/CartView.vue` + `client/tests/cart-view.test.ts`                                      |
-| 完整交易生命周期回归          | `scripts/market-smoke.mjs`（54 断言，最后几条是资金流与全局对账）                                       |
-| 视图组件测试的 stub 陷阱      | `client/tests/topic-view.test.ts`（契约）、`client/tests/messages-view.test.ts`（模块级单例）           |
-| 外键靠库默认值有什么风险      | `server/src/lib/db.ts`（`pragma('foreign_keys = ON')` 的注释）                                          |
-| 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                                      |
-| 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`                  |
-| CI 配置                       | `.github/workflows/ci.yml`                                                                              |
-| 更多踩坑记录                  | `docs/architecture.md`                                                                                  |
+| 想讲什么                      | 去哪看                                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| WS 帧协议                     | `server/src/ws/protocol.ts` + `client/src/api/wsProtocol.ts`                                                    |
+| 多端同步                      | `server/src/ws/hub.ts`                                                                                          |
+| 握手 / 心跳 / 重连 / 离线补偿 | `server/src/ws/server.ts` + `client/src/composables/useWebSocket.ts`                                            |
+| 乐观发送 + ack 收敛           | `client/src/composables/useChat.ts`                                                                             |
+| 搜索注入防护                  | `server/src/routes/posts.ts`（`/search` 与 `/search/suggest`）                                                  |
+| 关注关系建模                  | `server/src/lib/schema.ts`（`follows`）+ `server/src/routes/users.ts`                                           |
+| 关注按钮的乐观更新            | `client/src/composables/useFollow.ts` + `client/tests/use-follow.test.ts`                                       |
+| 收藏夹建模                    | `server/src/lib/schema.ts`（`favorites` / `favorite_folders`）+ `server/src/routes/favorites.ts`                |
+| 收藏按钮的乐观更新            | `client/src/composables/useFavorite.ts` + `client/tests/use-favorite.test.ts`                                   |
+| 通知去重与「不通知自己」      | `server/src/lib/notify.ts`（`createNotification` 是唯一写入口）                                                 |
+| 通知未读的实时推送            | `server/src/ws/instance.ts`（hub 单例）+ `ws/protocol.ts` 的 notification 帧                                    |
+| 话题为什么不做成实体表        | `server/src/routes/topics.ts`（GROUP BY topic_tag 的聚合视图）+ `client/src/views/TopicView.vue`                |
+| 二级回复 / 置顶的取舍         | `server/src/routes/comments.ts` + `client/src/utils/comments.ts`（排序规则必须前后端一致）                      |
+| 瀑布流算法                    | `client/src/utils/masonry.ts`                                                                                   |
+| 浏览记录：限长与毫秒时间戳    | `server/src/routes/viewHistory.ts` + `server/src/lib/schema.ts`（`view_history`）                               |
+| 交易表结构（快照 / CHECK）    | `server/src/lib/schema.ts`（`products` / `orders` / `order_items` / `wallets` / `wallet_transactions`）         |
+| 订单状态机                    | `server/src/routes/orders.ts`（`ALLOWED_TRANSITIONS` + 条件 UPDATE）                                            |
+| 余额变动与账本流水            | `server/src/lib/wallet.ts`（加钱扣钱都和写流水成对出现）                                                        |
+| **在途资金与守恒律**          | `server/src/lib/transit.ts`（hold / settle / release + `auditLedger`）+ `schema.ts` 的两张在途表                |
+| 卖家的钱什么时候到账          | `server/src/routes/orders.ts` 的 `transition()`（`completed` 才 settle，`refunded` 走 release）                 |
+| 金额换算与严格性              | `client/src/utils/money.ts` + `client/tests/money.test.ts`                                                      |
+| **推荐打分（纯函数）**        | `server/src/lib/feed-score.ts`（热度 log 压缩 / 新鲜度半衰期 / 兴趣归一化 / 推荐理由）                          |
+| **兴趣画像怎么算出来**        | `server/src/lib/feed-profile.ts`（五类行为 × 30 天半衰期；SQLite 时间必须按 UTC 解析）                          |
+| **排序快照与游标翻页**        | `server/src/lib/feed.ts`（`createSession` 冻结 + `readSessionPage` 的 rank 游标）+ `schema.ts` 的两张表         |
+| **推荐流的不变量测试**        | `server/tests/feed.test.ts`（翻页不重不漏 / 快照是冻的 / 屏蔽两层生效）                                         |
+| **推荐流的可解释与可纠正**    | `client/src/views/InterestView.vue` + `client/src/composables/useFeed.ts`（屏蔽先本地生效、失败回滚）           |
+| **EXIF 字节解析（纯函数）**   | `client/src/utils/image.ts`（`findExifSegment` 手写 APP1/TIFF 遍历 + 绝不抛异常）                               |
+| **剥离 EXIF 再解码**          | `client/src/utils/imageCompress.ts` 的 `stripExif`（`Blob.slice` 零拷贝拼回，方向只由我们自己负责）             |
+| **降级阶梯与串行处理**        | `client/src/utils/imageCompress.ts`（`RETRY_LADDER = [1, 0.75, 0.55]` + `compressSeries`）                      |
+| **压缩没收益就退回原图**      | `client/src/utils/image.ts`（`PASSTHROUGH_MAX_BYTES` + `planOutputSize` 的「永不放大」）                        |
+| **压缩真的发生的硬证据**      | `scripts/image-smoke.mjs`（噪点造图 + 落盘文件比原图小）                                                        |
+| **滚动入场的降级顺序**        | `client/src/assets/styles/motion.css` 的 `.motion-ready .sg-reveal`（隐藏态只挂在 JS 确认后才有的 class 下）    |
+| **错峰档位与封顶**            | `client/src/composables/useReveal.ts`（`maxStagger` / `stepMs` 按列表形态分档，封顶统一在 JS 算）               |
+| **动效降级的三重防线**        | `client/tests/use-reveal.test.ts`（单测 + 变异测试验证）+ `scripts/reveal-smoke.mjs`（e2e 抹掉 API 验证不白屏） |
+| **三套数据源不串味**          | `client/src/views/HomeView.vue` 的 `visiblePosts` 等 computed + `client/tests/home-view.test.ts`                |
+| 购物车按卖家分组              | `client/src/composables/useCart.ts` + `client/tests/use-cart.test.ts`                                           |
+| 结算两步与不可结算行          | `client/src/views/CartView.vue` + `client/tests/cart-view.test.ts`                                              |
+| 完整交易生命周期回归          | `scripts/market-smoke.mjs`（54 断言，最后几条是资金流与全局对账）                                               |
+| 视图组件测试的 stub 陷阱      | `client/tests/topic-view.test.ts`（契约）、`client/tests/messages-view.test.ts`（模块级单例）                   |
+| 外键靠库默认值有什么风险      | `server/src/lib/db.ts`（`pragma('foreign_keys = ON')` 的注释）                                                  |
+| 动效 token 与降级             | `client/src/assets/styles/motion.css` + `scripts/motion-check.mjs`                                              |
+| 容器化                        | `docker-compose.yml` + `server/Dockerfile` + `client/Dockerfile` + `client/nginx.conf`                          |
+| CI 配置                       | `.github/workflows/ci.yml`                                                                                      |
+| 更多踩坑记录                  | `docs/architecture.md`                                                                                          |
