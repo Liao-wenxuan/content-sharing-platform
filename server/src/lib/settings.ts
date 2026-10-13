@@ -226,3 +226,27 @@ export function serializeSettings(settings: UserSettings): string {
 export function shouldHideMedia(settings: UserSettings): boolean {
   return settings.minorMode
 }
+
+/**
+ * 某个账号的主页，对某个访问者是否可见。
+ *
+ * 刻意写成「从 settings 列里读」而不是读一个独立的 `profile_public` 列 ——
+ * 因为这是**偏好**而不是硬约束：将来还会有「只对关注者可见」这类选项，
+ * 它们都该待在同一份配置里，而不是每加一种就 ALTER 一次表。
+ *
+ * ⚠️ 「本人看得见」这条必须在这里判，而且必须判在最前面：
+ * 用户进自己主页时被自己的隐私设置挡在外面，是完全讲不通的。
+ * 而且这个开关常被用来「先关掉看看效果」，
+ * 关了之后连自己都进不去的话，他会以为功能坏了。
+ *
+ * 参数用「原始字符串」而不是 UserSettings，是为了让路由能直接把
+ * `SELECT settings` 的结果丢进来，不用在每个调用点先 parse 一次。
+ */
+export function isProfileVisible(
+  rawSettings: string | null | undefined,
+  ownerId: number,
+  viewerId: number | null | undefined
+): boolean {
+  if (ownerId === viewerId) return true
+  return parseSettings(rawSettings).profilePublic
+}

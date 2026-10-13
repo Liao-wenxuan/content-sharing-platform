@@ -5,6 +5,7 @@ import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { NICKNAME_MAX_LENGTH } from '../constants'
 import { createNotification } from '../lib/notify'
+import { isProfileVisible } from '../lib/settings'
 
 const router = Router()
 
@@ -448,7 +449,13 @@ router.get('/:id/following', optionalAuth, (req: Request, res: Response) => {
 })
 
 // ===== GET /:id/posts 指定用户的帖子列表（公开） =====
-router.get('/:id/posts', (req: Request, res: Response) => {
+/*
+ * ⚠️ 这里是 `optionalAuth` 而不是裸路由：
+ * 隐私判断需要知道「访问者是谁」，而游客也要能看公开主页。
+ * 用 requireAuth 会把游客挡在外面，用裸路由则 req.userId 永远是 undefined，
+ * 于是「本人访问自己私密主页」也会被 404 —— 那完全讲不通。
+ */
+router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
   try {
     const id = parseInt(String(req.params.id))
     if (isNaN(id) || id <= 0) {
@@ -456,11 +463,27 @@ router.get('/:id/posts', (req: Request, res: Response) => {
     }
 
     const user = db
-      .prepare('SELECT id, nickname, avatar, cover FROM users WHERE id = ?')
+      .prepare('SELECT id, nickname, avatar, cover, settings FROM users WHERE id = ?')
       .get(id) as any
 
     if (!user) {
       return res.status(404).json({ message: '用户不存在' })
+    }
+
+    /*
+     * 隐私：账号设置为「主页不公开」时，**非本人**看不到他的主页。
+     *
+     * ⚠️ 返回 404 而不是 403：
+     * 403 等于确认「这个用户存在，而且他把自己设成私密了」——
+     * 那本身就是个可枚举的信息。而「访问一个不存在的主页」对调用方
+     * 应该是同一种感觉。跟项目里「改别人的资源返回 404」是同一条判据。
+     *
+     * ⚠️ 判断放在服务端而不是前端：
+     * 前端隐藏入口的话，任何人直接访问 `/user/123` 还是能看到 ——
+     * 隐私开关必须由持有数据的那一端强制。
+     */
+    if (!isProfileVisible(user.settings, user.id, req.userId)) {
+      return res.status(404).json({ message: '该用户已设置为私密' })
     }
 
     const rows = db
