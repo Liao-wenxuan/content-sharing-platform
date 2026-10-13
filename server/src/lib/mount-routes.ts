@@ -15,6 +15,9 @@ import cartRouter from '../routes/cart'
 import ordersRouter from '../routes/orders'
 import walletRouter from '../routes/wallet'
 import feedRouter from '../routes/feed'
+import settingsRouter from '../routes/settings'
+import addressesRouter from '../routes/addresses'
+import accountsRouter from '../routes/accounts'
 
 /**
  * 统一挂载所有 API 路由
@@ -51,4 +54,12 @@ export function mountApiRouters(app: Express): void {
   // 推荐流独占 /api/feed 前缀。它内部有 /profile 和 /feedback 这些字面量路由，
   // 但没有 /:id 之类的通配，所以不存在顺序问题。
   app.use('/api/feed', feedRouter)
+
+  // ===== 设置相关 =====
+  // settings 必须排在 accounts 前面？—— 不需要，两者前缀不同。
+  // 但 settings 内部的 /storage /export /password 是**字面量**路由，
+  // 而它没有 /:id，所以也不存在顺序问题（这一点和 feedRouter 一样）。
+  app.use('/api/settings', settingsRouter)
+  app.use('/api/addresses', addressesRouter)
+  app.use('/api/accounts', accountsRouter)
 }

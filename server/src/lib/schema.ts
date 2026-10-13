@@ -556,4 +556,67 @@ export function initSchema(db: Database.Database): void {
   // 清理过期会话时要按 expires_at 扫，不能按 session_id 前缀（那是随机 token）
   db.exec(`CREATE INDEX IF NOT EXISTS idx_feed_sessions_expiry ON feed_sessions(expires_at)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_feed_sessions_user ON feed_sessions(user_id, created_at)`)
+
+  // ===== 用户偏好 =====
+  // 通用设置 / 隐私设置 / 外观偏好全部存一列 JSON，跟 `users.notify_prefs` 同一个理由：
+  // **这些字段从来没被查询过**。它们只在「打开设置页」那一刻整块读一次、
+  // 在「用户改一项」时整块写一次。没有「按它筛 / 排 / 关联」的场景，
+  // 就不值得为它建关系表 + 建索引。
+  //
+  // 判据是「有没有查询场景」，不是「数据有没有结构」。
+  // （话题不建 topics 表、通知偏好不建 settings 表，都是同一条判据。）
+  const settingsCols = new Set(
+    (db.pragma('table_info(users)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!settingsCols.has('settings')) {
+    db.exec('ALTER TABLE users ADD COLUMN settings TEXT')
+    console.log('[DB] Migrated: users.settings added')
+  }
+
+  // ===== 收货地址 =====
+  // 这张表和上面的偏好相反：**它会被查询**（下单时按 user_id 取默认地址、
+  // 按 is_default 找唯一一条），所以建表 + 建索引是对的。
+  //
+  // `is_default` 用「同一用户下最多一条」的保证来替代 UNIQUE 约束：
+  // SQLite 的 UNIQUE(user_id, is_default) 会把所有 is_default=0 的行也管起来
+  // （因为 0 == 0），设第 2 个地址为默认时直接撞约束。
+  // 正确的做法是换默认时用一条 UPDATE 把旧的置 0、新的置 1，写在同一个事务里。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS addresses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      receiver TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      province TEXT NOT NULL,
+      city TEXT NOT NULL,
+      detail TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id)`)
+
+  // ===== 多账号（切换账号）=====
+  // 存的是**设备侧的账号清单**，不是「谁能看谁」的关系：
+  // 它只对当前浏览器有意义（换台设备不该跟着走），所以没有 user_id，
+  // 只记「哪个登录态属于哪个浏览器」。
+  //
+  // ⚠️ **这里存的是 token 的哈希，不是明文。**
+  // 明文存 token 意味着：库一旦被复制，别人拿到就能直接登录，
+  // 而且没有任何撤销窗口 —— 改了密码也拦不住已泄漏的 token。
+  // 存哈希后仍然能验证「这个 token 有效」，但拿到库的人无法反推出可用凭据。
+  // 代价是切换账号时拿不到原 token，所以流程设计成「重新输密码换 token」，
+  // 而不是在账号列表里直接点一下就切（详见 routes/accounts.ts）。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS account_sessions (
+      token_hash TEXT PRIMARY KEY,             -- sha256(token)，不是明文
+      user_id INTEGER NOT NULL,
+      nickname TEXT NOT NULL,
+      avatar TEXT,
+      last_used_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_account_sessions_user ON account_sessions(user_id)`)
 }
