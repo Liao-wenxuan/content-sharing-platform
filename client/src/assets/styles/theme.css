@@ -195,6 +195,62 @@
 }
 
 /* ============================================================
+ * 界面密度（settings.density）
+ * ------------------------------------------------------------
+ * 由 useUserSettings 写到 `<html data-density="...">`。
+ *
+ * ⚠️ 这一段曾经完全不存在 —— 偏好有「紧凑 / 标准 / 宽松」三档，
+ * JS 也确实在写 `data-density`，但**没有任何 CSS 消费它**，
+ * 于是三个选项的效果完全一样。那是「只落库不生效」的假功能。
+ *
+ * 改的只有间距和行高，不改字号：
+ * 字号已经由 `fontScale`（html font-size）统一管，
+ * 两处都动字号会叠乘出不可预期的结果。
+ * ============================================================ */
+:root {
+  --density-line-height: 1.6;
+  --density-gap: 26px;
+  /* 瀑布流的两个间距。默认值 = 原来的 18px / 26px，改密度时视觉不变 */
+  --masonry-col-gap: 18px;
+  --masonry-item-gap: 26px;
+}
+
+:root[data-density='compact'] {
+  --sp-2: 6px;
+  --sp-3: 9px;
+  --sp-4: 12px;
+  --sp-5: 15px;
+  --sp-6: 18px;
+  --sp-8: 24px;
+  --sp-10: 30px;
+  --density-line-height: 1.45;
+  --density-gap: 16px;
+  /* 紧凑档的核心价值：一屏能多看两条 */
+  --masonry-col-gap: 14px;
+  --masonry-item-gap: 18px;
+}
+
+:root[data-density='comfortable'] {
+  --sp-3: 14px;
+  --sp-4: 20px;
+  --sp-5: 26px;
+  --sp-6: 32px;
+  --sp-8: 44px;
+  --density-line-height: 1.9;
+  --density-gap: 34px;
+  --masonry-col-gap: 24px;
+  --masonry-item-gap: 40px;
+}
+
+html {
+  line-height: var(--density-line-height);
+  /* 切密度时给一个过渡，否则间距是「跳」过去的，很扎眼 */
+  transition:
+    line-height var(--dur-medium) var(--ease-out-expo, ease),
+    font-size var(--dur-medium) var(--ease-out-expo, ease);
+}
+
+/* ============================================================
  * 全局基础样式
  * ============================================================ */
 
@@ -212,7 +268,15 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: var(--fs-base);
-  line-height: 1.6;
+  /*
+   * ⚠️ 这里**不能写死 1.6**。
+   *
+   * 写成字面量的话它会覆盖从 html 继承下来的 `var(--density-line-height)`，
+   * 于是「界面密度」里的宽松 / 紧凑两档在正文字号上完全看不出差别 ——
+   * 间距变了、行高没变，而用户预期的是两者都变。
+   * 症状是「切换了但只变了一半」，比完全不生效更难解释。
+   */
+  line-height: var(--density-line-height);
   transition:
     background-color 0.28s var(--ease-out-expo, ease),
     color 0.28s var(--ease-out-expo, ease);

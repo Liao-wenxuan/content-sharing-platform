@@ -8,6 +8,7 @@
  * 这个组件只做两件事：ResizeObserver 监听宽度 → 按结果渲染 DOM。
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Star, VideoPlay, Close } from '@element-plus/icons-vue'
 import type { Post } from '@/api/posts'
@@ -20,6 +21,7 @@ import {
   avatarText
 } from '@/utils/masonry'
 import { useReveal } from '@/composables/useReveal'
+import { useUserSettings } from '@/composables/useUserSettings'
 
 const props = defineProps<{
   posts: Post[]
@@ -36,8 +38,10 @@ const emit = defineEmits<{ dismiss: [postId: number] }>()
 const { formatTime } = useRelativeTime()
 
 const gridRef = ref<HTMLElement | null>(null)
+const router = useRouter()
 const gridWidth = ref(1200)
 const colCount = ref(5)
+const { settings } = useUserSettings()
 
 let resizeObserver: ResizeObserver | null = null
 
@@ -63,16 +67,79 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
  * `props.posts.length > 0` 是必需的 —— 空列表时挂观察器纯属浪费，
  * 而且「有 0 张卡」这件事本身不需要任何入场动画来表达。
  */
-useReveal(gridRef, () => props.posts.length > 0)
+useReveal(gridRef, () => visiblePosts.value.length > 0)
+
+/** 有没有需要过滤的偏好。为 false 时上面直接返回原数组，省一次遍历 */
+const needsFilter = computed(
+  () =>
+    settings.value.minorMode || settings.value.blockedTags.some((t) => t && !t.startsWith('lang:'))
+)
+
+/**
+ * 内容过滤：屏蔽的话题 + 未成年人模式。
+ *
+ * ⚠️ 过滤发生在**分列之前**，而不是渲染时把卡片 `v-if` 掉。
+ * 理由：瀑布流的高度估算依赖卡片数量和比例（`estimateHeight`），
+ * 先过滤再分列，估算用的就是真实要渲染的那些卡片；
+ * 先分列再隐藏的话，列高会按「其实没渲染的卡片」算，
+ * 页面底部会留一大块空白，而且滚动时列会「塌」一下。
+ */
+const visiblePosts = computed(() => {
+  const list = props.posts
+  if (!needsFilter.value) return list
+
+  const blocked = new Set(
+    settings.value.blockedTags
+      .filter((t) => t && !t.startsWith('lang:'))
+      .map((t) => t.toLowerCase())
+  )
+  const minor = settings.value.minorMode
+
+  return list.filter((p) => {
+    // 屏蔽话题：大小写不敏感，用户打「美食」不该因为存的是「美食」就漏掉
+    if (blocked.size > 0 && p.topicTag && blocked.has(p.topicTag.toLowerCase())) return false
+    // 未成年人模式：只挡**带图**的，纯文字照常看。
+    // 全挡住的话用户会以为应用坏了
+    if (minor && p.imageUrls?.length) return false
+    return true
+  })
+})
+
+const filteredCount = computed(() => props.posts.length - visiblePosts.value.length)
+
+/** 真正生效的屏蔽话题数（排除 lang: 标记） */
+const plainBlockedCount = computed(
+  () => settings.value.blockedTags.filter((t) => t && !t.startsWith('lang:')).length
+)
+
+/** 「为什么？」的展开态。默认收起 —— 大多数人不需要解释 */
+const showFilterHint = ref(false)
 
 const columns = computed(() => {
   const n = colCount.value
   const colWidth = (gridWidth.value - GAP * (n - 1)) / n
-  return distributeToColumns(props.posts, n, colWidth)
+  return distributeToColumns(visiblePosts.value, n, colWidth)
 })
 
-function onAuthorClick() {
-  ElMessage.info('个人主页跳转开发中')
+/**
+ * 点作者跳到他的主页。
+ *
+ * 之前这里只有一句「个人主页跳转开发中」的 toast ——
+ * 一个能被点到、点下去只会得到一句「快了」的假按钮。
+ * 路由 `/user/:id` 早就存在了，缺的只是这一跳。
+ *
+ * `.prevent` 是必须的：整个卡片是 router-link，
+ * 不拦住的话会先触发卡片的跳转再触发这一跳，两个导航互相打架。
+ */
+function onAuthorClick(post: Post) {
+  const authorId = post.author?.id
+  if (!authorId) {
+    // 作者信息缺失（比如种子数据里的匿名笔记）时不给假反馈 ——
+    // 「点了没反应」比「明确告知不能点」更糟
+    ElMessage.info('这条笔记没有关联作者')
+    return
+  }
+  router.push(`/profile/${authorId}`)
 }
 
 /** 话题标签是否命中当前搜索词 */
@@ -104,6 +171,23 @@ function markImageLoaded(postId: number) {
 </script>
 
 <template>
+  <!--
+    过滤提示。
+    ⚠️ 不是「隐藏」而是「说明」：屏蔽生效之后卡片会变少，
+    而用户不知道少的那几条去哪了 —— 表现就是「我的屏蔽没起作用」。
+    一行小字就能解决这个问题，而它的成本几乎为零。
+  -->
+  <p v-if="filteredCount > 0" class="filter-note">
+    按你的屏蔽偏好隐藏了 {{ filteredCount }} 条
+    <span class="filter-link" @click="showFilterHint = !showFilterHint">为什么？</span>
+  </p>
+  <p v-if="filteredCount > 0 && showFilterHint" class="filter-hint">
+    <template v-if="settings.minorMode">未成年人模式只显示纯文字笔记。 </template>
+    <template v-if="plainBlockedCount > 0">
+      已屏蔽话题：{{ plainBlockedCount }} 个（在「设置 → 内容偏好」里可以取消）。
+    </template>
+  </p>
+
   <div ref="gridRef" class="masonry">
     <div v-for="(col, ci) in columns" :key="ci" class="masonry-col sg-reveal">
       <router-link
@@ -178,7 +262,7 @@ function markImageLoaded(postId: number) {
 
         <!-- 作者 + 点赞 -->
         <div class="foot">
-          <div class="author" @click.prevent="onAuthorClick">
+          <div class="author" @click.prevent="onAuthorClick(item.post)">
             <el-avatar :size="20" class="avatar">
               {{ avatarText(item.post.author?.nickname) }}
             </el-avatar>
@@ -197,10 +281,47 @@ function markImageLoaded(postId: number) {
 </template>
 
 <style scoped>
+/*
+ * 两个 gap 都走变量，让「界面密度」偏好能真的改它们。
+ *
+ * ⚠️ 注意 `GAP`（utils/masonry.ts 里算列宽用的那个常量）**不能跟着变** ——
+ * 它参与的是「列宽 = (总宽 - 列间距 × (n-1)) / n」这个计算，
+ * 改了会让 JS 算出的宽度和 CSS 实际渲染的对不上，卡片右边会留缝。
+ * 密度只影响视觉间距，不影响布局计算。
+ */
+/* 过滤提示：低调但可点。它不是错误提示，是「你的设置生效了」的反馈 */
+.filter-note {
+  margin: 0 0 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.filter-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.filter-link:hover {
+  color: var(--accent-dim);
+}
+
+.filter-hint {
+  margin: -4px 0 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--border-strong);
+  background: var(--surface-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  line-height: 1.7;
+}
+
 .masonry {
   display: flex;
   align-items: flex-start;
-  gap: 18px;
+  gap: var(--masonry-col-gap);
 }
 
 .masonry-col {
@@ -208,7 +329,7 @@ function markImageLoaded(postId: number) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: var(--masonry-item-gap);
 }
 
 .card {
@@ -231,7 +352,15 @@ function markImageLoaded(postId: number) {
   aspect-ratio: 3 / 4;
   overflow: hidden;
   border-radius: var(--radius-md);
-  background: var(--muted);
+  /*
+   * 封面加载时的占位色。
+   *
+   * 由 settings.coverBlurPlaceholder 控制：关掉时把底色设成透明，
+   * 于是图片到达之前是一片空白而不是一块灰。
+   * 那看起来像「坏了」，但它至少不会让人误以为图加载失败 ——
+   * 两种都各有代价，所以做成可切换而不是替用户选一个。
+   */
+  background: var(--cover-placeholder, var(--muted));
 }
 
 .cover img {
