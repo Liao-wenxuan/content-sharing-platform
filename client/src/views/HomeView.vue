@@ -19,6 +19,7 @@ import { postsApi, type Post } from '@/api/posts'
 import { useHomeTabsStore } from '@/stores/homeTabs'
 import { useAuthStore } from '@/stores/auth'
 import { useFeed } from '@/composables/useFeed'
+import { useUserSettings } from '@/composables/useUserSettings'
 import PostMasonry from '@/components/PostMasonry.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -26,6 +27,7 @@ const route = useRoute()
 const router = useRouter()
 const homeTabs = useHomeTabsStore()
 const auth = useAuthStore()
+const userSettings = useUserSettings()
 
 /** 关注流 = 发现页的 channel=follow 视图 */
 const isFollowFeed = computed(() => route.query.channel === 'follow')
@@ -141,7 +143,64 @@ function onDismiss(postId: number) {
   void feed.dismiss(postId)
 }
 
-onMounted(() => loadFeed(true))
+onMounted(() => {
+  /*
+   * ⚠️ 两个请求**并行**，不要 await 落点处理再拉数据。
+   *
+   * 串行的写法（`await applyDefaultLanding(); loadFeed(true)`）看起来更清楚，
+   * 但它让首屏数据**白等一次偏好请求**。偏好是从服务端拉的，
+   * 弱网下那是几百毫秒到几秒 —— 用户看到的是一个空页面然后突然有内容。
+   *
+   * 落点逻辑本身会决定要不要重定向到关注流，而 `loadFeed` 读的是
+   * `isFollowFeed`（computed），重定向发生时 Vue 会重新渲染并
+   * 由 watch 触发重新加载 —— 不需要在这里等。
+   */
+  void applyDefaultLanding()
+  loadFeed(true)
+})
+
+/**
+ * 按偏好设置「打开首页时落在哪」。
+ *
+ * ⚠️ 两条必须守住的规则：
+ *
+ * ① **只在 URL 上没有 channel 时才重定向**。
+ *    用户手动点过「关注」之后带着 `?channel=follow` 回来，那是他的选择，
+ *    不能再被偏好覆盖 —— 否则点了关注、刷新一下又跳回推荐，他会以为坏了。
+ *
+ * ② **用 replace 不是 push**。
+ *    push 会往历史里塞一条，用户按「后退」会退回到「同一个首页的另一个频道」，
+ *    看起来像卡住了。
+ *
+ * ③ 关注流要求登录，未登录时按推荐处理 —— 不然会落到一个空页面。
+ */
+async function applyDefaultLanding() {
+  if (route.query.channel) return
+
+  const { settings, load } = userSettings
+  await load()
+
+  if (!settings.value.allowRecommendedFeed) {
+    // 关掉了推荐流：能登录就落关注流，游客只能落普通频道流
+    if (auth.isLoggedIn) {
+      router.replace({ path: '/', query: { channel: 'follow' } })
+      return
+    }
+  } else if (settings.value.defaultFeed === 'follow' && auth.isLoggedIn) {
+    router.replace({ path: '/', query: { channel: 'follow' } })
+    return
+  }
+
+  // defaultChannel 只在「推荐」这个频道之外有意义：
+  // 落点本来就是推荐流时再切频道属于自相矛盾
+  if (
+    settings.value.defaultFeed === 'category' &&
+    settings.value.defaultChannel !== 'recommend' &&
+    homeTabs.category === 'recommend'
+  ) {
+    homeTabs.setCategory(settings.value.defaultChannel)
+  }
+}
 
 // 频道切换：只影响发现流，关注流下频道栏根本不渲染
 watch(

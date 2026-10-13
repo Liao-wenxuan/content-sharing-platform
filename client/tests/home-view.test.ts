@@ -47,10 +47,59 @@ vi.mock('@/api/feed', () => ({
  * 而代码看起来完全正常。
  */
 let route: { query: Record<string, string> }
+const routerPush = vi.fn()
+const routerReplace = vi.fn()
 vi.mock('vue-router', () => ({
   useRoute: () => route,
-  useRouter: () => ({ push: vi.fn() })
+  // ⚠️ `replace` 必须一起 mock：首页的「默认落点」用的是
+  // router.replace 而不是 push（push 会往历史里塞一条，用户按后退会卡住）。
+  // 只 mock push 的话，代码一调 replace 就抛 TypeError，
+  // 而报错指向的是 mock 缺方法，离真正的病因很远
+  useRouter: () => ({ push: routerPush, replace: routerReplace })
 }))
+
+/**
+ * 偏好要 mock 掉，否则挂载时会真发一次 GET /api/settings。
+ *
+ * 那不只是慢：全量跑时这个请求会和其它用例的请求交错，
+ * 表现是「单跑这个文件全绿、跟着 27 个文件跑就时红时红」。
+ * 更糟的是它会让 `loadFeed` 的调用时机变得不确定 ——
+ * 而这些用例断言的正是「按当前 category 拉取」。
+ */
+vi.mock('@/composables/useUserSettings', async () => {
+  // ⚠️ 必须用 await import 而不是 require：
+  // 这个文件是 .ts，vitest 的 mock 工厂在 ESM 上下文里跑，
+  // `require` 既没类型也会在某些配置下报 "Cannot find name 'require'"
+  const { ref } = await import('vue')
+  const settings = ref({
+    defaultChannel: 'recommend',
+    defaultFeed: 'recommend',
+    coverBlurPlaceholder: true,
+    autoplayMedia: false,
+    themeMode: 'dark',
+    density: 'normal',
+    fontScale: 100,
+    showViewHistoryBadge: true,
+    allowRecommendedFeed: true,
+    profilePublic: true,
+    favoritesPublic: false,
+    minorMode: false,
+    blockedTags: [],
+    browserTranslateHint: true
+  })
+  return {
+    useUserSettings: () => ({
+      settings,
+      loaded: ref(true),
+      saving: ref(false),
+      loadError: ref(''),
+      load: vi.fn(async () => settings.value),
+      update: vi.fn(),
+      patch: vi.fn(),
+      saveNow: vi.fn()
+    })
+  }
+})
 
 const getFeed = vi.mocked(postsApi.getFeed)
 const getReco = vi.mocked(feedApi.get)

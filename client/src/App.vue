@@ -20,9 +20,20 @@ import TopBar from '@/components/TopBar.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { useAuthStore } from '@/stores/auth'
 import { connectWs, disconnectWs } from '@/composables/useWebSocket'
+import { useUserSettings } from '@/composables/useUserSettings'
 
 const route = useRoute()
 const auth = useAuthStore()
+
+/**
+ * 偏好要在**全局**加载一次，而不是等设置页打开才拉。
+ *
+ * 因为偏好要影响的不只是设置页：主题、密度、首页落点、内容过滤
+ * 全站都读它。等进设置页才加载的话，用户第一次打开首页会先看到
+ * 一瞬的默认样式再跳到真实设置 —— 那种「闪一下」比加载慢更难受。
+ */
+const { load: loadSettings } = useUserSettings()
+loadSettings()
 
 /** 登录页不套三栏壳：全屏居中更符合登录表单的阅读节奏 */
 const isAuthPage = computed(() => route.name === 'login')

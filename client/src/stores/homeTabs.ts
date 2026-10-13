@@ -14,5 +14,17 @@ import { ref } from 'vue'
 export const useHomeTabsStore = defineStore('homeTabs', () => {
   const category = ref('recommend')
 
-  return { category }
+  /**
+   * 设置默认频道时用。
+   *
+   * ⚠️ 刻意**不做合法性校验** —— 这个 store 只被 HomeView 的频道栏和
+   * 设置页的落点逻辑写，而那两个地方的候选值都来自同一份 CHANNELS 表。
+   * 在 store 里再校验一遍只会出现两套白名单，改一处漏一处。
+   * 真正需要校验的是「外部输入」；这里不是。
+   */
+  function setCategory(next: string) {
+    if (typeof next === 'string' && next) category.value = next
+  }
+
+  return { category, setCategory }
 })
