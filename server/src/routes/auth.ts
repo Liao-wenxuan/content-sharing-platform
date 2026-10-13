@@ -5,6 +5,7 @@ import db from '../lib/db'
 import { env } from '../lib/env'
 import { requireAuth } from '../middleware/auth'
 import { authLimiter } from '../middleware/rateLimit'
+import { rememberAccount } from './accounts'
 
 const router = Router()
 
@@ -48,7 +49,16 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
       expiresIn: env.TOKEN_EXPIRES_IN
     } as jwt.SignOptions)
 
-    // 6. 返回
+    // 6. 记进「这台设备登录过哪些号」，供登录页和设置页的切换账号用。
+    // 存的是 token 的**哈希**（见 routes/accounts.ts 的说明），
+    // 失败不该让登录本身失败 —— 它只是一个便利功能
+    try {
+      rememberAccount(token, userId, nickname, null)
+    } catch (e) {
+      console.error('[Remember Account Error]', e)
+    }
+
+    // 7. 返回
     res.status(201).json({
       accessToken: token,
       userInfo: { id: userId, email, nickname, avatar: null }
@@ -81,7 +91,14 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       expiresIn: env.TOKEN_EXPIRES_IN
     } as jwt.SignOptions)
 
-    // 4. 返回
+    // 4. 记进「这台设备登录过哪些号」（见 routes/accounts.ts 的说明）
+    try {
+      rememberAccount(token, user.id as number, user.nickname, user.avatar)
+    } catch (e) {
+      console.error('[Remember Account Error]', e)
+    }
+
+    // 5. 返回
     res.json({
       accessToken: token,
       userInfo: {
