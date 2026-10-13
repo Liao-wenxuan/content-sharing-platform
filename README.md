@@ -227,7 +227,7 @@ npm run dev          # vite
 ```bash
 npm run test:client          # 前端单测（vitest + @vue/test-utils，419 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，390 条）
+cd server && npm test        # 后端单测（vitest + supertest，397 条）
 
 npm run test:e2e             # Playwright 桌面端全流程回归（登录态）
 npm run test:search          # 搜索功能 + 注入防护
@@ -343,7 +343,7 @@ content-sharing-platform/
 │  │  ├─ lib/feed.ts             # 取候选 → 打分 → 冻结成快照 → 游标翻页 + 负反馈落库
 │  │  ├─ lib/wallet.ts           # 余额变动的唯一入口：加钱 / 扣钱都和写流水成对出现，扣钱走条件 UPDATE
 │  │  └─ constants.ts            # 服务端常量（与 client mirror）
-│  ├─ tests/                     # vitest + supertest（18 文件 390 条）
+│  ├─ tests/                     # vitest + supertest（19 文件 397 条）
 │  ├─ Dockerfile                 # 多阶段：构建期装原生模块工具链，运行时 prune 掉 devDeps
 │  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边 + 11 件商品（含 1 件下架演示）+ 各 2000 元余额，幂等，DB_PATH 与后端一致）
 │  └─ uploads/                   # multer 落地目录（.gitignore）
@@ -426,6 +426,7 @@ content-sharing-platform/
 | **reduced-motion 必须复位隐藏态**              | 全局兜底用 `transition-duration: 0.01ms`，但这**只让动画瞬间结束**，而 `.sg-reveal` 的终点是 JS 加的 `.is-revealed` —— 用户在卡片入场前切到 reduced-motion 的话，这个 class 永远不会加上。所以额外写一条「把隐藏态本身清掉」，不依赖 JS 补 class                                                                                                                                                                                                                                                               | 这是 `prefers-reduced-motion` 最常见的漏项：动画确实停了，但内容也没了。两条一起做才既尊重设置又不丢内容                                                                                |
 | **动效参数按列表形态分档**                     | 错峰步长瀑布流 60ms、规整网格 45ms，封顶档数 6 / 8。观察对象选**列**而不是卡片：瀑布流 5 列但 60+ 张卡，观察 60 个元素会让 IntersectionObserver 每帧跑 60 次回调。封顶逻辑统一放 JS 算，没写在 CSS 的 `:nth-child(n+7)` 上                                                                                                                                                                                                                                                                                     | 封顶档数是参数，同一规则写两遍必然改漏一处，而症状是「某个列表的动画莫名全卡住」这种极难定位的问题                                                                                      |
 | **设置页零假按钮，而且是被测出来的**           | 之前有 13 个点了只弹「即将上线」的按钮。现在每个入口背后都有真的接口或真实内容：偏好读写、真实存储统计、导出我的数据、改密码、地址簿、多账号切换、FAQ、已知限制清单。e2e 逐个点 13 项验证**没有一个点了没反应**，并查了 7 种占位措辞（逐个查而不是匹配「即将」，免得误伤正常文案）                                                                                                                                                                                                                             | 「会被人点到的占位，比没有更糟」—— 它在教用户这个站点的按钮有一半是假的。**没做的功能要写明为什么没做**：多语言面板只显示「当前是简体中文」并解释前置条件，而不是放一个只有中文的下拉框 |
+| **「落库」不等于「生效」**                     | 设置页有过一批只写进数据库、没有任何代码去读的开关 —— 比如「界面密度」确实往 `<html>` 上写了 `data-density`，但主题里压根没有对应的 CSS，于是三个选项效果完全一样。这类开关比没有更糟：用户以为设置生效了，于是做出一个基于错误前提的决定。修的是给每一项补上**能被观察到的行为**，并在 e2e 里断言「切换后 CSS 变量和行高真的变了」「带图的笔记消失而纯文字还在」，而不是断言「接口返回 200」                                                                                                                  | 一个只落库的开关和没有开关的区别只在于：**它让用户以为自己做了设置**。凡是写了却读不到的字段，都要么接上真实链路，要么从界面上删掉                                                      |
 
 ### 后端
 
@@ -433,7 +434,7 @@ content-sharing-platform/
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **可测试架构（Proxy 注入）**                | `db.ts` 用 `new Proxy()` 包装，测试用 `setTestDb(new Database(':memory:'))` 注入内存实例，生产文件 DB 和测试实例互不污染                                                                                                                                                                                                                          |
 | **schema 抽取复用**                         | `CREATE TABLE` 抽到 `lib/schema.ts` 的 `initSchema(db)`，生产启动和每个测试文件共用同一份 DDL                                                                                                                                                                                                                                                     |
-| **390 个集成测试**                          | vitest 18 个测试文件覆盖 auth / posts / likes / comments / follows / favorites / notifications / topics / suggest / users / uploads / conversations / view-history / market / feed / settings；`fileParallelism: false` 避免共享 DB 竞态                                                                                                          |
+| **397 个集成测试**                          | vitest 19 个测试文件覆盖 auth / posts / likes / comments / follows / favorites / notifications / topics / suggest / users / uploads / conversations / view-history / market / feed / settings；`fileParallelism: false` 避免共享 DB 竞态                                                                                                          |
 | **分层限流**                                | `express-rate-limit` 四档：auth 5/min、writes 20/min、uploads 30/min、**shop 60/min**（市集写操作单独一档 —— 购物车数量加减是 stepper 式高频操作，套 20/min 会让正常用户被限流）；`NODE_ENV=test` 自动跳过                                                                                                                                        |
 | **全局错误中间件**                          | `AppError` 类 + 4 个 catch 层（multer / JSON parse / 404 / 未知错误），统一响应格式，日志分级                                                                                                                                                                                                                                                     |
 | **env 启动校验**                            | `lib/env.ts` 用 dotenv 加载后校验 `JWT_SECRET` 必填，缺失直接 fail fast 而不是运行时才炸                                                                                                                                                                                                                                                          |
