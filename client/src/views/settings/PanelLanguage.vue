@@ -1,46 +1,57 @@
 <script setup lang="ts">
 /**
- * 多语言和翻译
+ * 内容偏好：屏蔽的话题 + 关于多语言的现状说明
  *
- * 这一栏之前是死按钮。现在它做两件**真的**事：
+ * 这一栏之前是死按钮。现在做两件**真的**事：
+ * ① 屏蔽话题的管理 —— 这个筛选真的在 PostMasonry 里执行
+ * ② 说明「为什么没有界面语言切换」和「为什么没有翻译开关」
  *
- * ① 内容语言偏好：影响搜索和推荐流能看到什么
- * ② 浏览器翻译提示：给外文内容加一个「用浏览器翻译」的提示条
+ * ⚠️ 界面上**没有**「界面语言」下拉框，也没有「自动翻译」开关。
+ * 两者都是「切了但什么都不变」的选项：
  *
- * ⚠️ 界面上**没有**「界面语言」下拉框。
- * 这个项目的界面文案全中文，做一个只有两个选项（中文 / English）
- * 而 English 根本没接的下拉框，就是另一种假按钮 ——
- * 用户切过去会发现什么都没变，那比不给更糟。
+ * - 界面全中文，做一个只有中文（和没接的 English）的下拉框，
+ *   用户切过去会发现什么都没变
+ * - 项目零外文内容，做一个翻译开关没有任何东西可翻译
  *
  * 真要做多语言界面，正确的前置条件是：
  * ① 抽出全部文案（约 200+ 条）② 引入 i18n 运行时 ③ 逐条翻译并维护
  * 这不是「加一个下拉框」的工作量，所以这里写明现状而不是假装支持。
+ *
+ * **诚实地说「没做」比勉强地说「做了」有用。**
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useUserSettings } from '@/composables/useUserSettings'
 
 const { settings, patch } = useUserSettings()
 
-const LANGUAGES = [
-  { code: 'zh', label: '简体中文', native: '简体中文' },
-  { code: 'en', label: '英语', native: 'English' },
-  { code: 'ja', label: '日语', native: '日本語' },
-  { code: 'ko', label: '韩语', native: '한국어' }
-] as const
+/** 输入框。新增屏蔽词时用 */
+const tagInput = ref('')
 
-/** 「内容语言」存在 blockedTags 之外的位置：用 tag 前缀约定，不新增字段 */
-const contentLangs = computed(() => settings.value.blockedTags.filter((t) => t.startsWith('lang:')))
+/** 真正生效的屏蔽词 —— 排除掉历史上用 lang: 前缀存的标记 */
+const plainTags = computed(() =>
+  settings.value.blockedTags.filter((t) => t && !t.startsWith('lang:'))
+)
 
-function isPicked(code: string) {
-  return !contentLangs.value.includes(`lang:${code}`)
+function addTag() {
+  const tag = tagInput.value.trim()
+  if (!tag) return
+  if (tag.length > 20) {
+    ElMessage.error('话题名不能超过 20 个字')
+    return
+  }
+  if (plainTags.value.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+    ElMessage.info('这个话题已经在屏蔽列表里了')
+    tagInput.value = ''
+    return
+  }
+  // 顺带清掉历史的 lang: 标记 —— 它们不生效，留着只会让人以为「内容语言」这个设置有用
+  patch({ blockedTags: [...plainTags.value, tag] })
+  tagInput.value = ''
 }
 
-function toggleLang(code: string, want: boolean) {
-  const marker = `lang:${code}`
-  const rest = settings.value.blockedTags.filter((t) => !t.startsWith('lang:'))
-  patch({
-    blockedTags: want ? rest : [...rest, marker]
-  })
+function removeTag(tag: string) {
+  patch({ blockedTags: plainTags.value.filter((t) => t !== tag) })
 }
 </script>
 
@@ -61,41 +72,48 @@ function toggleLang(code: string, want: boolean) {
     </section>
 
     <section class="block">
-      <h3 class="block-title">内容语言</h3>
+      <h3 class="block-title">屏蔽的话题</h3>
       <p class="block-desc">
-        用来决定搜索和推荐流里优先给你看哪种语言的内容。
-        取消勾选某个语言不会删掉已有的笔记，只是不再优先推给你。
+        被屏蔽的话题不会出现在首页、搜索结果和你的推荐流里。 这个筛选在「分列之前」执行 ——
+        先过滤再排版， 否则瀑布流会按「其实没渲染的卡片」算列高，底部会留一大块空白。
       </p>
 
-      <div class="langs">
-        <label v-for="l in LANGUAGES" :key="l.code" class="lang">
-          <el-checkbox
-            :model-value="isPicked(l.code)"
-            @update:model-value="(v: any) => toggleLang(l.code, v)"
-          />
-          <span class="lang-native">{{ l.native }}</span>
-          <span class="lang-label">{{ l.label }}</span>
-        </label>
+      <el-input
+        v-model="tagInput"
+        placeholder="输入话题名，回车添加"
+        class="tag-input"
+        :disabled="tagInput.length >= 20"
+        @keyup.enter="addTag"
+      />
+
+      <div
+        v-if="settings.blockedTags.filter((t) => !t.startsWith('lang:')).length > 0"
+        class="chips"
+      >
+        <el-tag
+          v-for="tag in plainTags"
+          :key="tag"
+          closable
+          size="small"
+          effect="plain"
+          @close="removeTag(tag)"
+        >
+          {{ tag }}
+        </el-tag>
       </div>
+      <p v-else class="empty-hint">还没有屏蔽任何话题。</p>
     </section>
 
     <section class="block">
       <h3 class="block-title">浏览器翻译</h3>
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">外文内容显示翻译提示条</span>
-          <span class="row-desc">
-            提示里给一个「用浏览器翻译」的链接。翻译本身由浏览器完成，我们不接翻译服务。
-          </span>
-        </div>
-        <el-switch
-          :model-value="settings.browserTranslateHint"
-          @update:model-value="(v: any) => patch({ browserTranslateHint: v })"
-        />
-      </div>
+      <p class="block-desc">
+        <b>这个项目现在没有接翻译功能。</b>
+        界面和内容都是中文，没有需要翻译的外文，所以也不做「翻译开关」——
+        那会是一个切了但什么都不变的选项。
+      </p>
       <p class="note">
-        这样做的原因：接一个翻译 API 意味着要把你的内容发给第三方 ——
-        那是隐私设置里的重大决定，不能默认开启。 交给浏览器则由用户自己决定要不要触发。
+        如果将来接入，正确的做法是<b>交给浏览器</b>而不是自建翻译服务： 接一个翻译 API
+        意味着把你的内容发给第三方， 那是隐私设置里的重大决定，不能默认开启。
       </p>
     </section>
   </div>

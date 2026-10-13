@@ -141,8 +141,8 @@ const groups: MenuGroup[] = [
       },
       {
         key: 'lang',
-        label: '多语言和翻译',
-        desc: '内容语言 · 浏览器翻译提示',
+        label: '内容偏好',
+        desc: '屏蔽话题 · 多语言说明',
         icon: ChatLineSquare,
         kind: 'panel',
         panel: 'language'
@@ -435,7 +435,7 @@ onMounted(async () => {
 
     <el-drawer
       :model-value="openPanel === 'language'"
-      title="多语言和翻译"
+      title="内容偏好"
       size="480px"
       @update:model-value="(v: boolean) => !v && close()"
     >

@@ -50,7 +50,10 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
       <div class="row">
         <div class="row-text">
           <span class="row-label">个人主页对外可见</span>
-          <span class="row-desc">关掉后陌生人搜不到你的主页，已有链接仍可访问</span>
+          <span class="row-desc">
+            关掉后陌生人直接访问会看到「该用户已设置为私密」。 已有链接不再可用 ——
+            这是这个开关的全部代价
+          </span>
         </div>
         <el-switch
           :model-value="settings.profilePublic"
@@ -61,7 +64,9 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
       <div class="row">
         <div class="row-text">
           <span class="row-label">收藏夹公开</span>
-          <span class="row-desc"> 收藏默认是私密的。公开后别人能在你的主页看到你收藏了什么 </span>
+          <span class="row-desc">
+            收藏默认私密：接口只给本人看，别人主页上那栏显示「私密」占位
+          </span>
         </div>
         <el-switch
           :model-value="settings.favoritesPublic"
@@ -71,19 +76,11 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
 
       <div class="row">
         <div class="row-text">
-          <span class="row-label">显示「XX 浏览过」这类痕迹</span>
-          <span class="row-desc">关掉之后首页和详情页不再显示浏览量相关提示</span>
-        </div>
-        <el-switch
-          :model-value="settings.showViewHistoryBadge"
-          @update:model-value="(v: any) => patch({ showViewHistoryBadge: v })"
-        />
-      </div>
-
-      <div class="row">
-        <div class="row-text">
           <span class="row-label">允许被推荐流触达</span>
-          <span class="row-desc"> 关掉之后首页默认落在关注流，推荐流也不再有「换一批」 </span>
+          <span class="row-desc">
+            关掉之后打开首页直接落在关注流，推荐频道被隐藏。
+            你发的内容不会被删，只是不再进入别人的推荐候选集
+          </span>
         </div>
         <el-switch
           :model-value="settings.allowRecommendedFeed"

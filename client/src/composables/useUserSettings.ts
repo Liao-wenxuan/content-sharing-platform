@@ -49,6 +49,11 @@ function applyLocal(next: UserSettings) {
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.density = next.density
     document.documentElement.style.fontSize = `${next.fontScale}%`
+    // 封面占位色：关掉时置成 transparent，让图片到达前是一片空白
+    document.documentElement.style.setProperty(
+      '--cover-placeholder',
+      next.coverBlurPlaceholder ? '' : 'transparent'
+    )
   }
 }
 
@@ -62,14 +67,27 @@ async function load(force = false) {
     applyLocal(remote)
   } catch (e: any) {
     /*
-     * 拉取失败**不抛**，也不把 settings 清空。
+     * **401 不算错误。**
      *
-     * 失败时保留默认值并继续渲染，比整页报错好得多：
-     * 设置页打不开的话用户改不了任何偏好，
-     * 而「网络抖了一下导致设置页白屏」是不能接受的。
-     * 错误信息挂在 loadError 上，由界面顶部显示一条可关闭的提示。
+     * 偏好是登录态资源，而游客也要用主题、密度、内容过滤 ——
+     * 这些对未登录的人同样有意义。所以游客拉到 401 时保留默认值继续走，
+     * 而不是把它当成「读取失败」弹一条红字：那条红字会在每个游客的
+     * 页面上闪一次，而它对用户没有任何可行动的信息。
      */
-    loadError.value = e?.response?.data?.message || '读取设置失败，已使用默认值'
+    const status = e?.response?.status
+    if (status === 401) {
+      settings.value = { ...DEFAULT_SETTINGS }
+      applyLocal(settings.value)
+    } else {
+      /*
+       * 其它失败也**不抛**，也不把 settings 清空。
+       *
+       * 失败时保留默认值并继续渲染，比整页报错好得多：
+       * 设置页打不开的话用户改不了任何偏好，
+       * 而「网络抖了一下导致设置页白屏」是不能接受的。
+       */
+      loadError.value = e?.response?.data?.message || '读取设置失败，已使用默认值'
+    }
   } finally {
     loaded.value = true
   }

@@ -64,22 +64,14 @@ const FONT_OPTIONS = [
       <div class="row">
         <div class="row-text">
           <span class="row-label">封面加载时先显示占位色</span>
-          <span class="row-desc">关掉之后封面区域会留一块空白直到图片到达</span>
+          <span class="row-desc">
+            关掉之后封面区域会留一块空白直到图片到达。
+            图片本身已经做了淡入过渡，关掉只影响**淡入之前**那一段的底色
+          </span>
         </div>
         <el-switch
           :model-value="settings.coverBlurPlaceholder"
           @update:model-value="(v: any) => update('coverBlurPlaceholder', v)"
-        />
-      </div>
-
-      <div class="row">
-        <div class="row-text">
-          <span class="row-label">自动播放图片动画</span>
-          <span class="row-desc">默认关闭。自动播放的动图很容易在滚动时抢注意力</span>
-        </div>
-        <el-switch
-          :model-value="settings.autoplayMedia"
-          @update:model-value="(v: any) => update('autoplayMedia', v)"
         />
       </div>
     </section>
