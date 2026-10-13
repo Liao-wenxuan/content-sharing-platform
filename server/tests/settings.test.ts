@@ -64,7 +64,7 @@ describe('偏好解析：坏数据一律退回默认值', () => {
 
   it('枚举字段非法时退回默认，而不是接受任意值', () => {
     const s = mergeSettings({ themeMode: 'neon', density: 'huge', defaultFeed: 'xxx' })
-    expect(s.themeMode).toBe('system')
+    expect(s.themeMode).toBe(DEFAULT_SETTINGS.themeMode)
     expect(s.density).toBe('normal')
     expect(s.defaultFeed).toBe('recommend')
   })
@@ -137,14 +137,14 @@ describe('GET/PUT /api/settings', () => {
   it('**非法值被服务端拒绝落库**，而不是原样存进去', async () => {
     const res = await request(app).put('/api/settings').set(auth).send({ themeMode: 'neon' })
     expect(res.status).toBe(200)
-    expect(res.body.settings.themeMode).toBe('system')
+    expect(res.body.settings.themeMode).toBe(DEFAULT_SETTINGS.themeMode)
   })
 
   it('偏好互不影响（一个用户的改动不该串到另一个）', async () => {
     const other = await signUp(`s_${stamp()}@t.local`)
     await request(app).put('/api/settings').set(auth).send({ themeMode: 'light' })
     const res = await request(app).get('/api/settings').set(other.auth)
-    expect(res.body.settings.themeMode).toBe('system')
+    expect(res.body.settings.themeMode).toBe(DEFAULT_SETTINGS.themeMode)
   })
 })
 
