@@ -121,10 +121,17 @@ describe('useUserSettings', () => {
     }
   }
 
+  it('⚠️ **默认是 dark，不是 system**', async () => {
+    // index.html 的 <html class="dark"> 先落好，避免首屏浅色闪烁。
+    // 默认跟随系统的话，首次访问会在浅深之间随机跳 ——
+    // 那不是尊重系统，是把首屏配色交给用户还没表达过的偏好
+    expect(DEFAULT_SETTINGS.themeMode).toBe('dark')
+  })
+
   it('默认状态不需要登录也能拿到一份完整偏好', async () => {
     const { prefs } = await freshModule()
     await prefs.load()
-    expect(prefs.settings.value.themeMode).toBe('system')
+    expect(prefs.settings.value.themeMode).toBe(DEFAULT_SETTINGS.themeMode)
     expect(prefs.settings.value.density).toBe('normal')
     expect(Array.isArray(prefs.settings.value.blockedTags)).toBe(true)
   })
@@ -136,7 +143,7 @@ describe('useUserSettings', () => {
     fail()
     await expect(prefs.load()).resolves.toBeTruthy()
     expect(prefs.loadError.value).not.toBe('')
-    expect(prefs.settings.value.themeMode).toBe('system')
+    expect(prefs.settings.value.themeMode).toBe(DEFAULT_SETTINGS.themeMode)
   })
 
   it('load 有缓存：第二次不重复请求', async () => {

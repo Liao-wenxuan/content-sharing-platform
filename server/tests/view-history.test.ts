@@ -30,6 +30,16 @@ let myPostId: number
 /** 别人的笔记，够用来测限长 */
 const otherPosts: number[] = []
 
+/**
+ * 毫秒时间戳 → SQLite 的 DATETIME 字符串（UTC，与 schema 的 DEFAULT 同格式）。
+ *
+ * ⚠️ 必须是 **UTC** 而不是本地时间：`view_history.viewed_at` 里存的是 UTC，
+ * 混进本地时间会让「谁更新」算错，在东八区能差 8 小时。
+ */
+function toSqliteDateTime(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 23).replace('T', ' ')
+}
+
 beforeAll(async () => {
   ;({ app } = createTestApp())
 
@@ -254,11 +264,43 @@ describe('浏览记录与笔记的关系', () => {
       bulkIds.push(Number(info.lastInsertRowid))
     }
 
-    for (const id of bulkIds) {
+    /*
+     * 时间基准：从「现在」往回退 bulkIds.length 毫秒，
+     * 保证回填出来的每个时间戳都早于真实写入时间 ——
+     * 否则剪枝逻辑可能选到一个「未来的」记录，那测的就不是同一条路径了。
+     */
+    const baseTime = Date.now() - bulkIds.length
+
+    /*
+     * ⚠️ 这里**不能靠 `setTimeout(1)` 来制造毫秒间隔**。
+     *
+     * 原来的写法是「每条之间 sleep 1ms，期望它们落在不同毫秒上」。
+     * 但 sleep 的精度取决于事件循环有多空：18 个测试文件串行跑的时候，
+     * 调度器里塞满了别的工作，多次 1ms 的 sleep 完全可能落在同一毫秒里。
+     * 一旦撞在同一毫秒，view_history 里就有并列的 viewed_at，
+     * 「剪掉最旧的」该剪谁变成不确定的 —— 这条断言会**时绿时红**。
+     *
+     * 而且这个 flaky 在单跑这个文件时永远复现不出来（机器闲，sleep 真的隔开了），
+     * 只在全量跑的时候偶发，极难定位。
+     *
+     * 现在的做法：让接口自己写 viewed_at（这样剪枝面对的是真实写入顺序），
+     * 但每写一条就**显式回填**一个严格递增的毫秒值，
+     * 保证下一次写入时看到的上一条一定比自己旧。
+     * 这样既走了真实的接口路径，又让排序确定。
+     */
+    for (const [i, id] of bulkIds.entries()) {
       await view(id)
-      // 毫秒精度：必须真的隔开，否则同一秒的记录排序不确定，
-      // 剪掉的就是随机几条，这条断言会时绿时红
-      await new Promise((r) => setTimeout(r, 1))
+      // 回填成严格递增：第 i 条的 viewed_at 一定比第 i-1 条大
+      //
+      // ⚠️ 格式必须是 SQLite 的 `'%Y-%m-%d %H:%M:%f'`（UTC、无时区后缀），
+      // 和 schema 里的 DEFAULT 完全一致。写成 ISO（带 T 和 Z）的话
+      // `toISO()` 的 `replace(' ', 'T') + 'Z'` 会拼出「2026-10-13TZ」的非法串，
+      // 接口直接 500 —— 而报错信息是「list 是 undefined」，离病因十万八千里。
+      db.prepare('UPDATE view_history SET viewed_at = ? WHERE user_id = ? AND post_id = ?').run(
+        toSqliteDateTime(baseTime + i),
+        meId,
+        id
+      )
     }
 
     const count = db
@@ -270,7 +312,21 @@ describe('浏览记录与笔记的关系', () => {
     // 注意 pageSize 在路由里封顶 50，传 200 只会拿到 50 条 —— 所以只比第一页，
     // 数量本身上面已经用 COUNT 断言过了。
     const expected = bulkIds.slice(-VIEW_HISTORY_LIMIT).reverse()
-    const page1 = await history(meToken, `?pageSize=50&page=1`)
+    const page1 = await history(meToken, '?pageSize=50&page=1')
     expect(page1.body.list.map((p: any) => p.id)).toEqual(expected.slice(0, 50))
+
+    // 上面那条只验了「剩下的按时间倒序」，没验「被剪掉的是最旧的那几条」。
+    // 直接查库比对集合 —— 这一条才是「限长」这个功能的真正不变量
+    const kept = db.prepare('SELECT post_id FROM view_history WHERE user_id = ?').all(meId) as {
+      post_id: number
+    }[]
+    const keptSet = new Set(kept.map((r) => r.post_id))
+    const shouldBeGone = bulkIds.slice(0, bulkIds.length - VIEW_HISTORY_LIMIT)
+    const survivedOld = shouldBeGone.filter((id) => keptSet.has(id))
+
+    expect(
+      survivedOld,
+      `最旧的 ${shouldBeGone.length} 条应该全被剪掉，但有 ${survivedOld.length} 条还在库里`
+    ).toEqual([])
   })
 })

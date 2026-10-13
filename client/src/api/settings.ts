@@ -37,7 +37,15 @@ export const DEFAULT_SETTINGS: UserSettings = {
   coverBlurPlaceholder: true,
   autoplayMedia: false,
 
-  themeMode: 'system',
+  /*
+   * 默认深色，不是 'system'。
+   *
+   * index.html 的 <html class="dark"> 已经先落好了，避免首屏浅色闪烁；
+   * 「跟随系统」是用户主动去选的选项。反过来做的话首次访问会在
+   * 浅色和深色之间随机跳 —— 那不是尊重系统，是把首屏配色交给一个
+   * 用户还没表达过的偏好。
+   */
+  themeMode: 'dark',
   density: 'normal',
   fontScale: 100,
 
