@@ -335,6 +335,42 @@ console.log('\n[5] 压缩后的图能真的发出去')
   check('笔记发布成功', !!latest, latest?.id)
   check('三张图都在', (latest?.imageUrls?.length ?? 0) === 3, String(latest?.imageUrls?.length))
 
+  // 列表缩略图必须在**上传那一刻**就带上 —— 服务端没有 canvas，
+  // 过了这一刻就再也补不出来了（只有回填脚本能，而它是一次性的）
+  check(
+    '缩略图数组和主图等长（服务端兜底填齐）',
+    (latest?.imageThumbs?.length ?? -1) === (latest?.imageUrls?.length ?? 0),
+    `${latest?.imageThumbs?.length} vs ${latest?.imageUrls?.length}`
+  )
+
+  // 缩略图与主图必须是**不同**的文件 —— 两者都合法、都 200，
+  // 写错的话症状是「首页每张卡片都显示 2000px 的图」，没有任何报错。
+  //
+  // ⚠️ 不能靠文件名判断：服务端按内容魔数重命名（时间戳+随机 hex），
+  // originalname 整个被丢弃，所以 URL 里永远不会出现 _thumb 这种标记。
+  // 唯一可靠的判据是「指向不同文件」+「缩略图明显更小」。
+  const thumbUrls = latest?.imageThumbs ?? []
+  const fullUrls = latest?.imageUrls ?? []
+  const distinct = thumbUrls.filter((t, i) => t !== fullUrls[i]).length
+  check('三张大图都生成了独立缩略图', distinct === 3, `不同 ${distinct}/3`)
+
+  if (fullUrls.length) {
+    let checked = 0
+    for (let i = 0; i < fullUrls.length; i++) {
+      const thumbFile = path.join(ROOT, 'server', thumbUrls[i].replace(/^\//, ''))
+      const fullFile = path.join(ROOT, 'server', fullUrls[i].replace(/^\//, ''))
+      if (!existsSync(thumbFile) || !existsSync(fullFile)) continue
+      const thumbKb = Math.round(statSync(thumbFile).size / 1024)
+      const fullKb = Math.round(statSync(fullFile).size / 1024)
+      if (thumbKb * 4 < fullKb) checked++
+    }
+    check(
+      '落盘的缩略图至少小 4 倍（列表每列只有 260px）',
+      checked === fullUrls.length,
+      `${checked}/${fullUrls.length} 张达标`
+    )
+  }
+
   // 落盘的文件确实比原始小 —— 这是「压缩真的发生了」的唯一硬证据，
   // 页面上那句「-92%」可以随便编
   if (latest?.imageUrls?.length) {
