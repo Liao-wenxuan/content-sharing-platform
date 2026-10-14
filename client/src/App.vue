@@ -15,6 +15,10 @@
  */
 import { computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+// Element Plus 的默认语言包是英文。按需引入模式下没有 app.use(ElementPlus, { locale })，
+// 所以组件内部的文案会直接用默认的 en —— 中文站点上 el-select 会显示 "No data"、
+// el-upload 会显示 "Click to upload"。归因时 en.mjs 实打实进了首屏 chunk。
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import SideNav from '@/components/SideNav.vue'
 import TopBar from '@/components/TopBar.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
@@ -62,27 +66,35 @@ watch(
 </script>
 
 <template>
-  <!-- ===== 独立全屏页（登录） ===== -->
-  <div v-if="isAuthPage" class="standalone">
-    <ErrorBoundary>
-      <router-view />
-    </ErrorBoundary>
-  </div>
-
-  <!-- ===== 桌面三栏 ===== -->
-  <div v-else class="shell">
-    <SideNav />
-
-    <div class="shell-body">
-      <TopBar />
-
-      <main class="content">
-        <ErrorBoundary>
-          <router-view />
-        </ErrorBoundary>
-      </main>
+  <!--
+    el-config-provider 必须包住**所有**页面，而不是只包设置页。
+    它是 provide/inject 注入：登录页的 el-input、发布页的 el-upload、
+    任何一处的 el-select 空状态文案都从这里取语言包。
+    放在顶层还顺带避免了「某些页面忘了包」的漏网。
+  -->
+  <el-config-provider :locale="zhCn">
+    <!-- ===== 独立全屏页（登录） ===== -->
+    <div v-if="isAuthPage" class="standalone">
+      <ErrorBoundary>
+        <router-view />
+      </ErrorBoundary>
     </div>
-  </div>
+
+    <!-- ===== 桌面三栏 ===== -->
+    <div v-else class="shell">
+      <SideNav />
+
+      <div class="shell-body">
+        <TopBar />
+
+        <main class="content">
+          <ErrorBoundary>
+            <router-view />
+          </ErrorBoundary>
+        </main>
+      </div>
+    </div>
+  </el-config-provider>
 </template>
 
 <style scoped>
