@@ -29,6 +29,7 @@ import {
   UPLOAD_TIMEOUT_MS,
   IMAGE_MAX_EDGE,
   IMAGE_QUALITY,
+  IMAGE_THUMB_MAX_EDGE,
   DEFAULT_API_BASE
 } from '@/constants'
 import { compressImage, compressSeries } from '@/utils/imageCompress'
@@ -52,6 +53,14 @@ interface PendingImage {
   file: File
   previewUrl: string // 本地预览（URL.createObjectURL）
   uploadedUrl: string | null // 上传成功后服务器返回的 URL
+  /**
+   * 列表缩略图的本地 Blob。和主图在**同一次请求**里一起发出去。
+   * null = 这张图生成不出缩略图（GIF / SVG，或原图本来就够小），
+   * 此时只传主图，服务端会自动拿原图当缩略图。
+   */
+  thumbBlob: Blob | null
+  /** 缩略图上传后的 URL。null = 没有缩略图（服务端会拿原图兜底） */
+  thumbUrl: string | null
   status: 'pending' | 'compressing' | 'uploading' | 'done' | 'error'
   progress: number // 0-100 上传进度
   errorMsg?: string // 上传失败时的提示
@@ -152,6 +161,8 @@ async function addFiles(files: File[]) {
       file,
       previewUrl: URL.createObjectURL(file),
       uploadedUrl: null,
+      thumbBlob: null,
+      thumbUrl: null,
       status: 'pending',
       progress: 0,
       originalSize: 0
@@ -164,6 +175,20 @@ async function addFiles(files: File[]) {
   // 一次选 9 张图时，每张解码成 RGBA 约 48MB，
   // 并发跑就是 432MB，移动端会在解码阶段直接崩（表现为「选完什么都没发生」）。
   await compressSeries(images.value.slice(), (img) => prepareAndUpload(img))
+}
+
+/**
+ * 给缩略图起个名字。
+ *
+ * 名字本身不参与识别（服务端按**内容魔数**定扩展名），但还是给个带
+ * thumb 标记的名字：出问题时（比如去 uploads 目录里翻文件），
+ * `1234-abcd_thumb.webp` 一眼就知道是缩略图，
+ * 而 `1234-abcd.webp` 只能靠猜。
+ */
+function thumbName(original: string): string {
+  const dot = original.lastIndexOf('.')
+  const stem = dot > 0 ? original.slice(0, dot) : original
+  return `${stem}_thumb.webp`
 }
 
 /**
@@ -180,7 +205,8 @@ async function prepareAndUpload(img: PendingImage) {
   try {
     const result = await compressImage(img.file, {
       maxEdge: IMAGE_MAX_EDGE,
-      quality: IMAGE_QUALITY
+      quality: IMAGE_QUALITY,
+      thumbMaxEdge: IMAGE_THUMB_MAX_EDGE
     })
     if (result.strategy === 'resized' || result.strategy === 'reencode') {
       img.originalSize = result.originalSize
@@ -191,9 +217,12 @@ async function prepareAndUpload(img: PendingImage) {
       img.previewUrl = URL.createObjectURL(result.blob)
       URL.revokeObjectURL(oldUrl)
     }
+    // 缩略图和主图在同一次请求里发出去，不额外发第二次 —— 每多一个 HTTP 请求
+    // 就多一次往返，而弱网下往返本身是要计时的
+    img.thumbBlob = result.thumb
   } catch {
     // compressImage 内部已经保证不抛，这里只是最后一道保险：
-    // 压缩失败绝不能阻断发布
+    // 压缩失败绝不能阻断发布。thumbBlob 留 null，服务端会拿原图当缩略图。
   }
 
   await uploadImage(img)
@@ -205,6 +234,9 @@ async function uploadImage(img: PendingImage) {
   img.errorMsg = undefined
   const formData = new FormData()
   formData.append('files', img.file)
+  // 缩略图紧跟主图，同一个请求发出。顺序即约定：
+  // 服务端按 files[0] / files[1] 取主图和缩略图，不做任何配对推断。
+  if (img.thumbBlob) formData.append('files', img.thumbBlob, thumbName(img.file.name))
 
   // 用 XHR 直接上传，绕开 axios 1.x 的 FormData/Content-Type 处理 bug
   // （axios 1.x 在 instance 默认 Content-Type 是 'application/json' 时，
@@ -235,6 +267,10 @@ async function uploadImage(img: PendingImage) {
           const uploaded = data.files?.[0]
           if (uploaded) {
             img.uploadedUrl = uploaded.url
+            // files[1] 只在确实发了缩略图时才是缩略图。
+            // 用「有没有发」来判断而不是「服务器返回几项」——
+            // 万一服务端将来调整了返回结构，这里不会静默拿到别人的图。
+            img.thumbUrl = img.thumbBlob ? (data.files?.[1]?.url ?? null) : null
             img.progress = 100
             img.status = 'done'
           } else {
@@ -335,11 +371,19 @@ async function handleSubmit() {
 
   try {
     // 图片在选完时已经各自上传完毕，直接拿 URL 创建 post
-    const imageUrls = images.value.map((i) => i.uploadedUrl).filter((u): u is string => !!u)
+    const uploaded = images.value.filter(
+      (i): i is PendingImage & { uploadedUrl: string } => !!i.uploadedUrl
+    )
+    const imageUrls = uploaded.map((i) => i.uploadedUrl)
+    // 缩略图可能缺（GIF / SVG / 原图本来就够小），缺的**留 null 占位**而不是过滤掉 ——
+    // 过滤会让后面所有缩略图前移一位，配到别人的主图上。
+    // 服务端 parseThumbs 也做同样的兜底，两边都不靠「数据一定整齐」。
+    const imageThumbs = uploaded.map((i) => i.thumbUrl ?? null)
 
     await postsApi.createPost({
       content: text,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+      imageThumbs: imageThumbs.length > 0 ? imageThumbs : undefined,
       topicTag: topicTag.value.trim() || undefined
     })
 
