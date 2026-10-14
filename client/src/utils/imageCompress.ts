@@ -292,7 +292,10 @@ export async function compressImage(
     }
 
     const type = outputTypeFor(file.type)
-    // PNG / WebP 的 quality 参数无效，别给一个看起来在调优其实没用的值
+    // PNG 是无损格式，quality 对它无效，传了也是白传。
+    // outputTypeFor 现在只会返回 jpeg / webp（都支持有损压缩），
+    // 但浏览器不认识目标类型时 canvas.toBlob 会回落到 PNG，
+    // 这个分支就是为了那一次回落保留的 —— 传 undefined 而不是假 quality。
     const effectiveQuality = type === 'image/png' ? undefined : quality
 
     for (const factor of RETRY_LADDER) {
