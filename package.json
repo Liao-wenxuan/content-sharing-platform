@@ -32,7 +32,8 @@
     "test:motion": "node scripts/motion-check.mjs",
     "perf": "node scripts/perf-smoke.mjs",
     "perf:bundle": "node scripts/analyze-bundle.mjs",
-    "audit:images": "node scripts/image-audit.mjs"
+    "audit:images": "node scripts/image-audit.mjs",
+    "seed:thumbs": "node scripts/gen-thumbs.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
