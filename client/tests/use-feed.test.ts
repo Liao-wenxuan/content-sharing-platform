@@ -41,6 +41,7 @@ function feedItem(id: number, reason: string | null = null): FeedItem {
       userId: 1,
       content: `笔记 ${id}`,
       imageUrls: [],
+      imageThumbs: [],
       topicTag: '美食',
       createdAt: '2026-01-01T00:00:00.000Z',
       likeCount: 0,

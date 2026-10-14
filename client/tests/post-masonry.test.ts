@@ -32,6 +32,7 @@ function mkPost(id: number, content: string, topicTag: string | null = '美食')
     userId: 1,
     content,
     imageUrls: [],
+    imageThumbs: [],
     topicTag,
     createdAt: '2026-01-01T00:00:00.000Z',
     likeCount: 3,
@@ -101,6 +102,44 @@ describe('PostMasonry 渲染', () => {
  * 搜索页一个都不传。所以「不传时必须什么都没有」和「传了才对」同样重要：
  * 只测传了的情况，会漏掉「搜索结果页莫名其妙冒出个 × 按钮」这种回归。
  */
+describe('PostMasonry 列表缩略图', () => {
+  function postWith(full: string[], thumbs: string[]): Post {
+    return {
+      ...mkPost(1, '有图的笔记'),
+      imageUrls: full,
+      imageThumbs: thumbs
+    }
+  }
+
+  function coverSrcs(posts: Post[]): string[] {
+    const wrapper = mountMasonry(posts)
+    return wrapper.findAll('img.sg-img').map((el) => el.attributes('src') ?? '')
+  }
+
+  it('卡片用的是缩略图，不是 2000px 的主图', () => {
+    // 瀑布流每列约 260px，下 2000px 的图等于 95% 的像素白下载
+    const [src] = coverSrcs([postWith(['/u/cover.jpg'], ['/t/cover.webp'])])
+    expect(src).toBe('/t/cover.webp')
+  })
+
+  it('服务端没给缩略图时退回主图，而不是渲染出空 src', () => {
+    // 老笔记整列 image_thumbs 是 NULL；前端这一层兜底是最后一道，
+    // 宁可慢一点也不能裂图
+    const [src] = coverSrcs([postWith(['/u/cover.jpg'], [])])
+    expect(src).toBe('/u/cover.jpg')
+  })
+
+  it('有图笔记的封面仍然是 loading=lazy（列表滚下去才加载）', () => {
+    const wrapper = mountMasonry([postWith(['/u/cover.jpg'], ['/t/cover.webp'])])
+    expect(wrapper.find('img.sg-img').attributes('loading')).toBe('lazy')
+  })
+
+  it('封面 alt 仍然描述作者与内容，不能因为换图源就丢掉', () => {
+    const wrapper = mountMasonry([postWith(['/u/cover.jpg'], ['/t/cover.webp'])])
+    expect(wrapper.find('img.sg-img').attributes('alt')).toBe('拿铁不加糖 的笔记封面')
+  })
+})
+
 describe('PostMasonry 推荐流增强', () => {
   it('不传 reasons / dismissable 时保持干净', () => {
     const w = mountMasonry([mkPost(1, '普通笔记')])

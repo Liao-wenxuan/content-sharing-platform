@@ -26,6 +26,7 @@ function mkPost(id: number, content = '一条笔记', overrides: Partial<Post> =
     userId: 1,
     content,
     imageUrls: [],
+    imageThumbs: [],
     topicTag: '美食',
     createdAt: '2026-01-01T00:00:00.000Z',
     likeCount: 0,

@@ -110,6 +110,7 @@ function mkPost(id: number, topicTag = '美食'): Post {
     userId: 1,
     content: `笔记 ${id}`,
     imageUrls: [],
+    imageThumbs: [],
     topicTag,
     createdAt: '2026-01-01T00:00:00.000Z',
     likeCount: 0,

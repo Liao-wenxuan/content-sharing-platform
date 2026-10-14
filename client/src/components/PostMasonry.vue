@@ -142,6 +142,21 @@ function onAuthorClick(post: Post) {
   router.push(`/profile/${authorId}`)
 }
 
+/**
+ * 卡片封面用缩略图。
+ *
+ * 瀑布流每列只有约 260px，而主图长边 2000 —— 限速实测里首屏 94% 的流量
+ * 是图片，而其中绝大部分像素是下到浏览器里又显示不出来的。
+ *
+ * `imageThumbs` 由服务端 parseThumbs 兜底填齐（缺的用原图补），
+ * 所以这里**不需要**再写 `?? imageUrls[0]`：真到了没有缩略图的数据，
+ * 兜底也已经在服务端做过了，再在前端补一层只会掩盖问题。
+ * 但仍留一个 `||`，因为它是零成本的，而断图不是。
+ */
+function coverSrc(post: Post): string {
+  return post.imageThumbs?.[0] || post.imageUrls[0]
+}
+
 /** 话题标签是否命中当前搜索词 */
 function tagMatched(post: Post): boolean {
   const kw = props.highlight?.trim().toLowerCase()
@@ -202,7 +217,7 @@ function markImageLoaded(postId: number) {
             v-if="item.post.imageUrls?.length"
             class="sg-img"
             :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
-            :src="item.post.imageUrls[0]"
+            :src="coverSrc(item.post)"
             :alt="`${item.post.author?.nickname} 的笔记封面`"
             loading="lazy"
             @load="markImageLoaded(item.post.id)"

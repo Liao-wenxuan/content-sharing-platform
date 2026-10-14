@@ -42,6 +42,7 @@ function mkItem(id: number, content: string): ViewHistoryItem {
     userId: 99,
     content,
     imageUrls: [],
+    imageThumbs: [],
     topicTag: '家居',
     createdAt: '2026-01-01T00:00:00.000Z',
     viewedAt: `2026-01-0${id}T00:00:00.000Z`,
