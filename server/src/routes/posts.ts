@@ -3,7 +3,13 @@ import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
 import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
-import { POST_CONTENT_MAX_LENGTH, CATEGORY_LABEL, isContentCategory } from '../constants'
+import {
+  POST_CONTENT_MAX_LENGTH,
+  CATEGORY_LABEL,
+  isContentCategory,
+  UPLOAD_MAX_FILES
+} from '../constants'
+import { thumbsFromRow, parseThumbs } from '../lib/postImages'
 
 const router = Router()
 
@@ -14,7 +20,7 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       return res.status(401).json({ message: '未登录' })
     }
 
-    const { content, imageUrls, topicTag } = req.body
+    const { content, imageUrls, imageThumbs, topicTag } = req.body
 
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return res.status(400).json({ message: '内容不能为空' })
@@ -23,26 +29,42 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       return res.status(400).json({ message: `内容不能超过 ${POST_CONTENT_MAX_LENGTH} 字` })
     }
 
+    // 图片数量必须服务端也卡一道。
+    // 客户端的 9 张上限只是 UI 提示：直接打接口传 500 个 URL 一样能过，
+    // 而这些 URL 会出现在每一��列表查询里 —— 一条笔记能把整个首页的
+    // SQL 结果集拖垮。客户端校验是体验，服务端校验才是约束。
+    if (Array.isArray(imageUrls) && imageUrls.length > UPLOAD_MAX_FILES) {
+      return res.status(400).json({ message: `图片最多 ${UPLOAD_MAX_FILES} 张` })
+    }
+
     const imageUrlsJson =
       imageUrls && Array.isArray(imageUrls) && imageUrls.length > 0
         ? JSON.stringify(imageUrls)
         : null
 
+    // 缩略图是**可选**的：GIF / SVG 走 passthrough 时压根生成不出来。
+    // 所以这里不做「必须一一对应」的校验 —— 宁可少一张小图，
+    // 也不要因为对不上而把整篇笔记拒掉。前端一律 `thumbs[i] ?? urls[i]` 兜底。
+    const imageThumbsJson =
+      imageThumbs && Array.isArray(imageThumbs) && imageThumbs.length > 0
+        ? JSON.stringify(imageThumbs)
+        : null
+
     const result = db
       .prepare(
         `
-      INSERT INTO posts (user_id, content, image_urls, topic_tag)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO posts (user_id, content, image_urls, image_thumbs, topic_tag)
+      VALUES (?, ?, ?, ?, ?)
     `
       )
-      .run(userId, content.trim(), imageUrlsJson, topicTag || null)
+      .run(userId, content.trim(), imageUrlsJson, imageThumbsJson, topicTag || null)
 
     const postId = result.lastInsertRowid as number
 
     const newPost = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, topic_tag, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, created_at
       FROM posts WHERE id = ?
     `
       )
@@ -53,6 +75,7 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       userId: newPost.user_id,
       content: newPost.content,
       imageUrls: newPost.image_urls ? JSON.parse(newPost.image_urls) : [],
+      imageThumbs: thumbsFromRow(newPost),
       topicTag: newPost.topic_tag,
       createdAt: toISO(newPost.created_at)
     })
@@ -125,7 +148,7 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -144,6 +167,7 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
       userId: row.user_id,
       content: row.content,
       imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
+      imageThumbs: thumbsFromRow(row),
       topicTag: row.topic_tag,
       createdAt: toISO(row.created_at),
       likeCount: row.like_count,
@@ -220,7 +244,7 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -240,6 +264,7 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
         userId: row.user_id,
         content: row.content,
         imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
+        imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
         createdAt: toISO(row.created_at),
         likeCount: row.like_count,
@@ -296,7 +321,7 @@ router.get('/search/suggest', optionalAuth, (req: Request, res: Response) => {
 
     const posts = db
       .prepare(
-        `SELECT p.id, p.content, p.image_urls
+        `SELECT p.id, p.content, p.image_urls, p.image_thumbs
          FROM posts p
          WHERE p.content LIKE ? ESCAPE '\\'
          ORDER BY (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) DESC, p.id DESC
@@ -334,7 +359,9 @@ router.get('/search/suggest', optionalAuth, (req: Request, res: Response) => {
         id: row.id,
         // 建议框只显示一行，完整正文在结果页看
         content: row.content.length > 40 ? `${row.content.slice(0, 40)}…` : row.content,
-        cover: row.image_urls ? (JSON.parse(row.image_urls)[0] ?? null) : null
+        // 建议框里是一张 32px 的小方图，用主图等于白下 2000px。
+        // parseThumbs 已经用主图兜底，老数据拿不到缩略图时返回主图
+        cover: parseThumbs(row.image_thumbs, row.image_urls)[0] ?? null
       })),
       topics,
       users: users.map((u) => ({ id: u.id, nickname: u.nickname, avatar: u.avatar }))
@@ -360,7 +387,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -389,6 +416,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       userId: row.user_id,
       content: row.content,
       imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
+      imageThumbs: thumbsFromRow(row),
       topicTag: row.topic_tag,
       createdAt: toISO(row.created_at),
       likeCount: row.like_count,

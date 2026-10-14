@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { createTestApp, teardownTestDb } from './app'
+import { UPLOAD_MAX_FILES } from '../src/constants'
 import type { Express } from 'express'
 
 let app: Express
@@ -52,6 +53,45 @@ describe('POST /api/posts', () => {
       topicTag: 'test',
       imageUrls: []
     })
+  })
+
+  it('图片超过上限返回 400（客户端的 9 张只是 UI 提示）', async () => {
+    // 客户端的限制可以被完全绕过 —— 直接打接口传 500 个 URL 一样能过，
+    // 而这些 URL 会出现在**每一条**列表查询的结果里。
+    const many = Array.from({ length: UPLOAD_MAX_FILES + 1 }, (_, i) => `/uploads/x${i}.jpg`)
+    const res = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ content: '图片超量', imageUrls: many })
+
+    expect(res.status).toBe(400)
+    expect(res.body.message).toMatch(new RegExp(`${UPLOAD_MAX_FILES} 张`))
+  })
+
+  it('正好等于上限能发出去（别把边界也一起拦了）', async () => {
+    const exactly = Array.from({ length: UPLOAD_MAX_FILES }, (_, i) => `/uploads/ok${i}.jpg`)
+    const res = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ content: '图片刚好满', imageUrls: exactly })
+
+    expect(res.status).toBe(201)
+    expect(res.body.imageUrls).toHaveLength(UPLOAD_MAX_FILES)
+  })
+
+  it('创建时带缩略图会一起存下来', async () => {
+    const res = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        content: '带缩略图',
+        imageUrls: ['/uploads/f.jpg', '/uploads/g.jpg'],
+        imageThumbs: ['/uploads/f_t.jpg', null]
+      })
+
+    expect(res.status).toBe(201)
+    // 第二张没缩略图 → 服务端用主图兜底，返回的数组仍然等长且每项非空
+    expect(res.body.imageThumbs).toEqual(['/uploads/f_t.jpg', '/uploads/g.jpg'])
   })
 
   it('内容为空返回 400', async () => {
