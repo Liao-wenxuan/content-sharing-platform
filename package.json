@@ -29,7 +29,10 @@
     "test:image": "node scripts/image-smoke.mjs",
     "test:reveal": "node scripts/reveal-smoke.mjs",
     "test:settings": "node scripts/settings-smoke.mjs",
-    "test:motion": "node scripts/motion-check.mjs"
+    "test:motion": "node scripts/motion-check.mjs",
+    "perf": "node scripts/perf-smoke.mjs",
+    "perf:bundle": "node scripts/analyze-bundle.mjs",
+    "audit:images": "node scripts/image-audit.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
