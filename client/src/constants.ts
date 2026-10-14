@@ -31,5 +31,17 @@ export const IMAGE_MAX_EDGE = 2000
  */
 export const IMAGE_QUALITY = 0.82
 
+/**
+ * 列表缩略图的长边。
+ *
+ * 为什么不直接用主图：瀑布流每列约 260px 宽，限速实测里首屏却在拉
+ * 2559px 的原图，**图片占了首屏流量的 94%**（scripts/perf-smoke.mjs）。
+ * 2000px 的图给 260px 的格子用，等于 95% 的像素是白下载的。
+ *
+ * 定 480 而不是 260：HiDPI 屏的 CSS 像素到设备像素是 2 倍，
+ * 480 能让 2x 屏上的卡片仍然清晰。再大只是白占流量。
+ */
+export const IMAGE_THUMB_MAX_EDGE = 480
+
 // API base（开发默认指向本地 Express + SQLite；生产会通过 VITE_API_BASE 覆盖）
 export const DEFAULT_API_BASE = 'http://localhost:3000/api'

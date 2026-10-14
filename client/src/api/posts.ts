@@ -5,6 +5,12 @@ import request from './request'
 export interface CreatePostPayload {
   content: string
   imageUrls?: string[]
+  /**
+   * 与 imageUrls **一一对应**的列表缩略图。
+   * 没有缩略图的那一位传 null 占位，不能过滤掉 —— 过滤会让后面的缩略图
+   * 前移一位，配到别人的主图上（服务端 parseThumbs 会再做一次同样的兜底）。
+   */
+  imageThumbs?: (string | null)[]
   topicTag?: string
 }
 
@@ -19,6 +25,13 @@ export interface Post {
   userId: number
   content: string
   imageUrls: string[]
+  /**
+   * 列表缩略图。**服务端已经用原图兜底填齐**，所以它和 imageUrls 等长，
+   * 且每一项都非空 —— 直接 `post.imageThumbs[0]` 就能拿去当 src。
+   *
+   * 详情页用 imageUrls（要看清楚的原图），列表页用 imageThumbs。
+   */
+  imageThumbs: string[]
   topicTag: string | null
   createdAt: string
   likeCount: number

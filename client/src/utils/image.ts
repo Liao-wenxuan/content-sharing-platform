@@ -28,6 +28,15 @@ export type ExifOrientation = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
 /** 默认输出长边。超过就等比缩小 */
 export const DEFAULT_MAX_EDGE = 2000
 
+/**
+ * 列表缩略图的长边上限。
+ *
+ * 瀑布流每列约 260px，而主图长边 2000 —— 差 7.7 倍。
+ * 限速实测里首屏 94% 的流量是图片，缩略图就是为了把这部分拿回来。
+ * 480 = 260 × 2，给 HiDPI 屏留一倍余量。
+ */
+export const DEFAULT_THUMB_EDGE = 480
+
 /** 编码质量。0.82 是肉眼几乎无损、体积却能砍到 1/5 附近的经验值 */
 export const DEFAULT_QUALITY = 0.82
 

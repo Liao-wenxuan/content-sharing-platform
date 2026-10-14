@@ -28,6 +28,7 @@
 import {
   DEFAULT_MAX_EDGE,
   DEFAULT_QUALITY,
+  DEFAULT_THUMB_EDGE,
   PASSTHROUGH_MAX_BYTES,
   canCompress,
   findExifSegment,
@@ -59,11 +60,26 @@ export interface CompressionResult {
   height: number
   orientation: ExifOrientation
   strategy: CompressionStrategy
+  /**
+   * 列表缩略图，**可能为 null**。
+   *
+   * 为 null 的两种情况：
+   * - 原图本来就比缩略图上限还小（存两份纯浪费）
+   * - 这张图走的是 passthrough（GIF / SVG 等不能过 canvas 的）
+   *
+   * 调用方必须能接受 null 并退回用主图 —— 拿不到缩略图只是慢一点，
+   * 绝不能是「图裂了」。
+   */
+  thumb: Blob | null
+  thumbWidth: number
+  thumbHeight: number
 }
 
 export interface CompressOptions {
   maxEdge?: number
   quality?: number
+  /** 缩略图长边上限。不传就不生成缩略图 */
+  thumbMaxEdge?: number
 }
 
 /** 降级阶梯：每一档的边长系数 */
@@ -259,6 +275,7 @@ export async function compressImage(
 ): Promise<CompressionResult> {
   const maxEdge = options.maxEdge ?? DEFAULT_MAX_EDGE
   const quality = options.quality ?? DEFAULT_QUALITY
+  const thumbMaxEdge = options.thumbMaxEdge ?? DEFAULT_THUMB_EDGE
   const originalSize = file.size
 
   const passthrough = (orientation: ExifOrientation = 1): CompressionResult => ({
@@ -269,7 +286,12 @@ export async function compressImage(
     width: 0,
     height: 0,
     orientation,
-    strategy: 'passthrough'
+    strategy: 'passthrough',
+    // passthrough 的图不能过 canvas，拿不到缩略图。
+    // 这里返回 null 而不是硬凑 —— 上传端会退回用原图当缩略图。
+    thumb: null,
+    thumbWidth: 0,
+    thumbHeight: 0
   })
 
   if (!canCompress(file.type)) return passthrough()
@@ -305,6 +327,21 @@ export async function compressImage(
 
       // 压出来了，但**变大了** → 说明重编码对这张图没有收益
       if (blob && (plan.needsResize || blob.size < originalSize)) {
+        // 缩略图复用**同一个 decoded**，不再解一遍。
+        // 12MP 的图解码成 RGBA 约 48MB，为了一张 480px 的小图再解一次
+        // 是纯浪费 —— 这也是这里必须嵌在循环里而不是压缩完再单独跑一遍的原因。
+        const thumbPlan = planOutputSize(
+          decoded.width,
+          decoded.height,
+          decoded.orientation,
+          thumbMaxEdge
+        )
+        // 原图本来就够小 → 存两份只是浪费磁盘和上传流量
+        const needThumb = thumbPlan.needsResize && thumbPlan.width > 0 && thumbPlan.height > 0
+        const thumb = needThumb
+          ? await encodeToCanvas(decoded, thumbPlan.width, thumbPlan.height, type, effectiveQuality)
+          : null
+
         return {
           blob,
           type,
@@ -313,7 +350,10 @@ export async function compressImage(
           width: w,
           height: h,
           orientation: decoded.orientation,
-          strategy: plan.needsResize || factor < 1 ? 'resized' : 'reencode'
+          strategy: plan.needsResize || factor < 1 ? 'resized' : 'reencode',
+          thumb,
+          thumbWidth: needThumb ? thumbPlan.width : 0,
+          thumbHeight: needThumb ? thumbPlan.height : 0
         }
       }
     }
