@@ -225,9 +225,9 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，419 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，421 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，397 条）
+cd server && npm test        # 后端单测（vitest + supertest，406 条）
 
 npm run test:e2e             # Playwright 桌面端全流程回归（登录态）
 npm run test:search          # 搜索功能 + 注入防护
@@ -243,10 +243,18 @@ npm run test:market         # 市集：发布 → 加购 → 下架 → 下单 �
 npm run test:feed           # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（29 断言）
 npm run test:reveal         # 滚动入场：逐帧证明动效在推进 / reduced-motion 真的停 / 没有 IntersectionObserver 不白屏（14 断言）
 npm run test:settings       # 设置页：逐个点 13 项验证零静默 / 11 个面板有内容 / 存储显示真实统计值 / 偏好真落库（14 断言）
-npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 落盘文件比原图小（15 断言）
+npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 照片型 PNG 落盘是 WebP（17 断言）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
 npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
 ```
+
+> **性能与体积**：这三个脚本不是回归测试，是量数字的工具（都能复现下面的实测值）
+>
+> ```bash
+> npm run perf               # 生产构建 + Slow 4G 限速首屏实测：FCP/LCP/CLS + 首屏流量构成
+> npm run perf:bundle        # entry chunk 字节归因：vue / element-plus / axios / 业务代码各占多少
+> npm run audit:images       # uploads 目录体检：每张图的像素尺寸与「字节/像素」
+> ```
 
 > 前端单测不只测纯函数：WebSocket 状态机（握手语义 / 退避重连 / 4401 停止重试 / 心跳保活）、
 > 聊天乐观发送（tempId → 真实 id 的乱序 ack 收敛）、顶栏未读红点与建议下拉键盘导航
@@ -387,7 +395,50 @@ content-sharing-platform/
 - **防御性校验**：所有限制（content ≤ 500 字、图 ≤ 10MB）双端校验，client 立即反馈 + server 拒绝非法请求
 - **Vue 3 reactivity 坑**：uploaded image 对象用 `reactive()` 显式包一层，绕开 `ref([]).push(plain)` 不会自动 proxy 子项的陷阱（详见 [docs/architecture.md](docs/architecture.md#踩过的坑)）
 - **后端 hardening**：dotenv + 启动期 env 校验、express-rate-limit（auth 5/min，写接口 20/min）、统一错误中间件（multer / JSON parse / 404）、password 列名迁移到 password_hash
-- **可测试架构**：db 模块用 Proxy 模式让测试注入 `:memory:` 实例，schema 抽成函数生产测试共用，路由也抽成 `mountApiRouters()` 让测试挂同一份；vitest 覆盖 auth / posts / likes / comments / follows / favorites / notifications / topics / suggest / users / uploads / conversations / ws / market / **feed** **17 个文件 353 个 case**
+- **可测试架构**：db 模块用 Proxy 模式让测试注入 `:memory:` 实例，schema 抽成函数生产测试共用，路由也抽成 `mountApiRouters()` 让测试挂同一份；vitest 覆盖 auth / posts / likes / comments / follows / favorites / notifications / topics / suggest / users / uploads / conversations / ws / market / **feed** / **settings** **20 个文件 406 个 case**
+
+## 📊 首屏性能：先量，再决定动不动
+
+这个项目一开始没有性能章节，因为**不知道慢在哪**。写了 `npm run perf`（生产构建 + Slow 4G 限速 + Playwright 采样）之后才发现，之前的直觉全是错的。
+
+### 实测（1440×900，Slow 4G：1.6Mbps / 150ms RTT）
+
+| 指标                 | 优化前    | 说明                                    |
+| -------------------- | --------- | --------------------------------------- |
+| FCP                  | 1196 ms   | 文本可见                                |
+| LCP                  | 6280 ms   | 首屏图片是最大元素                      |
+| **视口图片全部就绪** | **14.7s** | **这才是用户真正的等待**                |
+| CLS                  | 0.0000    | ✅ 固定 `aspect-ratio` 生效，零布局偏移 |
+
+**首屏流量构成：JS 167 KB（6%）／图片 2559 KB（94%）** —— 单张最大的一张 1676 KB。
+
+也就是说：**瓶颈是图片，不是 JavaScript**。花时间优化 entry chunk 的收益上限只有 6%。
+
+### 这轮实际改了什么
+
+| 改动                        | 依据                                                                                                                         | 效果                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **照片型 PNG 转 WebP**      | `outputTypeFor` 曾把 PNG 原样输出，而 PNG 的 `quality` 参数无效 —— 压缩链路跑完了，体积没动。`uploads` 里 PNG 封面平均 1.5MB | e2e 实测 6452KB → 1326KB（**-79%**，纯噪点图是最坏情况）        |
+| **服务端按魔数定类型**      | 扩展名原本取自 `file.originalname`，而请求头的 `Content-Type` 完全由客户端控制                                               | 修掉「`.png` 扩展名装着 WebP 内容」和一处**可利用的存储型 XSS** |
+| **vendor 分包**             | `manualChunks` 只切 vue / pinia / axios，**刻意不切 element-plus**（手动切会让它的按需引入失效）                             | entry 409.8KB → 246.1KB（**-42%**），业务改动不再让框架重下     |
+| **Element Plus 中文语言包** | 按需引入下没有 `app.use(ElementPlus, { locale })`，`en.mjs` 实打实进了产物，中文站点上 `el-select` 会显示 "No data"          | `en.mjs` 从产物中消失                                           |
+
+### 刻意没做的部分（以及为什么）
+
+- **换掉 axios（`entry` 里占 115KB 未压缩，是最大的一块可减项）**：
+  它撑起 27 个文件的调用和整套拦截器（401 处理、上传进度、mock 短路）。
+  收益是真的，但要重写 API 层并连带改一批测试。这轮先把它量出来、记下来，不硬塞。
+- **响应式图片（`srcset` / 多尺寸变体）**：
+  视口 1440px 的瀑布流每列约 260px，却下载 2559px 的原图，**差一个数量级**。
+  这是剩余收益最大的一项，但需要服务端生成缩略图变体（引入 sharp）或重新 seed，
+  属于独立的一轮。
+- **预加载 / `fetchpriority`**：
+  限速实测里首屏图就绪时间 ≈ 传输时间（2.5MB ÷ 1.6Mbps = 12.5s），
+  **瓶颈在带宽而非调度**，所以这一项排在「先把图片变小」之后。
+
+> 三个数字工具都在仓库里，结论可以自己复现：`npm run perf` / `perf:bundle` / `audit:images`。
+> 其中 `perf:bundle` 的归因显示 **entry chunk 里业务代码只占 6%，94% 是依赖** ——
+> 这也是为什么「优化业务代码」在这个项目里是无效努力，必须从依赖和图片下手。
 
 ## 💡 工程亮点（面试可以深聊的点）
 
@@ -421,6 +472,8 @@ content-sharing-platform/
 | **推荐装饰对游客整个关掉**                     | 游客也走推荐流，但那是**冷启动**：没有任何画像，每条理由只可能是「刚刚发布」，同一句话在整屏重复十二遍是纯噪声；而「不感兴趣」点了只会把游客弹去登录页 —— 一个点下去只会把人踢走的按钮，不如不给。所以 `reasons` 和 `dismissable` 都额外要求登录                                                                                                                                                                                                                                                               | 和搜索页的 `.tag-badge` 是同一个道理：增强是可选的，「不传时必须什么都没有」和「传了才对」同样重要，否则搜索结果页会莫名冒出个 ×                                                        |
 | **EXIF 朝向：物理剥离而不是加解码选项**        | 摆正照片原本靠 `createImageBitmap(file, { imageOrientation: 'none' })` 拿原始像素 —— 规格里是这么定义的，但**实测 Chromium 不认**：源图 2000×3000 / orientation=6，bitmap 直接返回 3000×2000，也就是已经被摆正过了。再叠自己的变换就成了**转两次**：竖图被转成横图、横图又被转成竖图，页面上还不报任何错。改成解码前用 `Blob.slice` 把 APP1 段**物理删掉**，朝向着实由我们自己唯一负责，两条解码路径（bitmap / `<img>`）语义从此一致。剥离是零拷贝的（只是两个视图），顺带把 GPS、机型这些隐私元数据也一并去掉 | 「规格写了但实现不保证」的选项不能拿来做正确性前提 —— 那等于把 bug 交给用户的浏览器版本决定。这个 bug 的恶劣之处在于它**不报错**：页面渲染正常、接口正常，只是图的角度不对              |
 | **压缩失败绝不能阻断发布**                     | `compressImage` 无论走哪条路径都保证返回一个非空 Blob。降级阶梯 `[1, 0.75, 0.55]` 应对 `toBlob` 在 iOS 上返回 `null` 而不是抛异常；任何异常都退回原图直传                                                                                                                                                                                                                                                                                                                                                      | 压缩是**优化**，不是功能的前置条件。对用户来说「图片压缩失败」和「发不出笔记」是同一件事，而后者是这个产品里最不能接受的结果                                                            |
+| **照片型 PNG 必须转码，不能只缩尺寸**          | `outputTypeFor` 原本对 PNG 返回 `'image/png'` 并丢掉 `quality` 参数。理由写的是「PNG 可能有透明背景，转 JPEG 会变黑底」—— 顾虑对，但结论下早了：**WebP 同样支持 alpha**，于是不必做任何检测。`uploads` 里 PNG 封面平均 1.5MB，首屏前 8 张图带走 2.5MB                                                                                                                                                                                                                                                          | 不用「检测透明通道再决定」，是因为**判错的方向不对称**：不透明误判成有透明只是没压；透明误判成不透明会变黑底，那是用户能看见的损坏。一个能被看见的损坏换多压一点，不划算                |
+| **上传扩展名不能取自 `originalname`**          | 原本 `path.extname(file.originalname)` 有两个洞：① 客户端把 PNG 转成 WebP 后 FormData 里 filename 仍是 `.png`，落盘得到「`.png` 扩展名 + WebP 内容」；② 更严重的是 `Content-Type` 请求头完全由客户端控制，`fileFilter` 只看它 —— 发一个 `image/png` 但内容是 HTML、文件名叫 `x.html` 的请求就是一次**存储型 XSS**。改成先落 `.tmp`，再用文件真实魔数决定扩展名，不匹配则整批回滚                                                                                                                               | 「客户端说了什么」和「文件实际是什么」是两件事。安全判断必须建立在**读到的字节**上，而不是请求头或文件名                                                                                |
 | **串行不是风格，是内存决定的**                 | 一次选 9 张图必须串行压缩：12MP 图解码成 RGBA 约 48MB，并发就是 432MB，移动端浏览器会在**解码阶段**直接崩（表现为「选完图什么都没发生」）。每张之间 `setTimeout(0)` 让出主线程，保证进度条能刷新、用户点「移除」能立刻响应                                                                                                                                                                                                                                                                                     | 这个限制在开发机上完全看不出来 —— 桌面 Chrome 有几 G 可用，串不串都一样快                                                                                                               |
 | **入场动画的降级顺序不能反**                   | 滚动入场的 CSS 顺序是「**默认可见 → JS 确认可用 → 才锁隐藏态**」。反过来写（默认 `opacity: 0`）的话，JS 加载失败、bundle 报错、用户禁用 JS 的任何一种情况下，内容都会永久停在隐藏态 —— **白屏，而且控制台干干净净**。降级路径用 `IntersectionObserver` 存在性判断 + e2e 里 `delete window.IntersectionObserver` 双重钉住                                                                                                                                                                                       | 这是动效里唯一会造成**功能性事故**（而不是"不够好看"）的地方。其余动效坏了最多丑，这一处坏了是页面没了                                                                                  |
 | **reduced-motion 必须复位隐藏态**              | 全局兜底用 `transition-duration: 0.01ms`，但这**只让动画瞬间结束**，而 `.sg-reveal` 的终点是 JS 加的 `.is-revealed` —— 用户在卡片入场前切到 reduced-motion 的话，这个 class 永远不会加上。所以额外写一条「把隐藏态本身清掉」，不依赖 JS 补 class                                                                                                                                                                                                                                                               | 这是 `prefers-reduced-motion` 最常见的漏项：动画确实停了，但内容也没了。两条一起做才既尊重设置又不丢内容                                                                                |
