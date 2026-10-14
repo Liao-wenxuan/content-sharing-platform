@@ -5,7 +5,7 @@ import fs from 'fs'
 import { randomBytes } from 'crypto'
 import { requireAuth } from '../middleware/auth'
 import { uploadLimiter } from '../middleware/rateLimit'
-import { UPLOAD_MAX_FILES, UPLOAD_MAX_SIZE_BYTES } from '../constants'
+import { UPLOAD_MAX_REQUEST_FILES, UPLOAD_MAX_SIZE_BYTES } from '../constants'
 import { sniffImageType } from '../lib/imageType'
 
 const router = Router()
@@ -50,7 +50,7 @@ const upload = multer({
   storage,
   limits: {
     fileSize: UPLOAD_MAX_SIZE_BYTES,
-    files: UPLOAD_MAX_FILES
+    files: UPLOAD_MAX_REQUEST_FILES
   },
   fileFilter: (_req, file, cb) => {
     // 只允许 image/*
@@ -63,7 +63,12 @@ const upload = multer({
 })
 
 // ===== multer 中间件 =====
-const uploadMiddleware = upload.array('files', UPLOAD_MAX_FILES)
+//
+// 一次请求里是「主图、缩略图、主图、缩略图…」交替的顺序对。
+// 服务端不做配对判断 —— 上传端本来就该保证成对，
+// 而一个错位的数组会让笔记的主图和缩略图**各自都是合法图片**，
+// 只是对不上号，这种错在服务端没有任何手段能发现。
+const uploadMiddleware = upload.array('files', UPLOAD_MAX_REQUEST_FILES)
 
 // ===== POST /api/uploads —— 单文件/多文件上传（鉴权）=====
 // 客户端 FormData field name: 'files'

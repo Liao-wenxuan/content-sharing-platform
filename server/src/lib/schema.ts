@@ -39,17 +39,45 @@ export function initSchema(db: Database.Database): void {
     console.log('[DB] Migrated: users.notify_prefs added')
   }
 
+  // ===== 列表缩略图 =====
+  //
+  // 为什么单独一列而不是把 image_urls 改成对象数组：
+  // image_urls 是 JSON 字符串数组，而 `.imageUrls[0]` 这个读法遍布
+  // list / feed / search / topics / favorites / notify 六条查询链路。
+  // 改成 `{ full, thumb }` 就要把六处一起改，而它们要的本来就是「能显示就行」的 URL。
+  //
+  // 单独一列的代价是「两张图可能对不上」（老数据没回填），所以兜底收在
+  // lib/postImages.ts 的 parseThumbs 里统一做 —— 拿到的是**已经填齐**的数组，
+  // 前端可以直接下标取。防御散到六条链路就等于没有防御。
+  //
+  // 实测依据（scripts/perf-smoke.mjs，Slow 4G）：
+  // 瀑布流每列约 260px，首屏却在拉 2559px 的原图，图片占首屏流量 94%。
+  //
+  // ⚠️ 这一段**必须**在下面 CREATE TABLE posts 之后：
+  // `pragma table_info(posts)` 在表还不存在时会直接抛「no such table」，
+  // 而 CREATE TABLE IF NOT EXISTS 恰恰保证表一定存在 —— 顺序反了就是全量测试红。
   db.exec(`
     CREATE TABLE IF NOT EXISTS posts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       content TEXT NOT NULL,
       image_urls TEXT,
+      image_thumbs TEXT,
       topic_tag TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `)
+
+  // 补老库：上面 CREATE TABLE IF NOT EXISTS 对**已存在**的 posts 表不会加列，
+  // 所以 image_thumbs 还要在这里再判一次。
+  const existingPostCols = new Set(
+    (db.pragma('table_info(posts)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!existingPostCols.has('image_thumbs')) {
+    db.exec('ALTER TABLE posts ADD COLUMN image_thumbs TEXT')
+    console.log('[DB] Migrated: posts.image_thumbs added')
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS likes (

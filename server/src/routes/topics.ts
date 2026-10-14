@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { optionalAuth } from '../middleware/auth'
 import { toISO } from '../lib/time'
+import { thumbsFromRow } from '../lib/postImages'
 
 /**
  * 话题
@@ -59,7 +60,11 @@ router.get('/', optionalAuth, (req: Request, res: Response) => {
                 MAX(p.created_at) AS latest_at,
                 -- 封面取这个话题下最新的那篇笔记的首图：
                 -- 话题列表要是一张张灰占位图，就没人想点进去了
-                (SELECT json_extract(s.image_urls, '$[0]')
+                --
+                -- COALESCE 而不是先查 thumbs 再回退 urls：这样只扫一次行，
+                -- 且「有主图但没缩略图」的老数据天然拿到主图。
+                (SELECT COALESCE(json_extract(s.image_thumbs, '$[0]'),
+                                 json_extract(s.image_urls, '$[0]'))
                  FROM posts s
                  WHERE s.topic_tag = p.topic_tag AND s.image_urls IS NOT NULL
                  ORDER BY s.created_at DESC, s.id DESC
@@ -118,7 +123,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
 
     const rows = db
       .prepare(
-        `SELECT p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
+        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
                 u.nickname AS author_nickname, u.avatar AS author_avatar,
                 (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
@@ -149,7 +154,8 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
     const cover = (
       db
         .prepare(
-          `SELECT json_extract(image_urls, '$[0]') AS cover
+          `SELECT COALESCE(json_extract(image_thumbs, '$[0]'),
+                          json_extract(image_urls, '$[0]')) AS cover
            FROM posts
            WHERE topic_tag = ? AND image_urls IS NOT NULL
            ORDER BY created_at DESC, id DESC LIMIT 1`
@@ -170,6 +176,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
         userId: r.user_id,
         content: r.content,
         imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
+        imageThumbs: thumbsFromRow(r),
         topicTag: r.topic_tag,
         createdAt: toISO(r.created_at),
         likeCount: r.like_count,

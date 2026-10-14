@@ -16,6 +16,15 @@ export const UPLOAD_MAX_FILES = 9
 export const UPLOAD_MAX_SIZE_MB = 10
 export const UPLOAD_MAX_SIZE_BYTES = UPLOAD_MAX_SIZE_MB * 1024 * 1024
 
+/**
+ * 一次请求里允许的文件数上限（主图 + 缩略图）。
+ *
+ * 每张图现在会带一个缩略图，所以实际收到的文件数是笔记图片数的两倍。
+ * 不放开这个上限的话，选满 9 张图会在第 5 张时报 LIMIT_FILE_COUNT ——
+ * 而且报错信息写的是「一次最多上传 9 张」，用户完全看不出是自己选了 9 张图。
+ */
+export const UPLOAD_MAX_REQUEST_FILES = UPLOAD_MAX_FILES * 2
+
 // 收藏夹（专辑）
 export const FOLDER_NAME_MAX_LENGTH = 20
 /** 单用户收藏夹上限：再多就只是「分类过细」，不是「整理」 */

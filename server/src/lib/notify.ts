@@ -1,6 +1,7 @@
 import db from './db'
 import { toISO } from './time'
 import { getHub } from '../ws/instance'
+import { parseThumbs } from './postImages'
 
 /**
  * 通知
@@ -188,7 +189,7 @@ export interface NotificationRow {
   createdAt: string
   actor: { id: number; nickname: string; avatar: string | null }
   /** 笔记被删了就是 null（post_id 存了 0 或孤儿 id），前端据此显示「原笔记已删除」 */
-  post: { id: number; content: string; imageUrls: string[] } | null
+  post: { id: number; content: string; imageUrls: string[]; imageThumbs: string[] } | null
 }
 
 export interface ListOptions {
@@ -224,7 +225,8 @@ export function listNotifications(
     .prepare(
       `SELECT n.id, n.type, n.post_id, n.comment_id, n.content, n.read_at, n.created_at,
               a.id AS actor_id, a.nickname AS actor_nickname, a.avatar AS actor_avatar,
-              p.id AS p_id, p.content AS p_content, p.image_urls AS p_images
+              p.id AS p_id, p.content AS p_content,
+              p.image_urls AS p_images, p.image_thumbs AS p_thumbs
        FROM notifications n
        JOIN users a ON a.id = n.actor_id
        LEFT JOIN posts p ON p.id = n.post_id AND n.post_id <> ${NONE}
@@ -245,7 +247,13 @@ export function listNotifications(
       createdAt: toISO(r.created_at),
       actor: { id: r.actor_id, nickname: r.actor_nickname, avatar: r.actor_avatar },
       post: r.p_id
-        ? { id: r.p_id, content: r.p_content, imageUrls: r.p_images ? JSON.parse(r.p_images) : [] }
+        ? {
+            id: r.p_id,
+            content: r.p_content,
+            imageUrls: r.p_images ? JSON.parse(r.p_images) : [],
+            // 通知卡片里是 40px 的小方图，用主图等于白下 2000px
+            imageThumbs: parseThumbs(r.p_thumbs, r.p_images)
+          }
         : null
     })),
     total,

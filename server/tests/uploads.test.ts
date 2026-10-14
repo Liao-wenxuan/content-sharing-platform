@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
 import { createTestApp, teardownTestDb } from './app'
+import { UPLOAD_MAX_REQUEST_FILES } from '../src/constants'
 import type { Express } from 'express'
 
 let app: Express
@@ -78,7 +79,10 @@ describe('POST /api/uploads', () => {
     expect(res.body.message).toMatch(/没有收到文件/)
   })
 
-  it('一次 > 9 张返回 400', async () => {
+  it('一次超过文件数上限返回 400', async () => {
+    // 上限是 UPLOAD_MAX_REQUEST_FILES（= 图片张数 × 2）而不是图片张数：
+    // 每张图现在会带一个缩略图，不放开的话选满 9 张图会在第 5 张被拦，
+    // 而报错写的是「一次最多上传 9 张」，用户完全看不出是自己图选多了。
     const pngBytes = Buffer.from(
       '89504E470D0A1A0A0000000D49484452000000010000000108060000001F15C489' +
         '0000000A49444154789C6300010000000500010D0A2DB40000000049454E44AE426082',
@@ -87,7 +91,8 @@ describe('POST /api/uploads', () => {
 
     const req = request(app).post('/api/uploads').set('Authorization', `Bearer ${token}`)
 
-    for (let i = 0; i < 10; i++) {
+    // 多传一个：正好越过上限，验的是「拦得住」而不是「刚好在界内能过」
+    for (let i = 0; i <= UPLOAD_MAX_REQUEST_FILES; i++) {
       req.attach('files', pngBytes, { filename: `img${i}.png`, contentType: 'image/png' })
     }
 

@@ -4,6 +4,7 @@ import { toISO } from './time'
 import { scoreCandidate, type FeedCandidate, type FeedProfile } from './feed-score'
 import { buildProfile, nicknameMap, topAuthors, topTopics } from './feed-profile'
 import { CATEGORY_LABEL, type ContentCategory } from '../constants'
+import { thumbsFromRow } from './postImages'
 
 /**
  * 推荐流编排
@@ -242,6 +243,8 @@ export interface SessionPage {
       userId: number
       content: string
       imageUrls: string[]
+      /** 列表缩略图。已经用原图兜底填齐，和 imageUrls 等长，可以直接下标取 */
+      imageThumbs: string[]
       topicTag: string | null
       createdAt: string
       likeCount: number
@@ -336,7 +339,7 @@ function loadPostsByIds(ids: number[]) {
 
   const rows = db
     .prepare(
-      `SELECT p.id, p.user_id, p.content, p.image_urls, p.topic_tag, p.created_at,
+      `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
               u.nickname, u.avatar,
               (SELECT COUNT(*) FROM likes     WHERE post_id = p.id) AS like_count,
               (SELECT COUNT(*) FROM comments  WHERE post_id = p.id) AS comment_count
@@ -352,6 +355,7 @@ function loadPostsByIds(ids: number[]) {
       userId: r.user_id,
       content: r.content,
       imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
+      imageThumbs: thumbsFromRow(r),
       topicTag: r.topic_tag,
       createdAt: toISO(r.created_at),
       likeCount: r.like_count,

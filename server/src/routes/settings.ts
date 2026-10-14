@@ -85,10 +85,16 @@ router.get('/storage', requireAuth, (req: Request, res: Response) => {
      * ⚠️ 只统计**这个用户发的笔记**上的图：共享目录里别人上传的文件
      * 算到谁头上都是错的，而按用户分摊字节数需要维护一张文件表 ——
      * 那张表的维护成本远大于这个数字本身的收益。
+     *
+     * ⚠️ image_thumbs 也要算：缩略图同样躺在 uploads 目录里，
+     * 漏掉的话这个数字会稳定偏小，而「我明明存了 8MB 怎么显示 6MB」
+     * 是用户会反复来问的那种问题。
      */
     const posts = db
-      .prepare('SELECT image_urls FROM posts WHERE user_id = ? AND image_urls IS NOT NULL')
-      .all(userId) as { image_urls: string }[]
+      .prepare(
+        'SELECT image_urls, image_thumbs FROM posts WHERE user_id = ? AND image_urls IS NOT NULL'
+      )
+      .all(userId) as { image_urls: string; image_thumbs: string | null }[]
 
     const uploadDir = path.resolve(process.cwd(), 'uploads')
     let usedBytes = 0
@@ -105,6 +111,22 @@ router.get('/storage', requireAuth, (req: Request, res: Response) => {
       } catch {
         continue
       }
+
+      // 缩略图并进同一批统计。用 Set 去重：万一某条数据的 thumb 和 url
+      // 指向同一个文件，重复加会让数字虚高 —— 而「占得比实际多」
+      // 和「占得比实际少」一样是错的。
+      const allFiles = new Set(urls)
+      if (row.image_thumbs) {
+        try {
+          const thumbs = JSON.parse(row.image_thumbs)
+          if (Array.isArray(thumbs)) {
+            for (const t of thumbs) if (typeof t === 'string' && t) allFiles.add(t)
+          }
+        } catch {
+          // 缩略图坏掉不影响主图统计，接着往下走
+        }
+      }
+      urls = [...allFiles]
       for (const url of urls) {
         // 只看 /uploads/ 开头的，避免有人传个 "../../etc/passwd" 去探测服务器文件
         if (!url.startsWith('/uploads/')) continue

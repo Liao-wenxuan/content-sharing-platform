@@ -6,6 +6,7 @@ import { toISO } from '../lib/time'
 import { NICKNAME_MAX_LENGTH } from '../constants'
 import { createNotification } from '../lib/notify'
 import { isProfileVisible } from '../lib/settings'
+import { thumbsFromRow } from '../lib/postImages'
 
 const router = Router()
 
@@ -205,7 +206,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
     const rows = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, topic_tag, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, created_at
       FROM posts
       WHERE user_id = ?
       ORDER BY created_at DESC, id DESC
@@ -225,6 +226,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
         userId: row.user_id,
         content: row.content,
         imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
+        imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
         createdAt: toISO(row.created_at)
       })),
@@ -489,7 +491,7 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
     const rows = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, topic_tag, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, created_at
       FROM posts
       WHERE user_id = ?
       ORDER BY created_at DESC, id DESC
@@ -509,6 +511,7 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
         userId: row.user_id,
         content: row.content,
         imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
+        imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
         createdAt: toISO(row.created_at)
       })),
