@@ -59,15 +59,24 @@ describe('哪些类型值得压', () => {
 })
 
 describe('重编码成什么格式', () => {
-  it('保持原格式，不统一转 JPEG', () => {
-    // PNG 转 JPEG 会把透明背景变成黑色，那是不可逆的信息丢失
-    expect(outputTypeFor('image/png')).toBe('image/png')
+  it('PNG 转 WebP：既保住 alpha，又让 quality 真正生效', () => {
+    // 不能转 JPEG —— 那会把透明背景变成黑色，是用户能看见的损坏。
+    // WebP 同时支持 alpha 和有损压缩，是唯一不需要「检测透明通道」的选择。
+    expect(outputTypeFor('image/png')).toBe('image/webp')
     expect(outputTypeFor('image/webp')).toBe('image/webp')
+    // JPEG 本来就没有 alpha 通道，保持原样
     expect(outputTypeFor('image/jpeg')).toBe('image/jpeg')
   })
 
-  it('其它一律落到 JPEG（只有被 canCompress 放行的才会走到这里）', () => {
-    expect(outputTypeFor('image/jpg')).toBe('image/jpeg')
+  it('不因为「统一转 WebP」就把 JPEG 也换了（多编一次没有收益）', () => {
+    // JPEG → JPEG。转 WebP 虽然更小，但会改变已有图片的格式，
+    // 而 JPEG 输入本来就能靠 quality 压下去。
+    expect(outputTypeFor('image/jpeg')).toBe('image/jpeg')
+  })
+
+  it('其它一律落到 WebP（只有被 canCompress 放行的才会走到这里）', () => {
+    expect(outputTypeFor('image/jpg')).toBe('image/webp')
+    expect(outputTypeFor('')).toBe('image/webp')
   })
 })
 

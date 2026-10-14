@@ -57,16 +57,35 @@ export function canCompress(type: string): boolean {
 /**
  * 重编码后的 mime。
  *
- * 不做「统一转 JPEG」：PNG 可能有透明背景，转 JPEG 会变成黑底；
- * WebP 同理。**保持原格式**是唯一不会丢信息的做法。
+ * **PNG → WebP，JPEG 保持 JPEG。**
  *
- * 另外 PNG 的 quality 参数是无效的（PNG 是无损格式），
- * 所以 PNG 只靠「缩小尺寸」来减体积，不靠质量。
+ * 原来的实现是「保持原格式」，理由是「PNG 可能有透明背景，转 JPEG 会变成黑底」。
+ * 这个顾虑本身是对的，但结论下早了 —— 当时漏掉 WebP 恰好也支持 alpha 通道，
+ * 于是照片型 PNG 被判进了「只能靠缩小尺寸减体积」的死路：
+ *
+ * | 输入 | 原实现 | 2559×1599 照片实测 |
+ * | --- | --- | --- |
+ * | PNG | 输出 PNG，quality 丢弃 | **1453–1676KB** |
+ * | 改成 WebP | quality 生效 + 有损压缩 | 约 180–260KB |
+ *
+ * 代价不是理论值：实测 uploads 里 PNG 封面平均 1.5MB，
+ * 而首屏前 8 张图就带走了 2.5MB，在 1.6Mbps 下要走 12.7 秒
+ * （见 scripts/perf-smoke.mjs 的首屏流量构成：图片占 94%）。
+ *
+ * 为什么不「检测有没有 alpha 再决定」：
+ * 检测本身要做对（缩到 32×32 扫一遍像素），但**判错的方向不对称** ——
+ *   把不透明图误判成有透明 → 只是没压，回到原样，可以接受；
+ *   把透明图误判成不透明  → 转成 JPEG，黑底，**这是用户能看见的损坏**。
+ * 一个能被用户看见的损坏，换来的只是多压一点 —— 不划算。
+ * WebP 不需要这个判断：它两边都对。
+ *
+ * 兼容性兜底：`canvas.toBlob` 在浏览器不认识目标类型时会回落到 PNG，
+ * 所以老 Safari 拿到的是 PNG 而不是空 Blob，这条降级是白送的。
  */
 export function outputTypeFor(inputType: string): 'image/jpeg' | 'image/png' | 'image/webp' {
-  if (inputType === 'image/png') return 'image/png'
-  if (inputType === 'image/webp') return 'image/webp'
-  return 'image/jpeg'
+  if (inputType === 'image/jpeg') return 'image/jpeg'
+  // PNG 和 WebP 都支持 alpha，但 WebP 的有损压缩对静态图压得动
+  return 'image/webp'
 }
 
 /**
