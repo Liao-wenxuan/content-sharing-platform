@@ -11,6 +11,9 @@
  * 覆盖：
  * - 大图真的被压小，而且落盘的文件比原始的小
  * - 压缩后的长边不超过 2000
+ * - **照片型 PNG 落盘变成 WebP，体积明显缩小**
+ *   （PNG 是无损格式，只缩尺寸压不动；这是 uploads 里 PNG 平均 1.5MB 的根因。
+ *    顺带验证服务端不再按 originalname 存扩展名 —— 否则会得到「.png 里装着 WebP」）
  * - **带 EXIF orientation=6 的竖拍照片，摆正后宽高要交换**
  *   （这一步是单元测试模拟不出来的：它依赖浏览器真实的解码行为）
  * - 已经够小的图不会被压大
@@ -63,8 +66,27 @@ const me = ensureAccount()
 
 /** 在真浏览器里画一张大图，返回 JPEG 字节 */
 async function makeJpeg(page, w, h, quality) {
+  return makeImage(page, w, h, 'image/jpeg', quality)
+}
+
+/**
+ * 造一张「照片型 PNG」：高频噪点的 PNG。
+ *
+ * 这不是随手加的一个用例 —— 它盯的是这轮性能排查挖出来的真实缺陷：
+ * uploads 里的 PNG 封面平均 1.5MB，最大的 1.6MB，因为
+ * `outputTypeFor` 曾把 PNG 原样输出，而 PNG 的 quality 参数是无效的。
+ * 结果就是「压缩链路跑完了，体积没动」。
+ *
+ * 用噪点而不是渐变：噪点在 PNG 下几乎不可压缩（这正是照片内容用 PNG 的处境），
+ * 转 WebP 后能压到很小 —— 两个数字一对比，收益才看得见。
+ */
+async function makePng(page, w, h) {
+  return makeImage(page, w, h, 'image/png', undefined)
+}
+
+async function makeImage(page, w, h, type, quality) {
   const base64 = await page.evaluate(
-    async ([width, height, q]) => {
+    async ([width, height, mime, q]) => {
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
@@ -79,13 +101,13 @@ async function makeJpeg(page, w, h, quality) {
         img.data[i + 3] = 255
       }
       ctx.putImageData(img, 0, 0)
-      const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', q))
+      const blob = await new Promise((r) => canvas.toBlob(r, mime, q))
       const buf = new Uint8Array(await blob.arrayBuffer())
       let s = ''
       for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i])
       return btoa(s)
     },
-    [w, h, quality]
+    [w, h, type, quality]
   )
   return Buffer.from(base64, 'base64')
 }
@@ -136,10 +158,12 @@ await page.addInitScript(
 const bigJpeg = await makeJpeg(page, 3000, 2000, 0.95)
 const rotatedJpeg = withExifOrientation(await makeJpeg(page, 2000, 3000, 0.95), 6)
 const tinyJpeg = await makeJpeg(page, 300, 200, 0.6)
+const bigPng = await makePng(page, 1600, 1200)
 console.log(
   `\n[0] 造图：大图 ${(bigJpeg.length / 1024).toFixed(0)}KB / ` +
     `EXIF转90° ${(rotatedJpeg.length / 1024).toFixed(0)}KB / ` +
-    `小图 ${(tinyJpeg.length / 1024).toFixed(0)}KB`
+    `小图 ${(tinyJpeg.length / 1024).toFixed(0)}KB / ` +
+    `照片型PNG ${(bigPng.length / 1024).toFixed(0)}KB`
 )
 
 /** 走一遍：选文件 → 等上传完成 → 返回每张图的状态 */
@@ -294,7 +318,8 @@ console.log('\n[5] 压缩后的图能真的发出去')
 {
   await uploadAll([
     { name: 'a.jpg', mimeType: 'image/jpeg', buffer: bigJpeg },
-    { name: 'b.jpg', mimeType: 'image/jpeg', buffer: rotatedJpeg }
+    { name: 'b.jpg', mimeType: 'image/jpeg', buffer: rotatedJpeg },
+    { name: 'c.png', mimeType: 'image/png', buffer: bigPng }
   ])
   await page.locator('textarea').fill(`图片压缩回归 ${Date.now()}`)
   await page.locator('.form-actions button').filter({ hasText: '发布' }).click()
@@ -308,7 +333,7 @@ console.log('\n[5] 压缩后的图能真的发出去')
 
   const latest = posts.list?.[0]
   check('笔记发布成功', !!latest, latest?.id)
-  check('两张图都在', (latest?.imageUrls?.length ?? 0) === 2, String(latest?.imageUrls?.length))
+  check('三张图都在', (latest?.imageUrls?.length ?? 0) === 3, String(latest?.imageUrls?.length))
 
   // 落盘的文件确实比原始小 —— 这是「压缩真的发生了」的唯一硬证据，
   // 页面上那句「-92%」可以随便编
@@ -321,6 +346,32 @@ console.log('\n[5] 压缩后的图能真的发出去')
       check('落盘文件比原图小', kb < origKb, `${origKb}KB → ${kb}KB`)
     } else {
       check('落盘文件存在', false, file)
+    }
+
+    // 照片型 PNG 的落盘格式与体积 —— 这条盯的是这轮修掉的真实缺陷
+    const pngStored = latest.imageUrls[2]
+    const pngFile = path.join(ROOT, 'server', pngStored.replace(/^\//, ''))
+    if (existsSync(pngFile)) {
+      const kb = Math.round(statSync(pngFile).size / 1024)
+      const origKb = Math.round(bigPng.length / 1024)
+      check(
+        '照片型 PNG 落盘后是 WebP（不是原样 PNG）',
+        pngFile.toLowerCase().endsWith('.webp'),
+        pngStored
+      )
+      // PNG 是无损的，噪点图几乎压不动；转 WebP 才有量级上的差别。
+      //
+      // 阈值定在 -60% 而不是「小一个数量级」：这张图是**纯随机噪点**，
+      // 也就是有损压缩的最坏情况（真实照片有大量可预测的结构，能压得更狠）。
+      // 拿最坏情况去卡一个乐观阈值，结果就是这条断言永远在骗人。
+      const shrink = 1 - kb / origKb
+      check(
+        '照片型 PNG 转 WebP 后体积至少缩掉 60%（噪点图是最坏情况）',
+        shrink > 0.6,
+        `${origKb}KB → ${kb}KB (-${Math.round(shrink * 100)}%)`
+      )
+    } else {
+      check('PNG 落盘文件存在', false, pngFile)
     }
   }
   await page.screenshot({ path: 'shots/img-post.png' })
