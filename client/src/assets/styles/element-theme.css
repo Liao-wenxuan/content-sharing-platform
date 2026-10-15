@@ -311,6 +311,64 @@ html:not(.dark) {
   box-shadow: none !important;
 }
 
+/* ============================================================
+ * 强调色底上的文字：必须是 --accent-foreground，不能是白
+ * ============================================================
+ *
+ * axe 实测：#ffffff 压在 #c6ca4c 上是 **1.75:1**（AA 要 4.5），
+ * 全站 51 处，出现在每一个页面 —— 因为顶栏的「发布笔记」「登录 / 注册」
+ * 两个按钮每页都有。
+ *
+ * 成因不是配色选错，是**根本没有这条规则**：Element Plus 的
+ * `.el-button--primary` 前景色取 `--el-button-text-color`，
+ * 默认就是 `--el-color-white`。`--accent-foreground` 这个变量
+ * 在 theme.css 里定义得好好的，却没有任何一处消费它 ——
+ * 上面那条 `.el-radio-button__inner` 是唯一一处，而它只管分段控件。
+ *
+ * 黄绿是高亮色，压在它上面的字必须是页面底色（#19191b），实测 9.99:1。
+ */
+.el-button--primary {
+  color: var(--accent-foreground, #19191b) !important;
+}
+
+/* 分段控件（el-segmented）：选中项底色是主色，文字同理。
+   类名是 `is-selected` 而不是 radio-button 那套 sibling 结构，
+   所以得单独写一条 —— 上面那条管不到它。 */
+.el-segmented__item.is-selected .el-segmented__item-label {
+  color: var(--accent-foreground, #19191b) !important;
+}
+
+/* ============================================================
+ * plain 变体：Element 的浅色调假设在深色模式下不成立
+ * ============================================================
+ *
+ * `.el-button--primary.is-plain` 的默认配色是「主色字 + 主色 light-9 底」，
+ * 而 light-9 是一层**接近白的**淡黄（#f9faed）。
+ * 放到深色模式上就变成：黄绿字压近白底 = **1.66:1**，22 处。
+ *
+ * 也就是说 Element 的「plain」表达的是「浅底弱化」，
+ * 而深色模式里没有浅底 —— 弱化只能靠**透明底 + 同色描边 + 同色文字**。
+ * 这正好是设计系统已有的 `--accent-muted`。
+ */
+html.dark .el-button--primary.is-plain,
+.el-button--primary.is-plain {
+  background: var(--accent-muted) !important;
+  color: var(--accent-on-muted) !important;
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent) !important;
+}
+
+/*
+ * 危险色 plain：同一个毛病，也必须换掉 Element 的浅色调。
+ * 染色比例跟强调色对齐用 12% —— 一开始试了 18%，红字压在偏红的暗底上
+ * 被拉暗到 4.48:1，卡在 AA 门槛下面；12% 配亮一档的红（#ff8a8d）才稳。
+ */
+html.dark .el-button--danger.is-plain,
+.el-button--danger.is-plain {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent) !important;
+  color: var(--destructive-text) !important;
+  border-color: color-mix(in srgb, var(--destructive) 45%, transparent) !important;
+}
+
 /* 开关：内嵌进面板的控件，不要太圆 */
 .el-switch {
   --el-switch-on-color: var(--el-color-primary);
