@@ -705,8 +705,22 @@ watch(
   }
 }
 
+/*
+ * 左栏和右栏必须是**同一种东西**。
+ *
+ * 右栏是 el-card（有面、有描边），左栏之前直接铺在页面底色上，
+ * 于是同一个 `.detail-grid` 里右边是块面板、左边是一张白纸 ——
+ * 短正文时尤其明显：右边一块板子孤零零立着，左边一大片空。
+ *
+ * 这里的取值逐条抄自 element-theme.css 里 `.el-card` 的定义，
+ * 用同样的变量，将来改主题时两边会一起变，不会又分家。
+ */
 .main-col {
   min-width: 0;
+  padding: var(--sp-5);
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-md);
 }
 
 /* ===== 作者栏 ===== */
@@ -714,7 +728,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 18px;
+  /* 底部分隔线与外层卡片的 padding 一起构成留白，这里只留一条线的呼吸 */
+  padding-bottom: 14px;
 }
 
 .avatar {
