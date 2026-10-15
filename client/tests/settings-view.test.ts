@@ -86,6 +86,14 @@ describe('useUserSettings', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.resetModules()
+    // 伪造一个登录态：load() 现在会先判断「有没有登录」，
+    // 没登录就不发请求（游客没有偏好可拉）。
+    // 不造这个的话，下面三条测「请求次数 / 缓存 / force」的用例会全部空跑 ——
+    // 断言看着在跑，其实一次请求都没发。
+    localStorage.setItem(
+      'auth',
+      JSON.stringify({ user: { id: 1, nickname: '测试' }, token: 'test-token' })
+    )
   })
 
   afterEach(() => {
@@ -120,6 +128,30 @@ describe('useUserSettings', () => {
       recover: () => (shouldFail = false)
     }
   }
+
+  it('游客**不发**请求，直接落默认值', async () => {
+    // 这条锁的是「不该发的请求就别发」，不是「发了别报错」。
+    //
+    // 之前是发了、拿到 401、在拦截器里静默掉。功能上没错，
+    // 但每次开页面都白跑一次必失败的往返，而且浏览器会自己打一条
+    // `Failed to load resource: 401` —— **那条日志 JS 拦不掉**，
+    // 因为拦截器只能处理 axios 的 reject。于是游客态下
+    // 「零 console error」这条 e2e 断言永远红着。
+    localStorage.clear()
+    vi.resetModules()
+    const settingsApi = await import('@/api/settings')
+    const prefs = (await import('@/composables/useUserSettings')).useUserSettings()
+    const calls: number[] = []
+    vi.spyOn(settingsApi.settingsApi, 'get').mockImplementation(async () => {
+      calls.push(1)
+      return { ...DEFAULT_SETTINGS }
+    })
+
+    await prefs.load()
+    expect(calls).toHaveLength(0)
+    // 但偏好本身仍然要有完整默认值：游客也要能改主题、密度、内容过滤
+    expect(prefs.settings.value).toEqual(DEFAULT_SETTINGS)
+  })
 
   it('⚠️ **默认是 dark，不是 system**', async () => {
     // index.html 的 <html class="dark"> 先落好，避免首屏浅色闪烁。

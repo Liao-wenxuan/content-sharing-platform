@@ -39,6 +39,22 @@ http.interceptors.response.use(
       return Promise.resolve(null)
     }
 
+    // 「401 是游客的正常状态」的出口。
+    //
+    // /api/settings 对游客一定返回 401（没有登录就没有偏好），
+    // 而 useUserSettings 是**全局**加载的，游客每次开页面都会打这一发。
+    // 它不是错误，是这个接口的正常响应之一 —— 但默认走下面的 console.error，
+    // 于是「游客打开首页」会稳定留下一条 [API Error]，
+    // 把「零 console error」这条 e2e 断言也弄挂。
+    //
+    // 和 silent404 同一个道理：**某个状态码算不算错误，
+    // 由调用侧决定，而不是由拦截器替所有人决定。**
+    // 这里仍然 reject —— 调用方需要区分「游客」和「请求失败」，
+    // 只是不要往控制台里刷一条不该有的错误。
+    if ((error.config as any)?.quiet401 && error.response?.status === 401) {
+      return Promise.reject(error)
+    }
+
     // 完整错误信息：状态码 + 后端 message + URL，方便排查
     console.error(
       '[API Error]',

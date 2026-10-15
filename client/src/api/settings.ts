@@ -77,7 +77,11 @@ export const CHANNELS = [
 
 export const settingsApi = {
   async get() {
-    const res = await request.get<{ settings: UserSettings }>('/settings')
+    // quiet401：游客没有偏好，服务端一定返回 401。这是**预期状态**，
+    // 不是错误 —— useUserSettings 会退回 DEFAULT_SETTINGS。
+    // 不打这个标记的话，游客每次开页面都会在控制台留下一条 [API Error]，
+    // 并把「零 console error」的 e2e 断言弄挂。
+    const res = await request.get<{ settings: UserSettings }>('/settings', { quiet401: true })
     return res.settings
   },
 

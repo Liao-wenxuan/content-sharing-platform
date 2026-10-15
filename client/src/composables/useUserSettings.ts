@@ -1,5 +1,6 @@
 import { ref, watch } from 'vue'
 import { settingsApi, DEFAULT_SETTINGS, type UserSettings } from '@/api/settings'
+import { useAuthStore } from '@/stores/auth'
 import { useTheme } from './useTheme'
 
 /**
@@ -57,8 +58,50 @@ function applyLocal(next: UserSettings) {
   }
 }
 
+/**
+ * 当前是否已登录。
+ *
+ * 用 try/catch 而不是直接调 useAuthStore()：
+ * 这个 composable 是模块级单例，load() 可能被单测在没有 Pinia 的环境里直接调用，
+ * 那时 useAuthStore() 会抛「no active pinia」。
+ * 兜底读 localStorage —— auth store 本身就是从那儿持久化的，
+ * 两个来源在正常运行下一致，分歧只可能出现在测试里，而测试要的就是默认值。
+ */
+function isLoggedIn(): boolean {
+  try {
+    return useAuthStore().isLoggedIn
+  } catch {
+    try {
+      return !!localStorage.getItem('auth')
+    } catch {
+      return false
+    }
+  }
+}
+
 async function load(force = false) {
   if (loaded.value && !force) return settings.value
+
+  /*
+   * **游客不发这个请求。**
+   *
+   * 之前是「发了、拿到 401、当成正常情况处理掉」。功能上没错，
+   * 但每次开页面都白跑一次必失败的往返，而且浏览器会自己打一条
+   * `Failed to load resource: 401` ——**那条日志 JS 拦不掉**，
+   * 因为拦截器只能处理 axios 的 reject，改不了 Chrome 的网络日志。
+   * 于是「零 console error」这条 e2e 断言在游客态下永远红着。
+   *
+   * 治本是「不该发的请求就别发」：未登录时直接落默认值，
+   * 不但省一次往返，语义也对了 —— 游客没有偏好可拉。
+   */
+  if (!isLoggedIn()) {
+    loaded.value = true
+    settings.value = { ...DEFAULT_SETTINGS }
+    applyLocal(settings.value)
+    lastSaved = JSON.stringify(settings.value)
+    return settings.value
+  }
+
   try {
     loadError.value = ''
     const remote = await settingsApi.get()
@@ -67,12 +110,9 @@ async function load(force = false) {
     applyLocal(remote)
   } catch (e: any) {
     /*
-     * **401 不算错误。**
-     *
-     * 偏好是登录态资源，而游客也要用主题、密度、内容过滤 ——
-     * 这些对未登录的人同样有意义。所以游客拉到 401 时保留默认值继续走，
-     * 而不是把它当成「读取失败」弹一条红字：那条红字会在每个游客的
-     * 页面上闪一次，而它对用户没有任何可行动的信息。
+     * 401 在这里仍然不算错误：**登录态可能刚好过期**，
+     * 此时偏好应该退回默认值，而不是弹一条红字 ——
+     * 那条红字没有任何可行动的信息，只会在每个页面上闪一次。
      */
     const status = e?.response?.status
     if (status === 401) {
