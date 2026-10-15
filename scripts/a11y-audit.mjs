@@ -21,6 +21,7 @@
  *   npm run a11y              游客 + 登录两种状态都扫
  *   npm run a11y -- --static  只跑静态扫描（不需要起服务）
  *   npm run a11y -- --guest   只跑游客态
+ *   npm run a11y -- --only 设置   只跑名字里含「设置」的页面（调面板时用）
  */
 import { chromium } from 'playwright'
 import { createRequire } from 'node:module'
@@ -34,6 +35,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const argv = process.argv.slice(2)
 const STATIC_ONLY = argv.includes('--static')
 const GUEST_ONLY = argv.includes('--guest')
+const ONLY = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null
 
 const serverRequire = createRequire(path.join(ROOT, 'server', 'package.json'))
 // axe-core 装在根目录（脚本的运行地），从根 package.json 解析
@@ -240,6 +242,31 @@ function staticScan() {
           (hasKeyboard ? '' : '，无键盘处理')
       })
     }
+
+    /*
+     * <li role="button">：列表项被改成了按钮。
+     *
+     * 这条单独列出来是因为它没有 @click 也躲不过去 ——
+     * 设置页那批菜单行就是这种写法，静态扫描当时是干净的，
+     * 问题由 axe 报出来：「<ul> 里出现了不允许的子节点 [role=button]」。
+     *
+     * role 会覆盖掉 <li> 隐含的 listitem，所以它既不是列表项，
+     * 也不是一个真正的按钮（没有原生焦点顺序、没有 Enter/Space）。
+     */
+    for (const tag of extractTags(stripComments(tpl[1]))) {
+      const name = tagName(tag.text)
+      if (name !== 'li') continue
+      const roleMatch = /\brole\s*=\s*"([^"]*)"/.exec(tag.text)
+      const role = roleMatch ? roleMatch[1].trim().toLowerCase() : null
+      if (!role || !INTERACTIVE_ROLES.has(role)) continue
+      findings.push({
+        kind: 'list-item-as-control',
+        file: path.relative(ROOT, file),
+        line: lineOf(source, tplStart + tag.offset),
+        detail: `<li role="${role}"> 覆盖了 listitem 语义，` +
+          `但 <li> 不是原生控件 —— 应改成 <li> 里放 <button>`
+      })
+    }
   }
   return findings
 }
@@ -297,7 +324,7 @@ const GUEST_PAGES = [
 ]
 
 const AUTH_PAGES = [
-  { name: '设置', path: '/settings' },
+  { name: '设置', path: '/settings', openDrawers: true },
   { name: '消息', path: '/messages' },
   { name: '收藏夹', path: '/favorites' },
   { name: '浏览记录', path: '/history' },
@@ -349,7 +376,8 @@ async function auditPage(ctx, loggedIn) {
   }
 
   const results = []
-  const pages = loggedIn ? [...GUEST_PAGES, ...AUTH_PAGES] : GUEST_PAGES
+  let pages = loggedIn ? [...GUEST_PAGES, ...AUTH_PAGES] : GUEST_PAGES
+  if (ONLY) pages = pages.filter((p) => p.name.includes(ONLY))
 
   for (const target of pages) {
     const p = await ctx.newPage()
@@ -401,12 +429,96 @@ async function auditPage(ctx, loggedIn) {
           // 看着像没抓到元素，其实是自己配错了。
           nodes: v.nodes.map((n) => ({
             html: n.html.slice(0, 120),
+            // axe 自己说的理由。只报「第 N 处不达标」的话，
+            // 修的人得反推它到底看的是什么，容易改成另一个错的东西。
+            msg: (n.any?.[0]?.message ?? n.all?.[0]?.message ?? '').slice(0, 160),
             data: n.any?.[0]?.data ?? {}
           }))
         }))
       })
 
       results.push({ page: target.name, path: target.path, nodeCount, violations: out })
+
+      /*
+       * 设置页的各个面板是 el-drawer，**不点开就不渲染**。
+       *
+       * 第一版只审 /settings 本身，于是 8 个 el-switch 里只报了 1 个 ——
+       * 另外 7 个在没打开的面板里，一个都没被扫到。
+       * 「审过了」和「审的是这个功能」不是一回事：
+       * 覆盖率上的一处空白，报告上是干干净净的 0 违规。
+       */
+      if (target.openDrawers) {
+        // 用 data-item 而不是文案定位：文案里有换行、有描述文字、
+        // 截断成 12 个字符之后 hasText 匹配就开始飘 —— 之前 6 个面板
+        // 只审成了 1 个，而且不报错，看上去像「只有一个面板有问题」。
+        const keys = await p.$$eval('.item-row.clickable', (els) =>
+          els.map((e) => e.getAttribute('data-item')).filter(Boolean)
+        )
+        for (const key of keys) {
+          const row = p.locator(`[data-item="${key}"]`)
+          // 每个面板都从一次干净的导航开始：抽屉的遮罩会盖住整页，
+          // 上一个没关干净的话，下一次点击会被自己的 overlay 拦下来
+          await p.goto(`${BASE}${target.path}`, { waitUntil: 'domcontentloaded' })
+          await p.locator('.item-row.clickable').first().waitFor({ timeout: 15000 })
+
+          // ⚠️ 别把点击错误吞掉。第一版写了 `.catch(() => {})`，
+          // 结果「点不动」和「点了没反应」在报告里长得一模一样 ——
+          // 12 个面板显示成「没弹出抽屉」，看上去像它们不是面板。
+          const clicked = await row
+            .click({ timeout: 8000 })
+            .then(() => true)
+            .catch((e) => {
+              console.log(`  ${'FAIL'.padEnd(4)} 设置·${key}  点不动：${String(e).split('\n')[0]}`)
+              return false
+            })
+          if (!clicked) continue
+          /*
+           * ⚠️ 必须用 `:visible`，不能等 `.el-drawer`。
+           *
+           * 页面上同时挂着 11 个抽屉（关着的时候也在 DOM 里，只是不可见），
+           * 而 waitForSelector 只盯 DOM 顺序里的第一个 —— 也就是永远不会
+           * 打开的那个，于是每个面板都「没弹出抽屉」。
+           * 报告里它长得和「点了没反应」完全一样。
+           */
+          const opened = await p
+            .locator('.el-drawer:visible')
+            .first()
+            .waitFor({ timeout: 4000 })
+            .then(() => true)
+            .catch(() => false)
+          if (!opened) {
+            // 点「路由」类菜单会跳走，那不是面板；跳走了就回到设置页
+            console.log(`  ${'SKIP'.padEnd(4)} 设置·${key}  没弹出抽屉（可能是跳转类菜单）`)
+            continue
+          }
+
+          await p.waitForTimeout(500)
+          await p.addScriptTag({ content: axeSource })
+          const panelOut = await p.evaluate(async () => {
+            const r = await window.axe.run(document, {
+              runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }
+            })
+            return r.violations.map((v) => ({
+              id: v.id,
+              impact: v.impact,
+              help: v.help,
+              count: v.nodes.length,
+              nodes: v.nodes.map((n) => ({
+                html: n.html.slice(0, 120),
+                msg: (n.any?.[0]?.message ?? n.all?.[0]?.message ?? '').slice(0, 160),
+                data: n.any?.[0]?.data ?? {}
+              }))
+            }))
+          })
+          const panelNodes = await p.evaluate(() => document.querySelectorAll('*').length)
+          results.push({
+            page: `设置·${key}`,
+            path: target.path,
+            nodeCount: panelNodes,
+            violations: panelOut
+          })
+        }
+      }
     } finally {
       await p.close()
     }
@@ -456,7 +568,10 @@ async function main() {
         console.log(`  FAIL  ${r.page.padEnd(10)} ${total} 个问题`)
         for (const v of r.violations) {
           console.log(`          [${v.impact}] ${v.id} ×${v.count} — ${v.help}`)
-          for (const n of v.nodes.slice(0, 2)) console.log(`            ${n.html}`)
+          for (const n of v.nodes.slice(0, 2)) {
+            console.log(`            ${n.html}`)
+            if (n.msg) console.log(`              -> ${n.msg}`)
+          }
         }
       }
     }
