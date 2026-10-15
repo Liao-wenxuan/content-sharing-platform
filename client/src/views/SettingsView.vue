@@ -520,7 +520,7 @@ onMounted(async () => {
 
 <style scoped>
 .settings {
-  max-width: 860px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
 }
 
@@ -547,11 +547,31 @@ onMounted(async () => {
 }
 
 /* ===== 分组卡 ===== */
+/*
+ * 两列 grid + align-items: start。
+ *
+ * 试过 CSS 多栏（columns），排版上确实没有空洞、列尾也平，
+ * 但它按列填充，「隐私与安全」会被顶到第二列的第一行 ——
+ * 设置菜单的**顺序本身是有意义的**，打乱它比参差更糟。撤回。
+ *
+ * 也试过 align-items: stretch：边框齐了，但「账号」只有 2 行、
+ * 「内容与外观」有 7 行，前者被拉出半张卡片的空洞，同样更糟。
+ *
+ * 现在这两点都避开：start 让卡片贴着内容收口（没有空洞），
+ * 顺序按 DOM 走（没有跳位）。剩下的参差是内容量差异造成的，
+ * 属于事实，不是排版错误。
+ */
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /* 1080 的内容宽下正好两列（每列约 528）；
+     480 以下落回单列，手机上不会挤成两条。 */
+  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
   gap: var(--sp-4);
   align-items: start;
+}
+
+.group-card {
+  break-inside: avoid;
 }
 
 .group-title {
