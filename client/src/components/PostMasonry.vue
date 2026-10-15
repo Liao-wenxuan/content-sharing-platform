@@ -452,7 +452,8 @@ function markImageLoaded(postId: number) {
   border-radius: var(--radius-full);
   font-size: var(--fs-2xs);
   font-weight: 600;
-  color: #fff;
+  /* 底是强调色，字必须是页面底色 —— 白字压黄绿只有 1.75:1 */
+  color: var(--accent-foreground);
   background: var(--accent);
 }
 
@@ -594,7 +595,14 @@ function markImageLoaded(postId: number) {
   display: block;
   margin-top: 4px;
   font-size: var(--fs-2xs);
-  color: var(--muted-foreground);
-  opacity: 0.7;
+  /*
+   * 用 --text-3，而不是 `--muted-foreground` + `opacity: 0.7`。
+   *
+   * 后者是两次透明度相乘：0.62 × 0.7 = 0.43，落在设计系统定义的
+   * 三档**之外**，实测压在页面上只有 4.26:1（AA 要 4.5）。
+   * 叠乘还有个更隐蔽的代价：改 --muted-foreground 时没人想得到
+   * 这几处还额外乘了 0.7，于是「调一个变量」在不同页面表现不一致。
+   */
+  color: var(--text-3);
 }
 </style>

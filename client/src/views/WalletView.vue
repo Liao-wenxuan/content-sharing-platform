@@ -330,8 +330,7 @@ onMounted(load)
   margin: 10px 0 0;
   font-size: var(--fs-2xs);
   line-height: 1.7;
-  color: var(--muted-foreground);
-  opacity: 0.85;
+  color: var(--text-2);
 }
 
 .section-title {

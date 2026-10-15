@@ -442,8 +442,7 @@ onMounted(refresh)
 .thumb-fallback {
   font-size: var(--fs-xl);
   font-weight: 700;
-  color: var(--muted-foreground);
-  opacity: 0.6;
+  color: var(--text-3);
 }
 
 .row-info {

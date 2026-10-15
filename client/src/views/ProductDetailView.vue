@@ -336,8 +336,7 @@ watch(() => props.id, load)
 .fallback {
   font-size: 72px;
   font-weight: 700;
-  color: var(--muted-foreground);
-  opacity: 0.5;
+  color: var(--text-3);
 }
 
 .thumbs {

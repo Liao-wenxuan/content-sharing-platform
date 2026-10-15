@@ -761,8 +761,7 @@ watch(activeId, () => {
 
 .empty-icon {
   font-size: 40px;
-  color: var(--muted-foreground);
-  opacity: 0.4;
+  color: var(--text-3);
 }
 
 .empty-title {

@@ -336,8 +336,7 @@ a.bar-label.author:hover {
 .bar-hint {
   grid-column: 2 / -1;
   font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  opacity: 0.75;
+  color: var(--text-2);
 }
 
 /* ===== 屏蔽列表 ===== */
@@ -403,7 +402,6 @@ a.bar-label.author:hover {
 .foot-note {
   margin: 4px 0 0;
   font-size: var(--fs-xs);
-  color: var(--muted-foreground);
-  opacity: 0.8;
+  color: var(--text-2);
 }
 </style>

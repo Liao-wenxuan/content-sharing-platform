@@ -422,8 +422,7 @@ onMounted(load)
 .cover-fallback {
   font-size: 40px;
   font-weight: 700;
-  color: var(--muted-foreground);
-  opacity: 0.5;
+  color: var(--text-3);
 }
 
 .body {
@@ -475,7 +474,8 @@ onMounted(load)
 
 .low-stock {
   font-size: var(--fs-2xs);
-  color: #b45309;
+  /* 走 token 而不是写死色值：写死的 #b45309 压在页面上只有 3.49:1 */
+  color: var(--warning);
 }
 
 .seller {
