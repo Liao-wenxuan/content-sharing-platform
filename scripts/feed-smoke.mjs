@@ -298,15 +298,25 @@ console.log('\n[9] 设置页能走进兴趣画像（不再是点不动的占位�
 {
   await page.goto(`${BASE}/settings`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)
-  const item = page.locator('li').filter({ hasText: '内容偏好调节' }).locator('button')
-  check(
-    '这一项的按钮文案是「查看」',
-    (await item.innerText()).includes('查看'),
-    await item.innerText()
-  )
-  await item.click()
+
+  // ⚠️ 这一段是在「设置页重构成抽屉式面板」之后改的。
+  //
+  // 原来的 DOM 是 `<li><button>查看</button></li>`，现在整行就是
+  // `<li role="button">`，尾���是箭头图标、没有 button 了。
+  //
+  // 它失效了整整两轮没人发现 —— 因为 e2e 不在 CI 里。
+  // **断言引用的 DOM 一旦被重构改掉，这条测试就是「看起来还在、其实没跑」**，
+  // 比没有这条测试更危险：它会让人以为这块有回归保护。
+  const row = page.locator('li[role="button"]').filter({ hasText: '内容偏好调节' })
+  check('设置页里能看到这个入口', (await row.count()) === 1, `匹配 ${await row.count()} 个`)
+
+  await row.click()
   await page.waitForTimeout(900)
   check('点得动，跳到兴趣画像', page.url().includes('/interest'), page.url())
+
+  // 兴趣画像页本身要有真内容，不能是个空壳
+  const hasWeights = await page.locator('.weight-bar, .weight-row, .interest').count()
+  check('兴趣画像页有实际内容', hasWeights > 0, `匹配 ${hasWeights} 个权重元素`)
 }
 
 console.log('\n[10] 控制台干净')

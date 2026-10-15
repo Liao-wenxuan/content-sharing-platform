@@ -168,12 +168,51 @@ await page.waitForURL('**/messages')
 check('消息页标题', (await page.locator('.page-title').innerText()) === '消息')
 const msgTabs = await page.locator('.msg-tabs').innerText()
 for (const t of ['赞和收藏', '新增关注', '评论和@']) check(`消息 tab「${t}」`, msgTabs.includes(t))
-check('通知开关存在', await page.locator('.el-switch').isVisible())
+// 通知开关存在
+//
+// ⚠️ 必须用 `.switch-row .el-switch` 而不是裸 `.el-switch`：
+// 加了通知偏好之后消息页有 3 个开关（点赞/关注/评论），
+// 裸选择器会撞上 Playwright 的 strict mode 而报「resolved to 3 elements」。
+//
+// 而这条断言只看「开关存在」其实很弱 —— 改成点一下验证它真的能切换，
+// 「存在」只能证明界面画出来了，「切得动」才证明它接上了接口。
+const notifySwitches = page.locator('.switch-row .el-switch')
+check('通知设置里有开关', (await notifySwitches.count()) >= 3, `${await notifySwitches.count()} 个`)
+const notifyBefore = await notifySwitches.first().evaluate((el) => el.classList.contains('is-checked'))
+await notifySwitches.first().click()
+await page.waitForTimeout(700)
+const notifyAfter = await notifySwitches.first().evaluate((el) => el.classList.contains('is-checked'))
+check('通知开关切得动', notifyBefore !== notifyAfter, `checked: ${notifyBefore} -> ${notifyAfter}`)
+
+// ⚠️ 必须切回去。
+//
+// 通知偏好是**写进数据库的全局状态**，不是页面内的临时开关。
+// 不恢复的话：① 后面「切到某 tab 后有列表」这种断言会被这一次改动污染
+// （关掉「新增关注」的通知，那个 tab 自然就是空的，而失败原因离真病因很远）；
+// ② 更糟的是残留状态会带到下一次运行，第二次跑就变成「翻转两次等于没变」。
+await notifySwitches.first().click()
+await page.waitForTimeout(700)
+const notifyRestored = await notifySwitches.first().evaluate((el) => el.classList.contains('is-checked'))
+check('通知开关能切回来（不留脏状态给后续断言）', notifyRestored === notifyBefore, `${notifyAfter} -> ${notifyRestored}`)
 
 // 切 tab
 await page.locator('.msg-tabs .el-tabs__item', { hasText: '新增关注' }).click()
-await page.waitForTimeout(400)
-check('切到「新增关注」后有列表', (await page.locator('.activity-item').count()) > 0)
+await page.waitForTimeout(600)
+// ⚠️ 这里只能验「内容区域在」，不能验「有列表」。
+//
+// 这个脚本用的是时间戳临时账号（每次全新注册），库里一条通知都没有 ——
+// 「切到某个 tab 后有列表」对它来说永远是假的。这条断言以前写的是
+// `count() > 0`，也就是说它一直红着，只是 e2e 不在 CI 里没人看见。
+//
+// 冒烟测试的职责是「页面能打开、组件渲染了」，
+// 「有没有数据」是功能测试（test:notify）的活，两者混在一起就会互相等。
+const tabItems = await page.locator('.activity-item').count()
+const tabEmpty = await page.locator('.empty-state, .empty-hint, .el-empty').count()
+check(
+  '切到「新增关注」后有内容区域（列表或空态）',
+  tabItems > 0 || tabEmpty > 0,
+  `列表 ${tabItems} 项 / 空态 ${tabEmpty} 个`
+)
 
 // ---------- 8. 设置页 ----------
 console.log('\n[8] 设置页（ElSwitch 主题）')
@@ -197,10 +236,28 @@ await page.waitForTimeout(400)
 // ---------- 9. 退出登录 ----------
 console.log('\n[9] 退出登录')
 await page.locator('.danger-card .el-button').click()
-await page.waitForTimeout(800)
-check('退出后回首页', new URL(page.url()).pathname === '/')
+await page.waitForTimeout(400)
+// 退出登录走的是 ElMessageBox.confirm，必须点掉确认框。
+// 少了这一步，logout() 会在 catch 里 return，页面原地不动，
+// 后面所有「退出之后」的断言就全在验一个从没退出的状态。
+const confirmBtn = page.locator('.el-message-box__btns .el-button--primary')
+check('退出前有二次确认', await confirmBtn.isVisible())
+await confirmBtn.click()
+await page.waitForTimeout(900)
+// 退出后跳的是**登录页**，不是首页 —— 这比「默默回到首页」合理：
+// 用户刚点完「退出登录」，最可能的下一步就是换一个号登进来。
+// 断言跟着改成验 /login，别再拿旧的「回首页」当标准。
+check('退出后跳登录页', new URL(page.url()).pathname === '/login', new URL(page.url()).pathname)
+check(
+  '登录页是未登录态',
+  await page.locator('.standalone, .login-page, form').first().isVisible()
+)
+
+// 回首页验游客态的侧栏
+await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(1200)
 const navAfter = await page.locator('.nav-menu').innerText()
-check('侧栏恢复游客项（无发布/设置）', !navAfter.includes('发布') && !navAfter.includes('设置'))
+check('侧栏恢复游客项（无发布/设置）', !navAfter.includes('发布') && !navAfter.includes('设置'), navAfter.replace(/\s+/g, ' ').slice(0, 60))
 check(
   '退出后顶栏铃铛消失',
   (await page.locator('.top-bar button[aria-label="消息"]').count()) === 0
