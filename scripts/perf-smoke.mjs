@@ -67,6 +67,23 @@ async function measure() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
 
+  // ⚠️ 必须在开跑之前验后端是通的。
+  //
+  // 曾经踩过：后端进程挂了，首页渲染成空态，脚本照样跑完，
+  // 输出一堆漂亮的数字：LCP 1876ms、图片 0.0KB。
+  // 那组数字读起来像「优化到极致」，实际上一张图都没加载 ——
+  // **测错对象比测不出来危险得多**，因为它会让人把性能问题「优化」没了。
+  try {
+    const health = await fetch('http://localhost:3000/api/health', { signal: AbortSignal.timeout(5000) })
+    if (!health.ok) throw new Error(`status ${health.status}`)
+  } catch (e) {
+    throw new Error(
+      `后端没起来（http://localhost:3000/api/health → ${e.message}）。\n` +
+        '  perf 跑的是生产构建 + 真实后端，两者缺一测出来的数字都是假的。\n' +
+        '  先在另一个窗口跑： cd server; npx tsx watch src/index.ts'
+    )
+  }
+
   const client = await context.newCDPSession(page)
   await client.send('Network.enable')
   await client.send('Network.emulateNetworkConditions', THROTTLE)
@@ -85,7 +102,14 @@ async function measure() {
     try {
       new PerformanceObserver((list) => {
         const entries = list.getEntries()
-        window.__lcp = entries[entries.length - 1].startTime
+        const last = entries[entries.length - 1]
+        window.__lcp = last.startTime
+        // LCP 元素是谁，比 LCP 是多少更有诊断价值：
+        // 元素是 <img> 说明还在等图片，是文本块说明图片没成为最大元素
+        window.__lcpElement = last.element
+          ? `${last.element.tagName}${last.element.className ? '.' + String(last.element.className).split(' ')[0] : ''}`
+          : 'unknown'
+        window.__lcpUrl = last.url || null
       }).observe({ type: 'largest-contentful-paint', buffered: true })
     } catch (error) {
       window.__lcpError = String(error)
@@ -123,11 +147,13 @@ async function measure() {
     const dom = await page.evaluate(() => ({
       html: document.querySelector('#app')?.innerHTML.length ?? -1,
       lcpError: window.__lcpError ?? null,
+      images: document.images.length,
       bodyText: document.body.innerText.slice(0, 120)
     }))
     throw new Error(
       '等不到 LCP 元素。\n' +
         `  #app 内容长度: ${dom.html}\n` +
+        `  页面 <img> 数量: ${dom.images}\n` +
         `  首屏文本: ${dom.bodyText.replace(/\s+/g, ' ')}\n` +
         `  observer 错误: ${dom.lcpError ?? '无'}\n` +
         '  先确认 3000 端口的 Express 在跑（preview 不代理 /api），再重试。'
@@ -136,6 +162,21 @@ async function measure() {
 
   // LCP 出现后还需要一点时间让最后一个候选落地
   await page.waitForTimeout(1500)
+
+  // 首屏真的得有图，否则下面所有数字都没意义
+  const viewportImageCount = await page.evaluate(
+    () =>
+      [...document.images].filter((img) => {
+        const rect = img.getBoundingClientRect()
+        return rect.bottom > 0 && rect.top < window.innerHeight
+      }).length
+  )
+  if (viewportImageCount === 0) {
+    throw new Error(
+      '视口内一张图都没有 —— 后端多半没起或首页是空态。\n' +
+        '  这种情况下「图片 0KB」不是优化成果，是压根没加载。'
+    )
+  }
 
   // ⚠️ 只等 LCP 是不够的，而且会得出严重误导的结论。
   //
@@ -206,12 +247,25 @@ async function measure() {
     return {
       fcp: paints['first-contentful-paint'] ?? 0,
       lcp: window.__lcp ?? 0,
+      lcpElement: window.__lcpElement ?? 'unknown',
+      lcpUrl: window.__lcpUrl ?? null,
       cls: window.__cls ?? 0,
       clsEntries: window.__clsEntries ?? 0,
       ttfb: nav?.responseStart ?? 0,
       domContentLoaded: nav?.domContentLoadedEventEnd ?? 0,
       domInteractive: nav?.domInteractive ?? 0,
       viewportImageCount: viewportImages.length,
+      // 有多少图真的设成了 eager/fetchpriority=high。
+      // 「我以为改了」和「它真的生效了」是两回事 ——
+      // 属性写错、computed 没重算、SSR 初始态没带上，都会让它静默退回 lazy。
+      loadingBreakdown: (() => {
+        const counts = {}
+        for (const img of document.querySelectorAll('img.sg-img')) {
+          const key = `${img.getAttribute('loading') || '(none)'}/${img.getAttribute('fetchpriority') || '(none)'}`
+          counts[key] = (counts[key] ?? 0) + 1
+        }
+        return counts
+      })(),
       // 没有视口图时退回「文本就绪」，否则 cutoff 会是 0，把所有资源都算进首屏
       imagesReadyAt: lastViewportImageEnd || window.__lcp || 0,
       resources
@@ -238,9 +292,17 @@ function report(metrics, distBytes) {
   console.log('\n=== 首屏关键指标（Slow 4G：1.6Mbps / 150ms RTT）===')
   console.log(`  TTFB            ${metrics.ttfb.toFixed(0).padStart(6)} ms`)
   console.log(`  FCP             ${metrics.fcp.toFixed(0).padStart(6)} ms`)
-  console.log(`  LCP             ${metrics.lcp.toFixed(0).padStart(6)} ms`)
+  console.log(`  LCP             ${metrics.lcp.toFixed(0).padStart(6)} ms   ${metrics.lcpElement}`)
+  if (metrics.lcpUrl) console.log(`  └ LCP 图片      ${metrics.lcpUrl.split('/').pop()}`)
   console.log(`  CLS             ${metrics.cls.toFixed(4).padStart(6)}      ${metrics.cls < 0.1 ? '✓ 达标 (<0.1)' : '✗ 超标'}  (${metrics.clsEntries} 次位移)`)
   console.log(`  视口图片就绪    ${metrics.imagesReadyAt.toFixed(0).padStart(6)} ms   (视口内 ${metrics.viewportImageCount} 张)`)
+  const eager = Object.entries(metrics.loadingBreakdown ?? {})
+    .filter(([k]) => k.startsWith('eager'))
+    .reduce((sum, [, v]) => sum + v, 0)
+  const lazy = Object.entries(metrics.loadingBreakdown ?? {})
+    .filter(([k]) => k.startsWith('lazy'))
+    .reduce((sum, [, v]) => sum + v, 0)
+  console.log(`  加载策略        eager ${eager} / lazy ${lazy}`)
   console.log(
     `  └ 文本可见后还要再等 ${(metrics.imagesReadyAt - metrics.lcp).toFixed(0).padStart(5)} ms 才看到图`
   )
@@ -251,6 +313,23 @@ function report(metrics, distBytes) {
   console.log(`  CSS     ${kb(firstScreenCss).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'stylesheet').length} 个请求`)
   console.log(`  图片    ${kb(firstScreenImg).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'img').length} 个请求`)
   console.log(`  合计    ${kb(firstScreenAll).padStart(8)} KB   ${beforeLcp.length} 个请求`)
+
+  // LCP 图片什么时候**下完**的？和 LCP 记录的时刻差多少。
+  //
+  // 这个差值是本脚本最有诊断价值的一行：
+  // - 差值 ≈ 0 → LCP 就是传输耗时，该去减字节
+  // - 差值很大 → 图早下完了，LCP 卡在**渲染**（动画 / 布局 / 主线程），
+  //   这时候再去优化字节是白费力气
+  const lcpResource = resources.find((r) => r.name === metrics.lcpUrl)
+  if (lcpResource) {
+    const gap = metrics.lcp - lcpResource.end
+    console.log(`\n  LCP 图片传输完成于 ${lcpResource.end.toFixed(0)} ms，而 LCP 记在 ${metrics.lcp.toFixed(0)} ms`)
+    console.log(
+      gap < 120
+        ? `  └ 两者几乎同时 → LCP 由传输决定，继续减字节`
+        : `  └ 中间空转了 ${gap.toFixed(0)} ms → **瓶颈在渲染/调度，不在传输**`
+    )
+  }
 
   const totalJs = distBytes.js
   console.log(`\n  全站 JS  ${kb(totalJs).padStart(8)} KB`)
@@ -263,6 +342,29 @@ function report(metrics, distBytes) {
   for (const r of beforeLcp.sort((a, b) => b.bytes - a.bytes).slice(0, 14)) {
     const file = r.name.split('/').pop()
     console.log(`  ${kb(r.bytes).padStart(8)} KB  ${r.kind.padEnd(10)} ${file}`)
+  }
+
+  // SPA 特有的一段串行：图片 URL 只有接口返回才知道，
+  // 所以「接口什么时候回来」直接决定「图片什么时候能开始下」。
+  // 不看这一段，很容易把接口耗时误判成图片传输慢。
+  const api = resources
+    .filter((r) => r.kind === 'fetch' || r.kind === 'xmlhttprequest')
+    .sort((a, b) => a.start - b.start)
+  if (api.length) {
+    console.log('\n=== 接口请求（限速下，含 RTT）===')
+    for (const r of api.slice(0, 6)) {
+      const file = r.name.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+      console.log(
+        `  ${file.padEnd(28)} 发起 ${r.start.toFixed(0).padStart(5)}ms → 完成 ${r.end.toFixed(0).padStart(5)}ms  (${(r.end - r.start).toFixed(0)}ms)`
+      )
+    }
+    const firstApiEnd = api[0].end
+    const firstImgStart = Math.min(...beforeLcp.filter((r) => r.kind === 'img').map((r) => r.start))
+    if (Number.isFinite(firstImgStart)) {
+      console.log(
+        `  → 首个接口 ${firstApiEnd.toFixed(0)}ms 完成，首张图 ${firstImgStart.toFixed(0)}ms 才发起，中间 ${(firstImgStart - firstApiEnd).toFixed(0)}ms`
+      )
+    }
   }
 }
 
