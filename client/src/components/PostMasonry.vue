@@ -173,6 +173,22 @@ const loadedImages = ref(new Set<number>())
 function markImageLoaded(postId: number) {
   loadedImages.value.add(postId)
 }
+
+/**
+ * 封面加载失败（文件被删、路径写错、磁盘清过）时退回占位块。
+ *
+ * 没有它的时候，浏览器会在封面区里直接渲染 alt 文字 ——
+ * 「设置检查号的笔记封面」这种一行字浮在灰底上，
+ * 整列的视觉基线被它带歪，看起来像卡片加载坏了。
+ *
+ * 判据是「宁可显示一块规整的占位，也不显示一行裸露的说明文字」：
+ * 前者仍然工整，后者让这一张卡和周围所有卡长得不一样。
+ */
+const brokenCovers = ref(new Set<number>())
+
+function markCoverBroken(postId: number) {
+  brokenCovers.value.add(postId)
+}
 </script>
 
 <template>
@@ -226,13 +242,14 @@ function markImageLoaded(postId: number) {
           <!-- 封面：有图显示图，无图也保留同尺寸占位，保证列高均匀 -->
           <div class="cover" :class="`ratio-${item.ratio}`">
             <img
-              v-if="item.post.imageUrls?.length"
+              v-if="item.post.imageUrls?.length && !brokenCovers.has(item.post.id)"
               class="sg-img"
               :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
               :src="coverSrc(item.post)"
               :alt="`${item.post.author?.nickname} 的笔记封面`"
               loading="lazy"
               @load="markImageLoaded(item.post.id)"
+              @error="markCoverBroken(item.post.id)"
             />
             <div v-else class="cover-blank">
               <span class="blank-tag"># {{ item.post.topicTag || '日常' }}</span>
@@ -288,7 +305,7 @@ function markImageLoaded(postId: number) {
           <el-icon><component :is="Close" /></el-icon>
         </button>
 
-        <!-- 作者 + 点赞 -->
+        <!-- 作者 + 时间 + 点赞：挤在一行里 -->
         <div class="foot">
           <!--
             有作者才给链接。
@@ -301,24 +318,29 @@ function markImageLoaded(postId: number) {
             class="author"
             :to="`/profile/${item.post.author.id}`"
           >
-            <el-avatar :size="20" class="avatar">
+            <el-avatar :size="18" class="avatar">
               {{ avatarText(item.post.author?.nickname) }}
             </el-avatar>
             <span class="nickname">{{ item.post.author?.nickname || '未知用户' }}</span>
           </router-link>
           <span v-else class="author author--plain" title="这条笔记没有关联作者">
-            <el-avatar :size="20" class="avatar">
+            <el-avatar :size="18" class="avatar">
               {{ avatarText(item.post.author?.nickname) }}
             </el-avatar>
             <span class="nickname">{{ item.post.author?.nickname || '未知用户' }}</span>
           </span>
+
+          <span class="dot">·</span>
+
+          <span class="time" :title="item.post.createdAt">{{
+            formatTime(item.post.createdAt)
+          }}</span>
+
           <span class="like">
             <el-icon><component :is="Star" /></el-icon>
             {{ item.post.likeCount }}
           </span>
         </div>
-
-        <span class="time" :title="item.post.createdAt">{{ formatTime(item.post.createdAt) }}</span>
       </div>
     </div>
   </div>
@@ -586,7 +608,7 @@ function markImageLoaded(postId: number) {
 
 /* ===== 标题 ===== */
 .title {
-  margin: 10px 0 8px;
+  margin: 8px 0 6px;
   font-size: var(--fs-base);
   line-height: 1.45;
   color: var(--foreground);
@@ -596,6 +618,15 @@ function markImageLoaded(postId: number) {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+  /*
+   * 预留两行高度。
+   *
+   * 瀑布流的「整齐」不是靠等高，而是靠**同一区域的基线对齐**：
+   * 一行标题的卡片会把下面的作者行往上提半行，整列看起来就歪。
+   * 代价是只有一行的卡片底部空一行半 —— 用一次留白换整列的齐，
+   * 而瀑布流本身每一列高度都不等，卡片整体高矮看不出来。
+   */
+  min-height: calc(2 * 1.45em);
   /* 跟着卡片一起亮：给出「这条被选中了」的第二个通道。
      对纯图片网格来说，多一层文字反馈比只动图片更好辨认。 */
   transition: color var(--dur-fast) var(--ease-out-expo);
@@ -611,18 +642,22 @@ function markImageLoaded(postId: number) {
   font-weight: 600;
 }
 
-/* ===== 作者行 ===== */
+/* ===== 作者行 =====
+ *
+ * 一行放完：作者 · 时间 …… 点赞。
+ * 之前时间是单独一行，每张卡因此多出约 18px，作者行起点也参差。
+ */
 .foot {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .author {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex: 1;
+  gap: 5px;
   min-width: 0;
   color: inherit;
   text-decoration: none;
@@ -654,34 +689,36 @@ function markImageLoaded(postId: number) {
 
 .nickname {
   font-size: var(--fs-xs);
-  color: var(--muted-foreground);
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 作者、时间、点赞之间的分隔点。用它而不是给每段加 margin：
+   时间被挤掉时分隔点会跟着消失，而不是留下两个空洞。 */
+.dot {
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  flex-shrink: 0;
+}
+
+.time {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .like {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  margin-left: auto;
+  padding-left: 6px;
   font-size: var(--fs-xs);
-  color: var(--muted-foreground);
+  color: var(--text-3);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
-}
-
-.time {
-  display: block;
-  margin-top: 4px;
-  font-size: var(--fs-2xs);
-  /*
-   * 用 --text-3，而不是 `--muted-foreground` + `opacity: 0.7`。
-   *
-   * 后者是两次透明度相乘：0.62 × 0.7 = 0.43，落在设计系统定义的
-   * 三档**之外**，实测压在页面上只有 4.26:1（AA 要 4.5）。
-   * 叠乘还有个更隐蔽的代价：改 --muted-foreground 时没人想得到
-   * 这几处还额外乘了 0.7，于是「调一个变量」在不同页面表现不一致。
-   */
-  color: var(--text-3);
 }
 </style>
