@@ -115,10 +115,12 @@ const plainBlockedCount = computed(
 /** 「为什么？」的展开态。默认收起 —— 大多数人不需要解释 */
 const showFilterHint = ref(false)
 
+/** 单列宽度。分列必须用它，别处再算一遍宽度的话，改了 GAP 其中一处不会跟着变 */
+const colWidth = computed(() => (gridWidth.value - GAP * (colCount.value - 1)) / colCount.value)
+
 const columns = computed(() => {
-  const n = colCount.value
-  const colWidth = (gridWidth.value - GAP * (n - 1)) / n
-  return distributeToColumns(visiblePosts.value, n, colWidth)
+  const buckets = distributeToColumns(visiblePosts.value, colCount.value, colWidth.value)
+  return buckets
 })
 
 /**

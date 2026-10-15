@@ -1,5 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+// 首页**故意不走懒加载**。
+//
+// 限速实测（scripts/perf-smoke.mjs，Slow 4G）给出的时间线：
+//   FCP 1240ms → /api/feed 1792ms 才发起
+// 中间这 552ms 花在「下载首页 chunk + 挂载组件」上 ——
+// 而这段时间里用户看着的是已经渲染出来、却空空如也的骨架。
+//
+// 首页 chunk 只有约 10KB（HomeView + PostMasonry + EmptyState），
+// 换来的是省掉一次「等 chunk 下完 → 执行 → 才能发接口」的串行。
+// 入口 chunk 大 10KB 的代价，换首屏早 400ms 出现内容，划算。
+import HomeView from '@/views/HomeView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -7,7 +18,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('@/views/HomeView.vue')
+      component: HomeView
     },
     {
       path: '/login',
