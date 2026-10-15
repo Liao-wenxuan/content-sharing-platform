@@ -299,15 +299,20 @@ console.log('\n[9] 设置页能走进兴趣画像（不再是点不动的占位�
   await page.goto(`${BASE}/settings`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)
 
-  // ⚠️ 这一段是在「设置页重构成抽屉式面板」之后改的。
+  // ⚠️ 这一段改过两次，都是被重构改掉的。
   //
-  // 原来的 DOM 是 `<li><button>查看</button></li>`，现在整行就是
-  // `<li role="button">`，尾���是箭头图标、没有 button 了。
+  // ① 设置页重构成抽屉式面板：原来的 DOM 是 `<li><button>查看</button></li>`，
+  //    变成了整行 `<li role="button">`，尾巴是箭头图标、没有 button 了。
+  //    它当时失效了整整两轮没人发现 —— 因为 e2e 不在 CI 里。
+  //    **断言引用的 DOM 一旦被重构改掉，这条测试就是「看起来还在、其实没跑」**，
+  //    比没有这条测试更危险：它会让人以为这块有回归保护。
+  // ② 无障碍改造：`role="button"` 覆盖了 `<li>` 的 listitem 语义
+  //    （axe 判「<ul> 里出现了不允许的子节点 [role=button]」），
+  //    现在可点的行用真 `<button>`，开关行不给 role。
   //
-  // 它失效了整整两轮没人发现 —— 因为 e2e 不在 CI 里。
-  // **断言引用的 DOM 一旦被重构改掉，这条测试就是「看起来还在、其实没跑」**，
-  // 比没有这条测试更危险：它会让人以为这块有回归保护。
-  const row = page.locator('li[role="button"]').filter({ hasText: '内容偏好调节' })
+  // 两次修法不一样：第一次把选择器对齐到新 DOM，第二次换成
+  // `[data-item]` 这个稳定钩子 —— 它不再跟着结构变。
+  const row = page.locator('[data-item="content"]')
   check('设置页里能看到这个入口', (await row.count()) === 1, `匹配 ${await row.count()} 个`)
 
   await row.click()

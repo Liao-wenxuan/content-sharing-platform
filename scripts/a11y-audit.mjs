@@ -22,6 +22,7 @@
  *   npm run a11y -- --static  只跑静态扫描（不需要起服务）
  *   npm run a11y -- --guest   只跑游客态
  *   npm run a11y -- --only 设置   只跑名字里含「设置」的页面（调面板时用）
+ *   npm run a11y -- --light       强制浅色模式再扫一遍
  */
 import { chromium } from 'playwright'
 import { createRequire } from 'node:module'
@@ -36,6 +37,10 @@ const argv = process.argv.slice(2)
 const STATIC_ONLY = argv.includes('--static')
 const GUEST_ONLY = argv.includes('--guest')
 const ONLY = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null
+// 浅色模式：token 改动必须两个主题都验，否则「深色下全绿」只是半个结论。
+// 做法是在页面加载完、主题应用之后摘掉 html.dark —— 主题只在加载时应用一次，
+// 摘掉之后不会有东西再把它加回来，比改数据库或伪装接口响应都干净。
+const LIGHT = argv.includes('--light')
 
 const serverRequire = createRequire(path.join(ROOT, 'server', 'package.json'))
 // axe-core 装在根目录（脚本的运行地），从根 package.json 解析
@@ -386,6 +391,11 @@ async function auditPage(ctx, loggedIn) {
       // 等主区域真的出现内容，而不是只等 DOM ready
       await p.locator('main, .standalone').first().waitFor({ state: 'visible', timeout: 15000 })
       await p.waitForTimeout(700)
+
+      if (LIGHT) {
+        await p.evaluate(() => document.documentElement.classList.remove('dark'))
+        await p.waitForTimeout(250)
+      }
 
       /*
        * 守卫二：确认没被重定向。
