@@ -163,31 +163,47 @@ watch(activeId, () => {
       <div v-if="loadingList" class="list-hint">加载中…</div>
 
       <ul v-else class="conv-items">
+        <!--
+          会话项是 <li> 里放 <button>，而不是让 <li> 自己可点。
+          两点原因：
+          ① 键盘和读屏只认原生控件，<li @click> 对它们不存在
+          ② 换会话是「切换当前面板」，不是导航，所以是按钮不是链接
+        -->
         <li
           v-for="conv in conversations"
           :key="conv.id"
-          class="conv-item"
-          :class="{ active: conv.id === activeId }"
-          @click="openConversation(conv.id)"
+          class="conv-item-wrap"
+          :class="{ active: activeId === conv.id }"
         >
-          <el-badge :value="conv.unreadCount" :hidden="conv.unreadCount === 0" class="avatar-badge">
-            <el-avatar :size="40" :src="conv.peer.avatar || undefined">
-              {{ conv.peer.nickname.slice(0, 1) }}
-            </el-avatar>
-            <span v-if="isPeerOnline(conv)" class="online-dot" />
-          </el-badge>
+          <button
+            type="button"
+            class="conv-item"
+            :aria-current="activeId === conv.id ? 'true' : undefined"
+            @click="openConversation(conv.id)"
+          >
+            <el-badge
+              :value="conv.unreadCount"
+              :hidden="conv.unreadCount === 0"
+              class="avatar-badge"
+            >
+              <el-avatar :size="40" :src="conv.peer.avatar || undefined">
+                {{ conv.peer.nickname.slice(0, 1) }}
+              </el-avatar>
+              <span v-if="isPeerOnline(conv)" class="online-dot" />
+            </el-badge>
 
-          <div class="conv-main">
-            <div class="conv-top">
-              <span class="peer-name">{{ conv.peer.nickname }}</span>
-              <span v-if="conv.lastMessage" class="conv-time">
-                {{ formatTime(conv.lastMessage.createdAt) }}
-              </span>
+            <div class="conv-main">
+              <div class="conv-top">
+                <span class="peer-name">{{ conv.peer.nickname }}</span>
+                <span v-if="conv.lastMessage" class="conv-time">
+                  {{ formatTime(conv.lastMessage.createdAt) }}
+                </span>
+              </div>
+              <p class="conv-last">
+                {{ conv.lastMessage?.content || '开始聊天吧' }}
+              </p>
             </div>
-            <p class="conv-last">
-              {{ conv.lastMessage?.content || '开始聊天吧' }}
-            </p>
-          </div>
+          </button>
         </li>
       </ul>
     </aside>
@@ -453,11 +469,31 @@ watch(activeId, () => {
   list-style: none;
 }
 
+/*
+ * <li> 只负责列表语义，可点击的是里面的 <button>。
+ * 激活态挂在 li 上而不是 button 上，这样样式表读起来还是
+ * 「这一项被选中了」，而不是「这个按钮是激活的」。
+ */
+.conv-item-wrap {
+  list-style: none;
+}
+
+.conv-item-wrap.active {
+  background: var(--muted);
+}
+
 .conv-item {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 10px 8px;
+  /* 按钮自带边框和背景，这里抹掉，换成和 li 一样的激活底色 */
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background 0.15s;
@@ -467,11 +503,12 @@ watch(activeId, () => {
   background: var(--muted);
 }
 
-.conv-item.active {
-  background: var(--muted);
+.conv-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
-.conv-item.active .peer-name {
+.conv-item-wrap.active .peer-name {
   color: var(--accent);
 }
 

@@ -8,8 +8,6 @@
  * 这个组件只做两件事：ResizeObserver 监听宽度 → 按结果渲染 DOM。
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { Star, VideoPlay, Close } from '@element-plus/icons-vue'
 import type { Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
@@ -38,7 +36,6 @@ const emit = defineEmits<{ dismiss: [postId: number] }>()
 const { formatTime } = useRelativeTime()
 
 const gridRef = ref<HTMLElement | null>(null)
-const router = useRouter()
 const gridWidth = ref(1200)
 const colCount = ref(5)
 const { settings } = useUserSettings()
@@ -130,19 +127,10 @@ const columns = computed(() => {
  * 一个能被点到、点下去只会得到一句「快了」的假按钮。
  * 路由 `/user/:id` 早就存在了，缺的只是这一跳。
  *
- * `.prevent` 是必须的：整个卡片是 router-link，
- * 不拦住的话会先触发卡片的跳转再触发这一跳，两个导航互相打架。
+ * 现在作者行本身就是 `<router-link>`，这个函数连同它那句提示一起删掉了：
+ * 有作者就走链接，没作者就渲染成明确不可点的纯文本。
+ * 保留一个「只在缺作者时才跑」的处理函数，等于留了一条平时永远走不到的分支。
  */
-function onAuthorClick(post: Post) {
-  const authorId = post.author?.id
-  if (!authorId) {
-    // 作者信息缺失（比如种子数据里的匿名笔记）时不给假反馈 ——
-    // 「点了没反应」比「明确告知不能点」更糟
-    ElMessage.info('这条笔记没有关联作者')
-    return
-  }
-  router.push(`/profile/${authorId}`)
-}
 
 /**
  * 卡片封面用缩略图。
@@ -196,7 +184,19 @@ function markImageLoaded(postId: number) {
   -->
   <p v-if="filteredCount > 0" class="filter-note">
     按你的屏蔽偏好隐藏了 {{ filteredCount }} 条
-    <span class="filter-link" @click="showFilterHint = !showFilterHint">为什么？</span>
+    <!--
+      以前是 <span @click>：鼠标能点，键盘 Tab 永远到不了。
+      它做的不是跳转而是「就地展开一段解释」，所以语义上就是按钮，
+      只是长得像链接 —— 保留链接外观，不保留链接标签。
+    -->
+    <button
+      type="button"
+      class="filter-link"
+      :aria-expanded="showFilterHint"
+      @click="showFilterHint = !showFilterHint"
+    >
+      为什么？
+    </button>
   </p>
   <p v-if="filteredCount > 0 && showFilterHint" class="filter-hint">
     <template v-if="settings.minorMode">未成年人模式只显示纯文字笔记。 </template>
@@ -207,84 +207,111 @@ function markImageLoaded(postId: number) {
 
   <div ref="gridRef" class="masonry">
     <div v-for="(col, ci) in columns" :key="ci" class="masonry-col sg-reveal">
-      <router-link
-        v-for="item in col"
-        :key="item.post.id"
-        :to="`/post/${item.post.id}`"
-        class="card"
-      >
-        <!-- 封面：有图显示图，无图也保留同尺寸占位，保证列高均匀 -->
-        <div class="cover" :class="`ratio-${item.ratio}`">
-          <img
-            v-if="item.post.imageUrls?.length"
-            class="sg-img"
-            :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
-            :src="coverSrc(item.post)"
-            :alt="`${item.post.author?.nickname} 的笔记封面`"
-            loading="lazy"
-            @load="markImageLoaded(item.post.id)"
-          />
-          <div v-else class="cover-blank">
-            <span class="blank-tag"># {{ item.post.topicTag || '日常' }}</span>
+      <!--
+        ⚠️ 卡片本身是 <a>，所以它内部**不能**再放任何可聚焦控件。
+        交互控件嵌在另一个交互控件里是 WCAG 的 serious 级违规：
+        读屏会把两个控件念成一串，Tab 停下来的位置也说不清。
+
+        之前这里是三样东西挤在一个 <a> 里：
+        - 「不感兴趣」按钮（真 <button>）
+        - 作者行（div + @click）
+        - 点赞数（其实只是展示数据）
+
+        现在卡片链接只负责「点进去看」，另外两个动作作为兄弟节点放在
+        .card-wrap 里，由 wrap 承担定位和 hover。视觉顺序没变：
+        封面 → 标题 → 作者行 → 时间。
+      -->
+      <div v-for="item in col" :key="item.post.id" class="card-wrap">
+        <router-link :to="`/post/${item.post.id}`" class="card">
+          <!-- 封面：有图显示图，无图也保留同尺寸占位，保证列高均匀 -->
+          <div class="cover" :class="`ratio-${item.ratio}`">
+            <img
+              v-if="item.post.imageUrls?.length"
+              class="sg-img"
+              :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
+              :src="coverSrc(item.post)"
+              :alt="`${item.post.author?.nickname} 的笔记封面`"
+              loading="lazy"
+              @load="markImageLoaded(item.post.id)"
+            />
+            <div v-else class="cover-blank">
+              <span class="blank-tag"># {{ item.post.topicTag || '日常' }}</span>
+            </div>
+
+            <span v-if="item.post.imageUrls && item.post.imageUrls.length > 1" class="count-badge">
+              +{{ item.post.imageUrls.length }}
+            </span>
+            <span v-if="item.post.topicTag === '视频'" class="play-badge">
+              <el-icon><component :is="VideoPlay" /></el-icon>
+            </span>
+
+            <!--
+              搜索命中话题标签时，正文里可能根本没有这个词（比如搜「美食」，
+              结果是靠 topic_tag 命中的），不给任何视觉反馈用户会以为没搜到。
+              所以命中标签时在封面左上角挂一个标签角标。
+            -->
+            <span v-if="tagMatched(item.post)" class="tag-badge"># {{ item.post.topicTag }}</span>
+
+            <!--
+              推荐理由（只有推荐流会传 reasons）。
+              放在封面上而不是标题下面，是因为它回答的是「为什么你会看到这条」，
+              而用户滑过一张卡片时眼睛先落在图上 —— 贴图的短句才读得到。
+            -->
+            <span v-if="props.reasons?.[item.post.id]" class="reason-badge">
+              {{ props.reasons[item.post.id] }}
+            </span>
           </div>
 
-          <span v-if="item.post.imageUrls && item.post.imageUrls.length > 1" class="count-badge">
-            +{{ item.post.imageUrls.length }}
-          </span>
-          <span v-if="item.post.topicTag === '视频'" class="play-badge">
-            <el-icon><component :is="VideoPlay" /></el-icon>
-          </span>
+          <!-- 标题：两行截断，命中关键词高亮 -->
+          <p class="title">
+            <span
+              v-for="(seg, si) in segments(item.post.content)"
+              :key="si"
+              :class="{ hit: seg.hit }"
+              >{{ seg.text }}</span
+            >
+          </p>
+        </router-link>
 
-          <!--
-            搜索命中话题标签时，正文里可能根本没有这个词（比如搜「美食」，
-            结果是靠 topic_tag 命中的），不给任何视觉反馈用户会以为没搜到。
-            所以命中标签时在封面左上角挂一个标签角标。
-          -->
-          <span v-if="tagMatched(item.post)" class="tag-badge"># {{ item.post.topicTag }}</span>
-
-          <!--
-            推荐理由（只有推荐流会传 reasons）。
-            放在封面上而不是标题下面，是因为它回答的是「为什么你会看到这条」，
-            而用户滑过一张卡片时眼睛先落在图上 —— 贴图的短句才读得到。
-          -->
-          <span v-if="props.reasons?.[item.post.id]" class="reason-badge">
-            {{ props.reasons[item.post.id] }}
-          </span>
-
-          <!--
-            不感兴趣。hover 才显形：常驻会变成视觉噪声，
-            而且它是个**破坏性**操作，不该和「点进去看」抢同等的视觉权重。
-            .prevent 挡住 router-link 的跳转，.stop 冒泡出去。
-          -->
-          <button
-            v-if="dismissable"
-            type="button"
-            class="dismiss-btn"
-            :aria-label="`不感兴趣：${item.post.content.slice(0, 20)}`"
-            @click.prevent.stop="emit('dismiss', item.post.id)"
-          >
-            <el-icon><component :is="Close" /></el-icon>
-          </button>
-        </div>
-
-        <!-- 标题：两行截断，命中关键词高亮 -->
-        <p class="title">
-          <span
-            v-for="(seg, si) in segments(item.post.content)"
-            :key="si"
-            :class="{ hit: seg.hit }"
-            >{{ seg.text }}</span
-          >
-        </p>
+        <!--
+          不感兴趣。hover 才显形：常驻会变成视觉噪声，
+          而且它是个**破坏性**操作，不该和「点进去看」抢同等的视觉权重。
+          定位挂在 .card-wrap 上（封面和 wrap 顶边对齐，所以偏移量不变）。
+        -->
+        <button
+          v-if="dismissable"
+          type="button"
+          class="dismiss-btn"
+          :aria-label="`不感兴趣：${item.post.content.slice(0, 20)}`"
+          @click="emit('dismiss', item.post.id)"
+        >
+          <el-icon><component :is="Close" /></el-icon>
+        </button>
 
         <!-- 作者 + 点赞 -->
         <div class="foot">
-          <div class="author" @click.prevent="onAuthorClick(item.post)">
+          <!--
+            有作者才给链接。
+            之前这里是 `div @click` + 弹一句「这条笔记没有关联作者」，
+            那是个键盘和读屏都够不到的假按钮：现在要么是真链接，
+            要么是一个明确不可点的纯展示元素。
+          -->
+          <router-link
+            v-if="item.post.author?.id"
+            class="author"
+            :to="`/profile/${item.post.author.id}`"
+          >
             <el-avatar :size="20" class="avatar">
               {{ avatarText(item.post.author?.nickname) }}
             </el-avatar>
             <span class="nickname">{{ item.post.author?.nickname || '未知用户' }}</span>
-          </div>
+          </router-link>
+          <span v-else class="author author--plain" title="这条笔记没有关联作者">
+            <el-avatar :size="20" class="avatar">
+              {{ avatarText(item.post.author?.nickname) }}
+            </el-avatar>
+            <span class="nickname">{{ item.post.author?.nickname || '未知用户' }}</span>
+          </span>
           <span class="like">
             <el-icon><component :is="Star" /></el-icon>
             {{ item.post.likeCount }}
@@ -292,7 +319,7 @@ function markImageLoaded(postId: number) {
         </div>
 
         <span class="time" :title="item.post.createdAt">{{ formatTime(item.post.createdAt) }}</span>
-      </router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -313,15 +340,32 @@ function markImageLoaded(postId: number) {
   color: var(--text-3);
 }
 
+/*
+ * 长得像链接的按钮。
+ *
+ * 保留 `underline` 是有意的：它告诉用户「这里能点、点了会展开」，
+ * 而周围正文没有下划线，所以这个下划线是唯一的功能提示。
+ * 代价是要手动抹掉按钮自带的 padding / 背景 / 字号继承。
+ */
 .filter-link {
-  color: var(--accent);
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
   cursor: pointer;
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .filter-link:hover {
   color: var(--accent-dim);
+}
+
+.filter-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .filter-hint {
@@ -347,6 +391,20 @@ function markImageLoaded(postId: number) {
   display: flex;
   flex-direction: column;
   gap: var(--masonry-item-gap);
+}
+
+/*
+ * 卡片外壳。
+ *
+ * 它存在的唯一原因是「链接里不能再放链接或按钮」：
+ * 不感兴趣按钮和作者主页链接都要在 <a class="card"> 外面，
+ * 定位和 hover 状态因此挂到这个壳上，而不是挂在卡片链接上。
+ *
+ * 封面和壳的顶边是齐的，所以 .dismiss-btn 的偏移量沿用原来的数值。
+ */
+.card-wrap {
+  position: relative;
+  display: block;
 }
 
 .card {
@@ -488,11 +546,14 @@ function markImageLoaded(postId: number) {
   不感兴趣按钮：
   - 默认 opacity 0，hover 卡片才显形
   - 聚焦时也显形，否则键盘用户永远看不到这个操作
+  - z-index 压在封面之上：它现在是 .card 的兄弟节点而不是后代，
+    两者都是定位元素，靠文档顺序已经够，但写出来免得以后有人调顺序时踩坑
 */
 .dismiss-btn {
   position: absolute;
   right: 8px;
   top: 8px;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -509,7 +570,7 @@ function markImageLoaded(postId: number) {
   transition: opacity var(--dur-fast) var(--ease-out-expo);
 }
 
-.card:hover .dismiss-btn,
+.card-wrap:hover .dismiss-btn,
 .dismiss-btn:focus-visible {
   opacity: 1;
 }
@@ -563,7 +624,25 @@ function markImageLoaded(postId: number) {
   gap: 6px;
   flex: 1;
   min-width: 0;
-  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-xs);
+}
+
+/* 作者行现在是 router-link，键盘焦点要有落点 */
+.author:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * 没有关联作者的笔记：渲染成纯文本，**不带** pointer 光标。
+ * 之前这里是 div + @click，鼠标有手型、点了弹一句 toast，
+ * 键盘却完全够不到 —— 一个看起来能点、实际只有一半人能用的控件。
+ * 现在它从一开始就不是控件，光标也不会骗人。
+ */
+.author--plain {
+  cursor: default;
 }
 
 .avatar {

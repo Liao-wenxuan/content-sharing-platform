@@ -237,32 +237,34 @@ onMounted(load)
 
     <template v-else>
       <ul ref="gridRef" class="grid">
-        <li
-          v-for="p in products"
-          :key="p.id"
-          class="card sg-reveal"
-          @click="router.push(`/market/product/${p.id}`)"
-        >
-          <div class="cover">
-            <img v-if="coverOf(p)" :src="coverOf(p)" :alt="p.title" loading="lazy" />
-            <span v-else class="cover-fallback">{{ p.title.slice(0, 1) }}</span>
-          </div>
-
-          <div class="body">
-            <h3 class="card-title">{{ p.title }}</h3>
-
-            <div class="price-row">
-              <span class="price">{{ formatYuan(p.priceCents) }}</span>
-              <span v-if="p.stock <= 0" class="sold-out">已售罄</span>
-              <span v-else-if="p.stock <= 3" class="low-stock">仅剩 {{ p.stock }} 件</span>
+        <!--
+          <li> 里放 <router-link>，而不是让 <li> 自己 @click。
+          进详情页是导航，就该是链接：Tab 能停、Ctrl/⌘+点击能开新标签、
+          右键能复制链接 —— 这三样 <li @click> 一个都给不了。
+        -->
+        <li v-for="p in products" :key="p.id" class="card-wrap sg-reveal">
+          <router-link class="card" :to="`/market/product/${p.id}`">
+            <div class="cover">
+              <img v-if="coverOf(p)" :src="coverOf(p)" :alt="p.title" loading="lazy" />
+              <span v-else class="cover-fallback">{{ p.title.slice(0, 1) }}</span>
             </div>
 
-            <p class="seller">
-              <span>{{ p.seller.nickname }}</span>
-              <span class="dot">·</span>
-              <span>{{ p.status === 'off_shelf' ? '已下架' : `${p.stock} 件在售` }}</span>
-            </p>
-          </div>
+            <div class="body">
+              <h3 class="card-title">{{ p.title }}</h3>
+
+              <div class="price-row">
+                <span class="price">{{ formatYuan(p.priceCents) }}</span>
+                <span v-if="p.stock <= 0" class="sold-out">已售罄</span>
+                <span v-else-if="p.stock <= 3" class="low-stock">仅剩 {{ p.stock }} 件</span>
+              </div>
+
+              <p class="seller">
+                <span>{{ p.seller.nickname }}</span>
+                <span class="dot">·</span>
+                <span>{{ p.status === 'off_shelf' ? '已下架' : `${p.stock} 件在售` }}</span>
+              </p>
+            </div>
+          </router-link>
         </li>
       </ul>
 
@@ -387,12 +389,26 @@ onMounted(load)
   padding: 0;
 }
 
+/*
+ * <li> 只提供列表语义，卡片本身是 <router-link>。
+ * 网格排布（gap）挂在壳上，所以壳必须还是 grid item。
+ */
+.card-wrap {
+  display: block;
+}
+
 .card {
+  display: block;
+  /* 卡片现在是壳的子元素，网格的拉伸落在壳上；
+     不显式撑满的话，同一行里标题两行和一行的高矮就对不齐了 */
+  height: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
   background: var(--background);
+  color: inherit;
+  text-decoration: none;
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -401,6 +417,12 @@ onMounted(load)
 .card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 18px rgb(0 0 0 / 8%);
+}
+
+/* 键盘焦点要有落点，和 hover 的位移用同一个通道 */
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .cover {
