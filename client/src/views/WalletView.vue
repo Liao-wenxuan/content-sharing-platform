@@ -302,7 +302,7 @@ onMounted(load)
   gap: 8px;
   font-size: var(--fs-sm);
   font-weight: 600;
-  color: #16a34a;
+  color: var(--success);
 }
 
 .audit.bad .audit-line {
@@ -366,7 +366,7 @@ onMounted(load)
 }
 
 .plus {
-  color: #16a34a;
+  color: var(--success);
 }
 
 .minus {

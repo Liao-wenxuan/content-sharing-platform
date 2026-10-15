@@ -99,14 +99,23 @@ html.dark {
 html:not(.dark) {
   color-scheme: light;
 
-  /* 浅色底上同一个黄绿只有 1.7:1 对比度，必须用它的暗态 */
-  --el-color-primary: #7d8220;
-  --el-color-primary-light-3: #a4a863;
-  --el-color-primary-light-5: #bec190;
-  --el-color-primary-light-7: #d8dabc;
-  --el-color-primary-light-8: #e5e6d2;
-  --el-color-primary-light-9: #f2f3e9;
-  --el-color-primary-dark-2: #64681a;
+  /*
+   * Element 的主色**从 theme.css 的 --accent 派生**，不再自己存一份。
+   *
+   * 之前这里是写死的 #7d8220，而 theme.css 的 --accent 被单独调深过，
+   * 于是两边对不上：改 --accent 之后 Element 的按钮和边框还是旧色。
+   * 两份同一件事的值，迟早会漂 —— 这就是漂移发生的那一次。
+   *
+   * 下面的 light-N 是按 primary 混白得到的（0.3 / 0.5 / 0.7 / 0.8 / 0.9），
+   * 换了 primary 只需重算这一组。
+   */
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: #8f935d;
+  --el-color-primary-light-5: #afb28b;
+  --el-color-primary-light-7: #cfd1b9;
+  --el-color-primary-light-8: #dfe0d1;
+  --el-color-primary-light-9: #eff0e8;
+  --el-color-primary-dark-2: #4c5012;
 
   --el-color-success: #1a7f37;
   --el-color-warning: #9a6700;
@@ -301,14 +310,33 @@ html:not(.dark) {
   border-radius: var(--el-border-radius-small) !important;
   background: transparent !important;
   box-shadow: none !important;
-  color: var(--el-text-color-secondary);
   font-weight: 500;
+}
+
+/*
+ * 未选中项的文字色。
+ *
+ * Element 的默认是 `--el-button-text-color / --el-text-color-regular`，
+ * 而实测在浅色模式下算出来是接近白的一层，压在浅底上只有 1.1~1.3:1。
+ * 这条规则**单写 `.el-radio-button__inner` 不生效** —— 无论加不加
+ * `!important`、换成 --text-2 还是 --el-text-color-secondary，
+ * 实测都是同一个结果。提高特异度（带上 .el-radio-group）才压得住。
+ *
+ * 报告里这一类是 30 处左右，全部集中在 Element 的单选按钮组内部。
+ */
+.el-radio-group .el-radio-button__inner {
+  color: var(--text-2) !important;
 }
 
 .el-radio-button__original-radio:checked + .el-radio-button__inner {
   background: var(--el-color-primary) !important;
   color: var(--accent-foreground, #19191b) !important;
   box-shadow: none !important;
+}
+
+/* 选中项也要跟着提一次特异度，理由同上 */
+.el-radio-group .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  color: var(--accent-foreground, #19191b) !important;
 }
 
 /* ============================================================
