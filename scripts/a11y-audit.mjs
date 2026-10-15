@@ -120,6 +120,17 @@ function collectVue(dir, out = []) {
 }
 
 /**
+ * 抹掉 HTML 注释，但**保留行数**（把内容换成等量的空格 + 原换行）。
+ *
+ * 不抹的话，模板注释里出现的 `<li @click>` 这类说明文字会被当成真的代码 ——
+ * 第一版把三处刚修好的地方又报了出来，报的全是解释它们为什么这么改的注释。
+ * 一个会把注释当代码的扫描器，报错时没人敢信。
+ */
+function stripComments(html) {
+  return html.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, ' '))
+}
+
+/**
  * 从模板里切出每一个开始标签的原文。
  *
  * 手写而不是用正则：标签可以跨行，属性值里还能有 `>`（比如 `:to="a > b"`），
@@ -188,7 +199,7 @@ function staticScan() {
     // template 段在原文件里的起始偏移，用来把 offset 换算成真实行号
     const tplStart = tpl.index + '<template>'.length
 
-    for (const tag of extractTags(tpl[1])) {
+    for (const tag of extractTags(stripComments(tpl[1]))) {
       const name = tagName(tag.text)
       if (!name) continue
       // 只审原生标签。自定义组件渲染成什么是运行时的事，交给 [B] 的 axe。
