@@ -329,6 +329,7 @@ watch(activeCategory, (cat) => {
               <el-switch
                 :model-value="notifyPrefs[p.key]"
                 :loading="savingPrefs"
+                :aria-label="p.label"
                 @change="(v: any) => onPrefChange(p.key, !!v)"
               />
             </div>

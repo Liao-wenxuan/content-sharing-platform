@@ -89,6 +89,7 @@ async function toggle(key: NotifyCategory, value: boolean) {
         <el-switch
           :model-value="prefs[g.key]"
           :loading="savingKey === g.key"
+          :aria-label="g.label"
           @update:model-value="(v: any) => toggle(g.key, v)"
         />
       </div>

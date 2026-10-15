@@ -125,18 +125,15 @@ watch(activeId, () => {
     </div>
 
     <ul v-if="suggestions.length" class="discover-grid">
-      <li
-        v-for="s in suggestions"
-        :key="s.id"
-        class="discover-item"
-        role="button"
-        tabindex="0"
-        @click="startWithPeer(s.id)"
-        @keydown.enter="startWithPeer(s.id)"
-      >
-        <el-avatar :size="52" :src="s.avatar || undefined">{{ s.nickname.slice(0, 1) }}</el-avatar>
-        <span class="discover-name">{{ s.nickname }}</span>
-        <span class="discover-hint">{{ s.postCount }} 篇笔记</span>
+      <!-- 和会话列表同理：<li> 给列表语义，按钮给点击和键盘 -->
+      <li v-for="s in suggestions" :key="s.id" class="discover-wrap">
+        <button type="button" class="discover-item" @click="startWithPeer(s.id)">
+          <el-avatar :size="52" :src="s.avatar || undefined">{{
+            s.nickname.slice(0, 1)
+          }}</el-avatar>
+          <span class="discover-name">{{ s.nickname }}</span>
+          <span class="discover-hint">{{ s.postCount }} 篇笔记</span>
+        </button>
       </li>
     </ul>
 
@@ -339,14 +336,23 @@ watch(activeId, () => {
   }
 }
 
+/* <li> 只提供列表语义；栅格排布落在壳上 */
+.discover-wrap {
+  list-style: none;
+}
+
 .discover-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  width: 100%;
   padding: 22px 12px 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   text-align: center;
   transition:
@@ -358,6 +364,12 @@ watch(activeId, () => {
 .discover-item:focus-visible {
   border-color: var(--accent);
   background: var(--muted);
+}
+
+/* 焦点框默认在按钮外侧，栅格里会被相邻卡片切掉，收到内侧 */
+.discover-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .discover-name {

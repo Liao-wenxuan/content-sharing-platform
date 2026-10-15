@@ -51,6 +51,7 @@ const FONT_OPTIONS = [
         <el-select
           :model-value="settings.defaultChannel"
           class="sub-select"
+          aria-label="默认频道"
           @update:model-value="(v: any) => update('defaultChannel', v)"
         >
           <el-option v-for="c in CHANNELS" :key="c.key" :label="c.label" :value="c.key" />
@@ -71,6 +72,7 @@ const FONT_OPTIONS = [
         </div>
         <el-switch
           :model-value="settings.coverBlurPlaceholder"
+          aria-label="封面加载时先显示占位色"
           @update:model-value="(v: any) => update('coverBlurPlaceholder', v)"
         />
       </div>

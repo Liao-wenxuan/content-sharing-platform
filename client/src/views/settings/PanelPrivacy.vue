@@ -57,6 +57,7 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
         </div>
         <el-switch
           :model-value="settings.profilePublic"
+          aria-label="个人主页对外可见"
           @update:model-value="(v: any) => patch({ profilePublic: v })"
         />
       </div>
@@ -70,6 +71,7 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
         </div>
         <el-switch
           :model-value="settings.favoritesPublic"
+          aria-label="收藏夹公开"
           @update:model-value="(v: any) => patch({ favoritesPublic: v })"
         />
       </div>
@@ -84,6 +86,7 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
         </div>
         <el-switch
           :model-value="settings.allowRecommendedFeed"
+          aria-label="允许被推荐流触达"
           @update:model-value="(v: any) => patch({ allowRecommendedFeed: v })"
         />
       </div>
@@ -98,6 +101,7 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
         </div>
         <el-switch
           :model-value="settings.minorMode"
+          aria-label="未成年人模式：只显示纯文字笔记"
           @update:model-value="(v: any) => patch({ minorMode: v })"
         />
       </div>
@@ -217,8 +221,21 @@ export default { name: 'PanelPrivacy' }
   line-height: 1.6;
 }
 
+/*
+ * 正文里的链接必须靠下划线区分，不能只靠颜色。
+ *
+ * axe 实测：强调色 #c6ca4c 与周围正文 #8f8f90 的对比只有 1.83:1
+ * （区分链接与普通文本要 3:1），对色觉障碍用户来说这两段文字长得一样。
+ * 加下划线同时也符合「不要只靠颜色传达信息」这条。
+ */
 .link {
   color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link:hover {
+  color: var(--accent-dim);
 }
 
 .count {

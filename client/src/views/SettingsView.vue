@@ -305,40 +305,58 @@ onMounted(async () => {
           ><span class="group-title">{{ group.title }}</span></template
         >
 
+        <!--
+          ⚠️ <li> 只负责列表语义，可点的是里面的 <button>。
+
+          之前这里是 `<li class="item-row" role="button" tabindex="0">`，
+          同一个 role 同时坏了两件事：
+          ① role 覆盖掉 <li> 隐含的 listitem，axe 判「<ul> 里出现了
+             不允许的子节点 [role=button]」（5 张卡片各中一次）
+          ② 带开关的行里套着 el-switch，是交互控件嵌套（serious）
+
+          所以开关行不给 role，也不整行可点 —— 它本来也只有开关可点。
+          开关自己带 aria-label：读屏念到它时得知道自己在切什么，
+          而行首那行字对开关不是 label。
+        -->
         <ul class="item-list">
-          <li
-            v-for="item in group.items"
-            :key="item.key"
-            class="item-row"
-            :class="{ clickable: item.kind !== 'toggle' }"
-            role="button"
-            tabindex="0"
-            @click="onItemClick(item)"
-            @keydown.enter="onItemClick(item)"
-            @keydown.space.prevent="onItemClick(item)"
-          >
-            <el-icon class="item-icon"><component :is="item.icon" /></el-icon>
+          <li v-for="item in group.items" :key="item.key" class="item-item">
+            <div v-if="item.kind === 'toggle'" class="item-row" :data-item="item.key">
+              <el-icon class="item-icon"><component :is="item.icon" /></el-icon>
 
-            <span class="item-text">
-              <span class="item-label">{{ item.label }}</span>
-              <span v-if="item.desc" class="item-desc">{{ item.desc }}</span>
-            </span>
+              <span class="item-text">
+                <span class="item-label">{{ item.label }}</span>
+                <span v-if="item.desc" class="item-desc">{{ item.desc }}</span>
+              </span>
 
-            <!-- 真实值，不是写死的假字符串 -->
-            <span v-if="item.key === 'theme'" class="item-value">{{ themeHint }}</span>
-            <span v-else-if="item.key === 'storage'" class="item-value tnum">
-              {{ storageHint }}
-            </span>
+              <span v-if="item.key === 'theme'" class="item-value">{{ themeHint }}</span>
 
-            <el-switch
-              v-if="item.kind === 'toggle'"
-              :model-value="isDark"
-              @click.stop
-              @change="toggleTheme"
-            />
-            <el-icon v-else class="item-arrow">
-              <component :is="Monitor" />
-            </el-icon>
+              <el-switch :model-value="isDark" :aria-label="item.label" @change="toggleTheme" />
+            </div>
+
+            <button
+              v-else
+              type="button"
+              class="item-row clickable"
+              :data-item="item.key"
+              @click="onItemClick(item)"
+            >
+              <el-icon class="item-icon"><component :is="item.icon" /></el-icon>
+
+              <span class="item-text">
+                <span class="item-label">{{ item.label }}</span>
+                <span v-if="item.desc" class="item-desc">{{ item.desc }}</span>
+              </span>
+
+              <!-- 真实值，不是写死的假字符串 -->
+              <span v-if="item.key === 'theme'" class="item-value">{{ themeHint }}</span>
+              <span v-else-if="item.key === 'storage'" class="item-value tnum">
+                {{ storageHint }}
+              </span>
+
+              <el-icon class="item-arrow">
+                <component :is="Monitor" />
+              </el-icon>
+            </button>
           </li>
         </ul>
       </el-card>
@@ -547,6 +565,11 @@ onMounted(async () => {
   padding: 0;
 }
 
+/* <li> 只提供列表语义，不再承担点击和聚焦 */
+.item-item {
+  list-style: none;
+}
+
 .item-row {
   display: flex;
   align-items: center;
@@ -558,8 +581,18 @@ onMounted(async () => {
  * 整行可点，而不是只有右侧那个图标可点。
  * 44px 高的行里只放一个 20px 的图标作为点击目标，
  * 在触控板和笔记本上都会很难点中。
+ *
+ * .clickable 现在同时挂在 div 和 button 上，但只有 button 分支带点击行为，
+ * 所以 cursor / hover 写在这里不会给开关行安上一个点不动的光标。
  */
 .item-row.clickable {
+  /* button 自带的边框和背景要抹掉，否则焦点框会被浏览器默认样式顶掉 */
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background-color var(--dur-fast) var(--ease-out-expo);
