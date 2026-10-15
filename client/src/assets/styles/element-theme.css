@@ -19,12 +19,14 @@ html.dark {
   color-scheme: dark;
 
   /*
-   * 主色：黄绿 #c6ca4c。
-   * light-N 派生值是「与白色按 N/10 混合」算出来的，不是手填 ——
+   * 主色直接取 theme.css 的 --accent，不在这里再存一份。
+   * 两个文件各存一份同名主色，就是浅色模式那 101 处违规的根因。
+   *
+   * 下面的 light-N 是「与白色按 N/10 混合」算出来的，不是手填 ——
    * 手填这六个值最容易出现渐变断层（某一档突然跳一大截）。
-   * 换主色时用 `node .git/gen-el-vars.mjs <hex>` 重算。
+   * 换主色时要连同浅色模式那一组一起重算。
    */
-  --el-color-primary: #c6ca4c;
+  --el-color-primary: var(--accent);
   --el-color-primary-light-3: #d7da82;
   --el-color-primary-light-5: #e3e5a6;
   --el-color-primary-light-7: #eeefc9;
