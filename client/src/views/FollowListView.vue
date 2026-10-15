@@ -188,7 +188,7 @@ watch([activeTab, targetId], () => load(true))
 
 <style scoped>
 .follow-list {
-  max-width: 720px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 24px 0 48px;
 }

@@ -341,7 +341,7 @@ onMounted(load)
 
 <style scoped>
 .market {
-  max-width: 1080px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 24px 0 48px;
 }

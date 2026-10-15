@@ -201,7 +201,7 @@ onMounted(() => {
 
 <style scoped>
 .search-page {
-  max-width: 1560px;
+  max-width: var(--content-max-width-wide);
   margin: 0 auto;
 }
 

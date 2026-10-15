@@ -299,7 +299,7 @@ watch(() => props.id, load)
 
 <style scoped>
 .product-detail {
-  max-width: 1000px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 24px 0 48px;
 }

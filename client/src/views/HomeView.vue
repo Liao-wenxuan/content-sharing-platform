@@ -298,7 +298,7 @@ watch(isFollowFeed, () => loadFeed(true))
 <style scoped>
 .explore {
   /* 首页比内页宽：小红书 explore 在 1920 下是 6 列 */
-  max-width: 1560px;
+  max-width: var(--content-max-width-wide);
   margin: 0 auto;
 }
 

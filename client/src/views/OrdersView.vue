@@ -301,7 +301,7 @@ onMounted(load)
 
 <style scoped>
 .orders {
-  max-width: 860px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
   padding: 24px 0 48px;
 }

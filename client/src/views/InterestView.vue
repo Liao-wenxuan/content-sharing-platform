@@ -233,7 +233,7 @@ onMounted(() => {
 
 <style scoped>
 .interest {
-  max-width: 860px;
+  max-width: var(--content-max-width);
   margin: 0 auto;
 }
 
