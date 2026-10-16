@@ -97,7 +97,7 @@
    ============================================================ */
 
 /* 按压：给一个 3% 的按下去的感觉，比 hover 更有信息量 */
-:where(button, .el-button, [role='button']).not(:disabled):active {
+:where(button, .el-button, [role='button']):not(:disabled):active {
   transform: scale(0.97);
   transition: transform var(--dur-instant) var(--ease-out-back);
 }
