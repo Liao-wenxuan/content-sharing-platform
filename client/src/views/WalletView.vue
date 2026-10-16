@@ -13,7 +13,7 @@
  * 换成真网关时只需要把「加钱」那段挪进回调里。
  */
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { Plus } from '@element-plus/icons-vue'
 import { walletApi, type LedgerAudit } from '@/api/wallet'
 import { formatYuan, yuanToCents } from '@/utils/money'

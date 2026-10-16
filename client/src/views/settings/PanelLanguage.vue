@@ -20,7 +20,7 @@
  * **诚实地说「没做」比勉强地说「做了」有用。**
  */
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { useUserSettings } from '@/composables/useUserSettings'
 
 const { settings, patch } = useUserSettings()

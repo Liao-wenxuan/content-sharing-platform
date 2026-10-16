@@ -15,7 +15,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { feedApi, type InterestProfile } from '@/api/feed'
 import EmptyState from '@/components/EmptyState.vue'
 

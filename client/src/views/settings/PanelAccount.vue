@@ -16,7 +16,7 @@
  */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { settingsApi } from '@/api/settings'
 import { useAuthStore } from '@/stores/auth'
 

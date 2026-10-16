@@ -13,7 +13,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { formatYuan } from '@/utils/money'
 import { ordersApi, ORDER_ACTIONS, type Order, type OrderStatus } from '@/api/orders'
 import { useCart } from '@/composables/useCart'

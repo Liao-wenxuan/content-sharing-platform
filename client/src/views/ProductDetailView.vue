@@ -13,7 +13,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { ShoppingCart, ArrowLeft } from '@element-plus/icons-vue'
 import { productsApi, type Product } from '@/api/products'
 import { formatYuan, yuanToCents } from '@/utils/money'

@@ -9,7 +9,7 @@
  */
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { Star, ChatDotRound, Collection, ArrowLeft, Plus } from '@element-plus/icons-vue'
 import { postsApi, type Post } from '@/api/posts'
 import { commentsApi, type Comment } from '@/api/comments'

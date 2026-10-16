@@ -8,7 +8,7 @@
  */
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { User, Message, Lock, EditPen } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'

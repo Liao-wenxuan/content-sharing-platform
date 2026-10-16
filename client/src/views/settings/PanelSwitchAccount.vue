@@ -15,7 +15,7 @@
  */
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { accountsApi, type DeviceAccount } from '@/api/accounts'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'

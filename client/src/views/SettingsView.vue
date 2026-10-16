@@ -17,7 +17,7 @@
  */
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessageBox } from '@/utils/element'
 import {
   User,
   Setting,

@@ -13,7 +13,7 @@
  */
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { Delete } from '@element-plus/icons-vue'
 import { viewHistoryApi, type ViewHistoryItem } from '@/api/viewHistory'
 import PostMasonry from '@/components/PostMasonry.vue'

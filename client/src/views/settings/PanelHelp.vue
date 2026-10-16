@@ -13,7 +13,7 @@
  * 指向真实的 issue 通道是诚实且可用的做法。
  */
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { FAQS, FEATURE_GROUPS } from './labels'
 import { copyText } from '@/utils/format'
 import { REPO_URL } from '@/composables/useStorageStats'

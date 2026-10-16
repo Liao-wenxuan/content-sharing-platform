@@ -3,6 +3,79 @@ import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+
+const EP_COMPONENTS_DIR = fileURLToPath(
+  new URL('./node_modules/element-plus/es/components', import.meta.url)
+)
+
+/** PascalCase -> kebab-case，和 element-plus 自己的目录命名一致 */
+const kebab = (s: string) =>
+  s
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase()
+
+/**
+ * 子组件没有自己的目录，由父组件的 index.mjs 一起导出。
+ * 只列我们真正用到的；不在表里的名字一律先按 kebab-case 猜目录，猜错时
+ * 会因为文件不存在而静默回落到总桶 —— 所以这张表错了构建不会报错，
+ * 只会让体积悄悄涨回去（见 scripts/analyze-bundle.mjs 的总桶检查）。
+ */
+const EP_PARENT_DIR: Record<string, string> = {
+  ElCheckboxGroup: 'checkbox',
+  ElDescriptionsItem: 'descriptions',
+  ElDropdownDivider: 'dropdown',
+  ElDropdownItem: 'dropdown',
+  ElDropdownMenu: 'dropdown',
+  ElFormItem: 'form',
+  ElMenuItem: 'menu',
+  ElMenuItemGroup: 'menu',
+  ElRadioButton: 'radio',
+  ElRadioGroup: 'radio',
+  ElRadioLabel: 'radio',
+  ElSubMenu: 'menu',
+  ElTabPane: 'tabs',
+  ElOption: 'select',
+  ElOptionGroup: 'select'
+}
+
+/** 组件名 -> element-plus/es/components/<dir>/index；目录不存在则返回 undefined */
+function epComponentPath(name: string): string | undefined {
+  const dir = EP_PARENT_DIR[name] ?? kebab(name.replace(/^El/, ''))
+  return existsSync(join(EP_COMPONENTS_DIR, dir, 'index.mjs'))
+    ? `element-plus/es/components/${dir}/index`
+    : undefined
+}
+
+/**
+ * ElementPlusResolver 的深路径版。
+ *
+ * 原版把组件解析到 `from: 'element-plus/es'` —— 那是整个库的总桶。
+ * CSS 是按组件 import 的（sideEffects 里带 components/<name>/style/css），
+ * 所以样式看起来「按需」，JS 却不是：任何一个用 el-* 的 SFC 都会
+ * 把总桶拉进自己的依赖图，而总桶 re-export 了全部 98 个组件。
+ * 实测入口 chunk 因此带上了 date-picker / table-v2 / transfer / tree-select
+ * 这些本项目根本没用的组件，以及它们的 dayjs、@popperjs/core、
+ * @ctrl/tinycolor、@vueuse/core、lodash-es。
+ *
+ * 这里只改 `from`，name 和 sideEffects 原样保留 —— CSS 的按需行为不受影响。
+ * 图标（ElXxxIcon）和指令分支本来就不走总桶，原样返回。
+ */
+const ElementPlusDeepResolver = ElementPlusResolver({ importStyle: 'css' }).map((resolver) =>
+  resolver.type === 'component'
+    ? {
+        ...resolver,
+        resolve: async (name: string) => {
+          const resolved = await resolver.resolve?.(name)
+          if (!resolved || resolved.from !== 'element-plus/es') return resolved
+          const path = epComponentPath(resolved.name ?? name)
+          return path ? { ...resolved, from: path } : resolved
+        }
+      }
+    : resolver
+)
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -14,8 +87,30 @@ export default defineConfig({
     // 生成的 components.d.ts 让 vue-tsc 也能认识这些组件。
     Components({
       dts: 'src/components.d.ts',
-      resolvers: [ElementPlusResolver({ importStyle: 'css' })]
-    })
+      resolvers: [ElementPlusDeepResolver]
+    }),
+    {
+      // 只在分析时开：SG_DUMP_GRAPH=1 SG_GRAPH_OUT=<path> npm --prefix client run build
+      // 把 Rollup 的模块导入图倒出来，scripts/analyze-bundle.mjs --why <包名> 用它
+      // 回答「这个包为什么会进首屏」。平时不产生任何开销，产物也不入库。
+      name: 'sg-dump-module-graph',
+      apply: 'build',
+      generateBundle() {
+        if (!process.env.SG_DUMP_GRAPH) return
+        const out = process.env.SG_GRAPH_OUT
+        if (!out) throw new Error('SG_DUMP_GRAPH=1 需要同时给 SG_GRAPH_OUT=<输出路径>')
+        const ids = [...this.getModuleIds()]
+        const edges: [string, string][] = []
+        for (const id of ids) {
+          const info = this.getModuleInfo(id)
+          if (!info) continue
+          for (const imp of info.importedIds) edges.push([id, imp])
+        }
+        mkdirSync(dirname(out), { recursive: true })
+        writeFileSync(out, JSON.stringify(edges))
+        this.warn(`module graph: ${ids.length} modules, ${edges.length} edges`)
+      }
+    }
   ],
   resolve: {
     alias: {

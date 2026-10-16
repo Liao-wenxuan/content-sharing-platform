@@ -13,7 +13,7 @@
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { productsApi, type Product, type ProductSort } from '@/api/products'
 import { uploadImage } from '@/api/uploads'

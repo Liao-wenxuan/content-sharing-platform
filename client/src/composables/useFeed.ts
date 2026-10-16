@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { feedApi, type FeedbackAction, type FeedItem } from '@/api/feed'
 import type { Post } from '@/api/posts'
 

@@ -20,7 +20,7 @@
  * 装完有自己的图标和自己的窗口，没有浏览器地址栏。
  */
 import { computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { copyText } from '@/utils/format'
 
 interface WidgetDef {

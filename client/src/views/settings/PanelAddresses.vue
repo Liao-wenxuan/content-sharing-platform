@@ -10,7 +10,7 @@
  * 想确认时点一下「显示完整号码」即可。
  */
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { addressesApi, formatAddress, maskPhone, type Address } from '@/api/addresses'
 
 const list = ref<Address[]>([])

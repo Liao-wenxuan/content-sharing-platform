@@ -25,7 +25,7 @@ vi.mock('@/api/auth', () => ({
 }))
 
 const ElMessage = { success: vi.fn(), error: vi.fn() }
-vi.mock('element-plus', () => ({
+vi.mock('@/utils/element', () => ({
   ElMessage: {
     success: (...a: unknown[]) => ElMessage.success(...a),
     error: (...a: unknown[]) => ElMessage.error(...a)

@@ -11,7 +11,7 @@
  */
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { Star, User, ChatDotRound } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'

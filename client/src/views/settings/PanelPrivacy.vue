@@ -11,7 +11,7 @@
  * 唯一能证明「隐私设置不是摆设」的功能。
  */
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { useUserSettings } from '@/composables/useUserSettings'
 import { settingsApi } from '@/api/settings'
 import { downloadText, formatCount } from '@/utils/format'

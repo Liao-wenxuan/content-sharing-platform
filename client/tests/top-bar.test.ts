@@ -15,6 +15,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+// 测试里要的是 Element Plus 的**真实渲染**（组件结构本身就是被测对象），
+// 所以这里用的是全量插件默认导出。它只活在测试环境，不进生产构建 ——
+// 生产代码的按需规则由 scripts/analyze-bundle.mjs 的总桶守卫管，只扫 src/。
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import TopBar from '@/components/TopBar.vue'

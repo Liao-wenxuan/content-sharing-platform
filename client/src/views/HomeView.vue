@@ -13,7 +13,7 @@
  *   关注流不显示内容频道栏 —— 订阅流按时间排，再按话题筛一遍没有意义
  */
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { useRoute, useRouter } from 'vue-router'
 import { postsApi, type Post } from '@/api/posts'
 import { useHomeTabsStore } from '@/stores/homeTabs'

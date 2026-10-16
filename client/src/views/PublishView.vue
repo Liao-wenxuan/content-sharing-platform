@@ -14,8 +14,8 @@
  */
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import type { UploadFile } from 'element-plus'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from '@/utils/element'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { PictureFilled, UploadFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'

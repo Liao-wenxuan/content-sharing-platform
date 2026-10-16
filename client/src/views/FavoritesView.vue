@@ -16,7 +16,7 @@
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { Collection, Plus, Delete, EditPen, FolderOpened } from '@element-plus/icons-vue'
 import { favoritesApi, type FavoriteFolder, type FavoritedPost } from '@/api/favorites'
 import EmptyState from '@/components/EmptyState.vue'

@@ -24,7 +24,7 @@ vi.mock('@/api/feed', () => ({
   }
 }))
 
-vi.mock('element-plus', () => ({
+vi.mock('@/utils/element', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), info: vi.fn() }
 }))
 

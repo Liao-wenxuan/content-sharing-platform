@@ -13,7 +13,7 @@
  * 但「点了没反应」的风险是实打实的。
  */
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage } from '@/utils/element'
 import { notificationsApi, type NotifyPrefs, type NotifyCategory } from '@/api/notifications'
 
 const prefs = ref<NotifyPrefs>({ likes: true, follows: true, mentions: true })
