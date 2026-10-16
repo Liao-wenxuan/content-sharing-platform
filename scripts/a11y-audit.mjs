@@ -341,6 +341,37 @@ const AUTH_PAGES = [
 
 let fails = 0
 
+/**
+ * 切到浅色模式，并**禁用所有过渡**。
+ *
+ * 两件事必须成对做，缺一不可：
+ *
+ * ① 去掉 html.dark。index.html 里预置了这个 class，避免首屏浅色闪烁，
+ *    所以它一直在。
+ *
+ * ② 禁掉 transition。Element 给控件加了 `transition: var(--el-transition-all)`
+ *    （300ms 颜色过渡）。摘掉 dark 之后所有颜色同时开始过渡，
+ *    此时立刻读 computed style 拿到的是**中间色** ——
+ *    axe 会把「正在变暗的白字」当成最终颜色，量出 1.1:1 这种不存在的对比度。
+ *    这个 bug 一度让浅色模式显示「101 处违规」，我为此写了 `!important`、
+ *    提特异度、翻 Element 源码改变量，三轮全是在跟一个测量假象打架。
+ *
+ * ⚠️ 每次 page.goto() 之后都要重做一遍：导航会重置页面，
+ *    dark class 回来、注入的样式也没了。设置页的面板审计每开一个抽屉
+ *    就重新导航一次，之前漏在这里，导致 11 个面板其实都跑在深色模式下。
+ */
+async function forceLight(page, on) {
+  if (!on) return
+  await page.evaluate(() => {
+    document.documentElement.classList.remove('dark')
+    const s = document.createElement('style')
+    s.textContent =
+      '*,*::before,*::after{transition:none !important;animation:none !important}'
+    document.head.appendChild(s)
+  })
+  await page.waitForTimeout(300)
+}
+
 async function probeBackend() {
   try {
     const res = await fetch(`${API}/api/health`)
@@ -392,10 +423,8 @@ async function auditPage(ctx, loggedIn) {
       await p.locator('main, .standalone').first().waitFor({ state: 'visible', timeout: 15000 })
       await p.waitForTimeout(700)
 
-      if (LIGHT) {
-        await p.evaluate(() => document.documentElement.classList.remove('dark'))
-        await p.waitForTimeout(250)
-      }
+      // 详见 forceLight：切主题 + 禁过渡必须成对做，且每次导航后重做。
+      await forceLight(p, LIGHT)
 
       /*
        * 守卫二：确认没被重定向。
@@ -470,6 +499,9 @@ async function auditPage(ctx, loggedIn) {
           // 上一个没关干净的话，下一次点击会被自己的 overlay 拦下来
           await p.goto(`${BASE}${target.path}`, { waitUntil: 'domcontentloaded' })
           await p.locator('.item-row.clickable').first().waitFor({ timeout: 15000 })
+          await p.waitForTimeout(500)
+          // 重新导航会重置页面：dark class 和注入的禁过渡样式都没了
+          await forceLight(p, LIGHT)
 
           // ⚠️ 别把点击错误吞掉。第一版写了 `.catch(() => {})`，
           // 结果「点不动」和「点了没反应」在报告里长得一模一样 ——
