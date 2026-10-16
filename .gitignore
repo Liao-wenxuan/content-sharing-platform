@@ -46,7 +46,6 @@ uploads/
 # 本地一次性调试脚本（迁移期遗留，选择器多已失效，不入版本库）
 # 注意：正式可复用的脚本请显式添加，不要用 *.mjs / scripts/ 宽泛规则
 scripts/auth-smoke.mjs
-scripts/check-css.mjs
 scripts/check-feed.mjs
 scripts/db-inspect.mjs
 scripts/probe.mjs

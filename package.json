@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Root-level tooling: lint, format, git hooks. Client + server each have their own package.json for runtime deps.",
   "scripts": {
-    "lint": "eslint . --ext .ts,.vue",
+    "lint": "eslint . --ext .ts,.vue && node scripts/check-css.mjs",
     "lint:fix": "eslint . --ext .ts,.vue --fix",
     "format": "prettier --write \"**/*.{ts,vue,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,vue,json,md,css}\"",
@@ -35,7 +35,8 @@
     "audit:images": "node scripts/image-audit.mjs",
     "a11y": "node scripts/a11y-audit.mjs",
     "seed:thumbs": "node scripts/gen-thumbs.mjs",
-    "layout:measure": "node scripts/layout-measure.mjs"
+    "layout:measure": "node scripts/layout-measure.mjs",
+    "check:css": "node scripts/check-css.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
@@ -43,6 +44,7 @@
     "@typescript-eslint/eslint-plugin": "^8.8.0",
     "@typescript-eslint/parser": "^8.8.0",
     "axe-core": "^4.14.0",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^9.28.0",
