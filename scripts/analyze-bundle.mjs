@@ -25,12 +25,14 @@
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import fsSync from 'node:fs'
 import { spawnSync } from 'node:child_process'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CLIENT = path.join(ROOT, 'client')
 const DIST = path.join(CLIENT, 'dist')
 const ASSETS = path.join(DIST, 'assets')
+const GRAPH_OUT = path.join(ROOT, 'node_modules/.cache/sg-module-graph.json')
 
 const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 const VLQ_LOOKUP = /* @__PURE__ */ (() => {
@@ -157,7 +159,57 @@ function printDetail(attribution, prefix, limit) {
   }
 }
 
+/**
+ * 总桶守卫：src 里不允许再出现 `from 'element-plus'`。
+ *
+ * 背景：`element-plus/es/index.mjs` re-export 了全部 98 个组件。
+ * 模板里的组件由 vite.config.ts 的深路径 resolver 解决，但 ElMessage 这类
+ * 在 script 里调用的组件 resolver 扫不到，只能手写 —— 手写时很容易图省事
+ * 写成 `import { ElMessage } from 'element-plus'`，于是整个库进首屏。
+ *
+ * 为什么值得单独查：体积归因只会告诉你「element-plus 有 XXX KB 在首屏」，
+ * 不会告诉你是哪一行把它拉进来的。这条检查直接把行号摆出来。
+ *
+ * 注释里的 'element-plus' 不算 —— 文档正是在解释为什么不能这么写。
+ */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
+function findBarrelImports() {
+  const hits = []
+  const walk = (dir) => {
+    for (const entry of fsSync.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (/\.(vue|ts)$/.test(entry.name)) {
+        const src = stripComments(fsSync.readFileSync(full, 'utf8'))
+        src.split('\n').forEach((line, i) => {
+          if (/from\s+['"]element-plus['"]/.test(line)) {
+            hits.push(`${path.relative(ROOT, full).replace(/\\/g, '/')}:${i + 1}  ${line.trim()}`)
+          }
+        })
+      }
+    }
+  }
+  walk(path.join(CLIENT, 'src'))
+  return hits
+}
+
 async function main() {
+  // 先查总桶再构建：这类问题不需要等 6 秒的构建就能确认
+  const barrels = findBarrelImports()
+  if (barrels.length) {
+    console.log('✗ 检测到 element-plus 总桶导入（会把全部 98 个组件拉进依赖图）：')
+    for (const h of barrels) console.log(`    ${h}`)
+    console.log('\n  改成深路径：client/src/utils/element.ts 已经集中了 ElMessage /')
+    console.log('  ElMessageBox / UploadFile 的深路径导出，从那里 import 即可。')
+    process.exit(1)
+  }
+  console.log('✓ 没有 element-plus 总桶导入')
+
+  const why = process.argv.includes('--why') ? process.argv[process.argv.indexOf('--why') + 1] : null
+
   console.log('带 sourcemap 构建中…（产物会覆盖 client/dist，末尾提示如何恢复）')
 
   // 直接跑 vite 的 bin，不经 npm：Windows 上 spawnSync('npm.cmd') 的退出码
@@ -166,7 +218,12 @@ async function main() {
   const result = spawnSync(process.execPath, [path.join(CLIENT, 'node_modules/vite/bin/vite.js'), 'build'], {
     cwd: CLIENT,
     stdio: 'inherit',
-    env: { ...process.env, SG_SOURCEMAP: '1', VITE_MINIFY: '0' }
+    env: {
+      ...process.env,
+      SG_SOURCEMAP: '1',
+      VITE_MINIFY: '0',
+      ...(why ? { SG_DUMP_GRAPH: '1', SG_GRAPH_OUT: GRAPH_OUT } : {})
+    }
   })
   if (result.status !== 0) {
     throw new Error(
@@ -220,11 +277,72 @@ async function main() {
   }
 
   // 想看某个包内部到底是谁最肥：node scripts/analyze-bundle.mjs element-plus
-  const detailPrefix = process.argv[2]
+  const detailPrefix = process.argv.slice(2).find((a) => !a.startsWith('--'))
   if (detailPrefix) printDetail(attribution, detailPrefix, 12)
+
+  if (why) printWhy(why)
 
   console.log('\n提示：本次构建未 minify 且带 sourcemap，用来跑 dev 会很慢。')
   console.log('恢复生产构建： cd client; npm run build')
+}
+
+/**
+ * 「这个包为什么会进首屏」——体积归因只回答「有多少」，不回答「谁拉的」。
+ *
+ * 做法：构建时顺带导出 Rollup 的模块导入图，从入口 main.ts 做 BFS，
+ * 打印到目标包的最短依赖链。两条相邻的路径差别巨大：
+ *   app 自己的文件  →  我们能改
+ *   第三方内部依赖  →  改不了，只能接受
+ * 只看数字的话很容易把时间花在改不动的地方上。
+ */
+function printWhy(target) {
+  const norm = (p) => p.replace(/\\/g, '/')
+  const short = (p) =>
+    p
+      .replace(/^.*content-sharing-platform[\\/]client[\\/]/, '')
+      .replace(/^.*node_modules[\\/]/, '~/')
+
+  const edges = JSON.parse(fsSync.readFileSync(GRAPH_OUT, 'utf8'))
+  const adj = new Map()
+  for (const [a, b] of edges) {
+    const A = norm(a)
+    if (!adj.has(A)) adj.set(A, [])
+    adj.get(A).push(norm(b))
+  }
+
+  const entry = [...adj.keys()].find((k) => k.endsWith('client/src/main.ts'))
+  if (!entry) throw new Error('模块图里找不到入口 main.ts')
+
+  const prev = new Map([[entry, null]])
+  let frontier = [entry]
+  for (let d = 0; d < 16 && frontier.length; d++) {
+    const next = []
+    for (const cur of frontier) {
+      for (const n of adj.get(cur) || []) {
+        if (prev.has(n)) continue
+        prev.set(n, cur)
+        next.push(n)
+      }
+    }
+    frontier = next
+  }
+
+  const hit = [...prev.keys()].find((k) => k.includes(target))
+  console.log(`\n=== 为什么 ${target} 会在首屏依赖图里 ===`)
+  if (!hit) {
+    console.log('  不在首屏依赖图中 —— 已经摇掉了')
+    return
+  }
+  const chain = []
+  for (let p = hit; p; p = prev.get(p)) chain.unshift(short(p))
+  chain.forEach((n, i) => console.log('  ' + '  '.repeat(i) + (i === chain.length - 1 ? '-> ' : '   ') + n))
+
+  const editable = chain.filter((n) => !n.startsWith('~/'))
+  console.log(
+    editable.length
+      ? `\n  其中 ${editable.length} 段是我们自己的代码，改得动；其余是第三方内部依赖。`
+      : '\n  整条链都在第三方内部 —— 改不动，只能接受。'
+  )
 }
 
 main().catch((error) => {
