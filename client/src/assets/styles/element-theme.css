@@ -307,37 +307,57 @@ html:not(.dark) {
   padding: 3px;
 }
 
+/*
+ * 分段 / 单选按钮组的两个文字色。
+ *
+ * ⚠️ 这里**改变量是压不住的**：`unplugin-vue-components` 在运行时注入
+ * Element 的组件 CSS，位置在本文件**之后**。而 `.el-radio-button` 两边
+ * 特异度相同（都是 0,1,0），于是后写的 Element 赢：
+ * `--el-radio-button-checked-text-color` 又变回 `--el-color-white`，
+ * 白字压强调色 = 1.75:1。
+ *
+ * 所以颜色本身仍然要用 `!important` 写在属性上。
+ * 变量那两行仍然保留 —— 它对**后代**组件（面板里的、卡片里的）
+ * 有效，成本是零，但它不能替代下面这条。
+ *
+ * 选中态的选择器必须照抄 Element 的：
+ *   .el-radio-button.is-active .el-radio-button__original-radio:not(:disabled)
+ *     + .el-radio-button__inner
+ * 之前我写的是 `:checked +`，压根没匹配上。
+ */
+.el-radio-button {
+  --el-button-text-color: var(--text-2);
+  --el-radio-button-checked-text-color: var(--accent-foreground, #19191b);
+}
+
 .el-radio-button__inner {
   border: none !important;
   border-radius: var(--el-border-radius-small) !important;
   background: transparent !important;
   box-shadow: none !important;
   font-weight: 500;
-}
-
-/*
- * 未选中项的文字色。
- *
- * Element 的默认是 `--el-button-text-color / --el-text-color-regular`，
- * 而实测在浅色模式下算出来是接近白的一层，压在浅底上只有 1.1~1.3:1。
- * 这条规则**单写 `.el-radio-button__inner` 不生效** —— 无论加不加
- * `!important`、换成 --text-2 还是 --el-text-color-secondary，
- * 实测都是同一个结果。提高特异度（带上 .el-radio-group）才压得住。
- *
- * 报告里这一类是 30 处左右，全部集中在 Element 的单选按钮组内部。
- */
-.el-radio-group .el-radio-button__inner {
   color: var(--text-2) !important;
 }
 
-.el-radio-button__original-radio:checked + .el-radio-button__inner {
+.el-radio-button.is-active
+  .el-radio-button__original-radio:not(:disabled)
+  + .el-radio-button__inner {
   background: var(--el-color-primary) !important;
   color: var(--accent-foreground, #19191b) !important;
   box-shadow: none !important;
 }
 
-/* 选中项也要跟着提一次特异度，理由同上 */
-.el-radio-group .el-radio-button__original-radio:checked + .el-radio-button__inner {
+/* 分段控件（el-segmented）：同一套理由。 */
+.el-segmented {
+  --el-segmented-color: var(--text-2);
+  --el-segmented-item-selected-color: var(--accent-foreground, #19191b);
+}
+
+.el-segmented__item-label {
+  color: var(--text-2) !important;
+}
+
+.el-segmented__item.is-selected .el-segmented__item-label {
   color: var(--accent-foreground, #19191b) !important;
 }
 
@@ -361,11 +381,17 @@ html:not(.dark) {
   color: var(--accent-foreground, #19191b) !important;
 }
 
-/* 分段控件（el-segmented）：选中项底色是主色，文字同理。
-   类名是 `is-selected` 而不是 radio-button 那套 sibling 结构，
-   所以得单独写一条 —— 上面那条管不到它。 */
-.el-segmented__item.is-selected .el-segmented__item-label {
-  color: var(--accent-foreground, #19191b) !important;
+/* 分段控件（el-segmented）：和上面同一套理由 —— 改变量，不改 color。
+ *
+ * 源码：`.el-segmented { --el-segmented-color: var(--el-text-color-regular);
+ *          --el-segmented-item-selected-color: var(--el-color-white) }`
+ * 之前只给 `.el-segmented__item.is-selected .el-segmented__item-label`
+ * 写了一条 `color: ... !important`，实测在浅色模式下没赢过 Element ——
+ * 因为它的取值走的是上面这两个变量。
+ */
+.el-segmented {
+  --el-segmented-color: var(--text-2);
+  --el-segmented-item-selected-color: var(--accent-foreground, #19191b);
 }
 
 /* ============================================================
