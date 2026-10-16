@@ -253,7 +253,9 @@ npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配�
 > ```bash
 > npm run perf               # 生产构建 + Slow 4G 限速首屏实测：FCP/LCP/CLS + 首屏流量构成
 > npm run perf:bundle        # entry chunk 字节归因：vue / element-plus / axios / 业务代码各占多少
+> npm run perf:bundle -- --why dayjs   # 打印「这个包为什么会进首屏」的最短依赖链
 > npm run audit:images       # uploads 目录体检：每张图的像素尺寸与「字节/像素」
+> npm run check:css          # 用 esbuild 当裁判扫全部 CSS（lint 里也会跑，CI 会拦）
 > ```
 
 > 前端单测不只测纯函数：WebSocket 状态机（握手语义 / 退避重连 / 4401 停止重试 / 心跳保活）、
@@ -414,9 +416,9 @@ content-sharing-platform/
 
 | 指标                 | 优化前    | 优化后      | 变化                      |
 | -------------------- | --------- | ----------- | ------------------------- |
-| FCP                  | 1196 ms   | 1352 ms     | +112 ms（entry 换首屏早） |
-| LCP                  | 6280 ms   | **3048 ms** | **-51%**                  |
-| **视口图片全部就绪** | **14.7s** | **3.0s**    | **-80%（快 4.9×）**       |
+| FCP                  | 1196 ms   | 1320 ms     | +124 ms（entry 换首屏早） |
+| LCP                  | 6280 ms   | **2896 ms** | **-54%**                  |
+| **视口图片全部就绪** | **14.7s** | **2.9s**    | **-80%（快 5.1×）**       |
 | CLS                  | 0.0000    | 0.0000      | ✅ 零布局偏移             |
 
 **首屏流量 2746 KB → 408 KB（-85%）**：其中图片 **2559 KB → 229 KB（-91%）**，
@@ -491,6 +493,104 @@ LCP 图片传输完成   3038 ms
 > `audit:images` / `seed:thumbs`（给存量图片补缩略图）。
 > 其中 `perf:bundle` 的归因显示 **entry chunk 里业务代码只占 6%，94% 是依赖** ——
 > 这也是为什么「优化业务代码」在这个项目里是无效努力，必须从依赖和图片下手。
+
+## 📦 依赖卫生：一行 import 决定了 98 个组件的命运
+
+性能章节收尾后又量了一轮首屏依赖，结果指向一个比「包太大」更具体的问题：
+**首屏到底装了哪些依赖，以及是谁把它们拉进来的。**
+
+### 现象：CSS 按需，JS 不按需
+
+`unplugin-vue-components` 的 `ElementPlusResolver` 把组件解析到：
+
+```js
+{ name: 'ElButton', from: 'element-plus/es', sideEffects: ['.../button/style/css'] }
+```
+
+`sideEffects` 是**按组件**的 CSS，`from` 却是 `element-plus/es` —— 整个库的**总桶**，
+它 re-export 了全部 98 个组件。也就是说：任何用到 `el-*` 的 SFC，
+都会把整个 Element Plus 拖进自己的依赖图。
+
+再加上一批手写导入。`ElMessage` 这类在 `<script setup>` 里调用的组件
+resolver 扫不到，只能手写，而手写时很容易图省事：
+
+```ts
+import { ElMessage } from 'element-plus' // ← 26 处
+```
+
+先补上工具再下结论。原来的 `perf:bundle` 只回答「有多少字节」，
+不回答「哪一行把它拉进来的」，于是加了两个能力：
+
+```bash
+npm run perf:bundle                       # 构建前先扫总桶，有就直接失败并给行号
+npm run perf:bundle -- --why dayjs        # 从 main.ts BFS，打印到该包的最短依赖链
+```
+
+`--why` 的输出会区分**我们自己的代码**和**第三方内部依赖**：
+
+```
+main.ts → App.vue → TopBar.vue → element-plus/es/components/avatar
+        → avatar-group-props → @popperjs/core
+  其中 5 段是我们自己的代码，改得动；其余是第三方内部依赖。
+```
+
+这条区分是重点：popper 被 avatar 拉进来、tinycolor 被 button 拉进来 ——
+**都改不动**，把时间花在它们身上是白费。而如果是某个 `src/views/*.vue`
+拉进来的，那就是我们的责任。
+
+### 改完的实测
+
+| 项目                             | 改前               | 改后                  |
+| -------------------------------- | ------------------ | --------------------- |
+| 首屏依赖图里的 Element Plus 组件 | **98**             | **31**                |
+| `dayjs`                          | 在首屏             | 完全出局              |
+| `async-validator`                | 在首屏             | 完全出局              |
+| entry chunk（原始 / gzip）       | 281.00 / 100.26 kB | 279.98 / **97.31** kB |
+
+> **关于那 2 KB 的实话**：字节只省了 1 kB，比这次改动看起来应有的收益小得多。
+> 原因是 Rollup 之前**已经在摇这个桶**了 —— 被保留的组件本来就只有 22 个。
+> 所以这次修的是**潜在风险**，不是一笔一直存在的开销：
+> 总桶一旦被某个副作用钉住，就会全量进首屏，而这种钉子通常来自一个你根本没写过的 import。
+
+### 顺手挖出来的两条：一个死掉的规则和一个从来没跑过的检查器
+
+**一条从未生效的 CSS。** 构建里一直挂着一行警告：
+
+```
+[esbuild css minify] Expected identifier but found "not("
+```
+
+对应的是 `motion.css` 里按压态的选择器：
+
+```css
+/* 错 */ :where(button, .el-button, [role='button']).not(:disabled):active
+/* 对 */ :where(button, .el-button, [role='button']):not(:disabled):active
+```
+
+`.not(` 少一个冒号 → 整条规则非法 → 浏览器**静默丢弃**。
+也就是说全站按钮的按压反馈 `scale(0.97)` 从写下那天起就没生效过。
+紧挨着的 hover 规则写的是对的，所以肉眼看两行挨着完全不会觉得奇怪。
+
+**一个从来没跑过的检查器。** `scripts/check-css.mjs` 负责抓这类问题，
+但它 (1) `import` 的 `postcss` 从未被安装，(2) 没被任何 npm script 调用，
+(3) 只解析 `.vue` 里的 `<style>` 块、跳过独立的 `.css` 文件 ——
+而三个全局样式表正好全在覆盖范围之外。
+
+而且就算它能跑也抓不到：postcss 的默认解析器只校验结构，
+`.not(:disabled)` 在它眼里完全合法。**真正会报这个错的只有 esbuild**，
+所以检查器必须用同一个裁判：
+
+- esbuild 的 `transform()` 对这段 CSS 静默通过，
+  只有 `build({ stdin, minify: true })` 会报 warning —— 实测过，不是猜的
+- 它报的是 **warning 不是 error**，所以 lint-staged 和 CI 都不会因此失败，
+  必须有一个独立检查把它变成非零退出
+
+现在 `npm run lint` 会跑它，CI 也拦得住。变异测试确认过：
+把 `.not(` 放回去，检查器会在正确的行号上变红。
+
+> **判据**：当一个工具「本该拦住某类问题」却从没拦到过时，先怀疑工具本身，
+> 别急着相信「没有这类问题」。这次两处都是这样 ——
+> 一处是 CSS 检查器从没执行过，一处是字节归因只给数字不给来源。
 
 ## ♿ 可访问性：先量，再改
 
@@ -704,13 +804,15 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 > 我先写了限速采样脚本（生产构建 + Slow 4G + Playwright），结果和直觉相反。
 
-- 首屏 **LCP 6280ms → 3048ms（-51%）**，视口内图片就绪 14.7s → 3.0s
+- 首屏 **LCP 6280ms → 2896ms（-54%）**，视口内图片就绪 14.7s → 2.9s
 - 字节归因显示 **entry chunk 里业务代码只占 6%，94% 是依赖** ——
   所以「优化业务代码」在这个项目里是无效努力
 - 动作：压缩时**顺带**用同一个已解码位图画 480px 缩略图
   （12MP 解码成 RGBA 约 48MB，为了一张小图再解一次是纯浪费）→ 首屏图片 **-91%**
 - 首屏路由改静态 import：FCP 到 `/api/feed` 之间那 552ms
   花在「等首页 chunk 下完才能发接口」的串行上 → LCP 再降 **500ms**
+- Element Plus 改成按路径导入 → 首屏依赖图里组件数 **98 → 31**，
+  dayjs / async-validator 完全出局（详见下一章）
 
 > **被实测推翻的一次**：我加了 `fetchpriority="high"` 和 `loading="eager"`，
 > 想着能抢带宽。改完一测——**零收益**，而且因为 Chrome 的懒加载有 1250px 距离阈值，
