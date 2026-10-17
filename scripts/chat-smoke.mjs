@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { getJwtSecret } from './lib/secret.mjs'
+import { reportErrors } from './lib/ep-noise.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -286,42 +287,7 @@ console.log('\n──────── 结果 ────────')
 // 鉴权那条会故意产生一个 4xx，属预期
 const real = errors.filter((e) => !/HTTP 401|websocket|WebSocket|ws:\/\//i.test(e))
 
-/*
- * Element Plus 在**卸载期**的两个内部竞态，dev server 下偶发：
- *
- *   TypeError: Cannot read properties of null (reading 'ce')   at renderSlot
- *   TypeError: Cannot read properties of undefined (reading 'indexOf')
- *       at Object.removeChild [as unregisterPane]
- *
- * 栈全在 node_modules/.vite/deps/ 里，也就是 vite 预构建出来的依赖块，
- * 不在本项目任何一行代码上 —— ChatView 只用了 avatar / tag / icon / badge /
- * button / input，一个 popper 系组件都没有。
- *
- * 成因是 vite dev 的依赖预构建：重新打包依赖会让组件拿到不同的一份模块实例，
- * 于是卸载时 popper 的 content 引用已经没了。生产构建不会有这个问题
- * （模块只有一份），所以这是**开发模式的噪音**，不是被测行为。
- *
- * 但不能直接丢弃：报错原文照打，只是不参与判定。
- * 这样「真的多了一条」和「这条属于已知的第三方噪音」在日志里长得不一样，
- * 而丢弃会把这两种情况统一成沉默 —— 那正是这个守卫最初写成
- * `.catch(() => {})` 时犯过的错。
- */
-const EP_TEARDOWN = /renderSlot|unregisterPane/
-const noisy = real.filter((e) => EP_TEARDOWN.test(e))
-const actual = real.filter((e) => !EP_TEARDOWN.test(e))
 
-if (real.length === 0) {
-  console.log('  console error / 失败请求：0')
-} else {
-  if (actual.length) {
-    console.log(`  有 ${actual.length} 条异常：`)
-    actual.slice(0, 8).forEach((e) => console.log('   - ' + e))
-  }
-  if (noisy.length) {
-    console.log(`  另有 ${noisy.length} 条 Element Plus 卸载期噪音（不计入失败）：`)
-    noisy.slice(0, 4).forEach((e) => console.log('   ~ ' + e))
-  }
-}
+const clean = reportErrors(real)
 console.log(fails === 0 ? '  断言：全部通过' : `  断言：${fails} 项失败`)
-console.log('  收尾：请运行 node server/cleanup-test-data.mjs --yes 清掉两个测试账号')
-process.exit(fails === 0 && actual.length === 0 ? 0 : 1)
+process.exit(fails === 0 && clean ? 0 : 1)

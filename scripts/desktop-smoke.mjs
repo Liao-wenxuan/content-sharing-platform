@@ -7,6 +7,7 @@
  * 不涉及任何真实用户凭据。跑完可以随手在数据库里删掉。
  */
 import { chromium } from 'playwright'
+import { splitEpNoise } from './lib/ep-noise.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -266,11 +267,18 @@ check(
 // ---------- 汇总 ----------
 console.log('\n──────── 结果 ────────')
 const realErrors = errors.filter((e) => !e.includes('401') || !e.includes('/api/auth/me'))
-if (realErrors.length === 0) {
+// Element Plus 卸载期的 renderSlot / unregisterPane 竞态单独归一堆、不计入失败。
+// 依据见 scripts/lib/ep-noise.mjs：栈全在 .vite/deps 里，不在本项目任何一行代码上。
+const { real: realHits, noise: epNoise } = splitEpNoise(realErrors)
+if (realHits.length === 0) {
   console.log('  控制台错误 / 失败请求：0')
 } else {
-  console.log(`  控制台错误 / 失败请求：${realErrors.length}`)
-  realErrors.slice(0, 15).forEach((e) => console.log('    - ' + e))
+  console.log(`  控制台错误 / 失败请求：${realHits.length}`)
+  realHits.slice(0, 15).forEach((e) => console.log('    - ' + e))
+}
+if (epNoise.length) {
+  console.log(`  另有 ${epNoise.length} 条 Element Plus 卸载期噪音（不计入失败）：`)
+  epNoise.slice(0, 4).forEach((e) => console.log('    ~ ' + e))
 }
 console.log(`  断言：${fails === 0 ? '全部通过' : fails + ' 项失败'}`)
 
@@ -291,4 +299,4 @@ try {
   console.log('  数据收尾：跳过（' + (e.message || '').split('\n')[0] + '）')
 }
 
-process.exit(fails === 0 && realErrors.length === 0 ? 0 : 1)
+process.exit(fails === 0 && realHits.length === 0 ? 0 : 1)
