@@ -592,6 +592,90 @@ main.ts → App.vue → TopBar.vue → element-plus/es/components/avatar
 > 别急着相信「没有这类问题」。这次两处都是这样 ——
 > 一处是 CSS 检查器从没执行过，一处是字节归因只给数字不给来源。
 
+## 🚦 回归防线：把 456 个断言搬进 CI
+
+上一轮结束时，CI 里只有三个 job：后端测试、前端单测、lint。
+**14 套 e2e（约 456 个断言点）只能在本地跑** —— 也就是说，
+push 之后没有任何东西验证过用户真正会走的那些路径。
+
+这不是理论风险。我在这个项目里**被它咬过一次**：三个断言红了很久没人知道，
+而「不在 CI 里的测试会烂掉」这句话，是我事后才验证的。
+
+于是这一轮的主题就是把它们搬进去。结果发现，
+**搬的过程比搬进去本身有价值得多** —— 一共抓出 11 个问题，
+其中 3 个是真实的产品缺陷。
+
+### 搬之前必须先解决的（都是实测出来的，不是设想的）
+
+| 拦路的东西                              | 症状                                        | 根因                                                       |
+| --------------------------------------- | ------------------------------------------- | ---------------------------------------------------------- |
+| **空库**                                | `desktop-smoke` 1 秒内超时                  | 搜索建议下拉读热门话题，空库下面板根本不渲染               |
+| **`seed.mjs` 崩在第 32 行**             | ENOENT                                      | `readdirSync('uploads/demo/')`，而 `uploads/` 被 gitignore |
+| **20 个脚本写死 `server/data.db`**      | `POST /api/conversations => 404 用户不存在` | 忽略 `DB_PATH`，服务端和脚本看的是两个文件                 |
+| **20 处读 `server/.env` 取 JWT_SECRET** | 每套都崩在读密钥那行                        | `.env` 被 gitignore，且兜底值还各写各的                    |
+| **`reveal-smoke` 借个人账号**           | 1 秒内退出                                  | 14 套里唯一依赖「我的个人数据」的一个                      |
+| **CI 里没有 demo 配图**                 | 12 个话题全部「无封面」+ 一堆 404           | 缺图时 seed 降级成 0 张 —— 而一半断言测的是**有图的页面**  |
+
+### 搬进去之后，它立刻抓出来的
+
+前五个属于「工具/配置本身有毛病」，后三个属于「真的有 bug」：
+
+1. **`/api/health` 不碰数据库。** `lib/db.ts` 导出惰性 Proxy，schema 只在第一次访问时才建，
+   而健康检查只回一个静态 JSON。于是 CI 认为后端好了，紧接着 seed 撞上「no such table」。
+   _「进程在监听端口」和「数据库可用」是两件事。_
+2. **`upload-artifact@v4` 默认跳过隐藏文件**，`.e2e-logs/` 以点开头被静默丢弃 ——
+   上传照样报成功，但里面只剩两个无关日志。第一轮我就是这么丢掉了定位失败所需的日志。
+3. **API 的启动目录错了（我写的）。** `/uploads` 是 `path.join(process.cwd(), 'uploads')`，
+   我从仓库根跑 `node server/dist/index.js`，cwd 变成仓库根，seed 写的配图全部 404。
+   **同一个 cwd 问题，穿过三层表现出来的都不是它自己**：a11y 看到「元素加载失败」，
+   有的套件看到「HTTP 404」，有的看到「元素不可见」。
+4. **前端该用 dev server 而不是 preview（我写的）。** 我为了「更快、更接近生产」选了 preview，
+   结果 `image-smoke` 挂在 `import('/src/utils/image.ts')` —— 那是 dev server 才有的路径。
+   而那一段是**有意的白盒测试**（注释写明是为了把「EXIF 解析器坏了」和「压缩链路坏了」分开）。
+   _为迁就 CI 去改一个刻意写好的测试，是把成本放错了地方。_
+5. **审计和测试的「数据对象」是随机取的。** a11y 脚本取「库里 id 最小的那篇笔记」，
+   `topic-smoke` 取「笔记最多的那个话题」—— 两处都对**被选中数据的性质**做了断言，
+   却从没保证那些性质成立。于是：
+   - `topic-smoke` 挑中了 desktop-smoke 造的 `#桌面重构`（5 条笔记全无图、作者各只发过一条），
+     「有封面图」和「有相关话题」必然挂 —— **测试的通过与否取决于运行顺序**。
+   - a11y 那篇笔记恰好既没图也没话题标签，于是 `<el-image>` 和 `<el-tag>` **根本不渲染**，
+     axe 扫不到，报告上是「0 违规」—— **两个真实缺陷躲了好几轮**。
+6. **🔴 话题封面被空数组顶掉（产品缺陷）。** 没配图的笔记存的是 `[]` 而不是 NULL，
+   被 `image_urls IS NOT NULL` 放进封面候选，`json_extract('[]','$[0]')` 取出 NULL ——
+   只要话题里**最新**那篇没图，整个话题的头图就消失，哪怕更早的笔记都配了图。
+7. **🔴 详情页主图没有 `alt`（产品缺陷）。** 全项目唯一漏写的图片容器，严重级别 critical。
+8. **🔴 话题标签对比度 4.25:1，低于 AA（产品缺陷）。** `element-theme.css` 里
+   **早就修过一模一样的毛病**（`.el-button--danger.is-plain` 那条规则连注释都写着
+   「卡在 AA 门槛下面」），只是从来没人把同一套处理套到标签上。
+
+> **判据：替身失效时，先确认替身的运行环境，再看被测代码。**
+> 「找不到元素 / 元素不可见 / 资源 404」这类症状几乎总是**环境**问题 ——
+> 业务代码不会因为「启动目录不一样」而改变行为。
+>
+> **CI 的运行环境应该尽量复制本地，而不是比本地更「优化」。**
+
+### 现在的 CI
+
+五个 job，**故意不设 `needs`**：
+
+| Job                | 内容                                                      |
+| ------------------ | --------------------------------------------------------- |
+| `Server (Node 24)` | tsc + vitest（422 用例）                                  |
+| `Client (Node 24)` | vue-tsc + vitest 覆盖率（432 用例）+ build + **体积预算** |
+| `Lint (root)`      | eslint + **CSS 检查** + prettier                          |
+| `E2E (Playwright)` | 14 套顺序跑，跑完再汇总                                   |
+| `A11Y (axe-core)`  | 深色 + 浅色各扫一遍（37 个页面状态）                      |
+
+不挂 `needs` 是因为挂上去看着省事，代价是**一次 push 只拿一份信号**：
+单测挂了看不到 e2e 坏没坏，只能改完再推一次才知道。公开仓库 Actions 不计费，那就全跑。
+
+> **判据：断言依赖被选中的数据时，选择器必须保证待审元素真的会出现。**
+> 「扫不到」不等于「没问题」，「碰巧有数据」也不等于「测过了」。
+>
+> 配套的一条同样重要：**把测试搬到一台「什么都没有」的机器上跑一遍，
+> 是找出「靠本机状态才通过」的测试最便宜的手段** —— 比逐条读断言可靠得多。
+> 这一轮四处（DB_PATH、JWT secret、个人账号、审计对象）全是这么冒出来的。
+
 ## ♿ 可访问性：先量，再改
 
 首屏优化收尾之后，接了一轮 WCAG 2.1 A/AA。结论同样来自实测，不是凭印象：
@@ -779,7 +863,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **GitHub Actions CI**                    | 3 个并行 job：`server`（vitest + tsc）/ `client`（vue-tsc + vitest + build）/ `lint`（eslint + prettier --check），ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22，Node 20 会让"Install deps"假绿然后在 `vitest run` 挂掉）；本地能过的命令 CI 也必须能过                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 422 例）/ `client`（vue-tsc + vitest 432 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**14 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：248 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
