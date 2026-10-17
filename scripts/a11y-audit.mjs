@@ -342,34 +342,49 @@ const AUTH_PAGES = [
 let fails = 0
 
 /**
- * 切到浅色模式，并**禁用所有过渡**。
+ * 采样前把页面**冻结到终态**。三件事，**深浅两个主题都要做**。
  *
- * 两件事必须成对做，缺一不可：
- *
- * ① 去掉 html.dark。index.html 里预置了这个 class，避免首屏浅色闪烁，
+ * ① 去掉 html.dark（仅浅色）。index.html 里预置了这个 class，避免首屏浅色闪烁，
  *    所以它一直在。
  *
- * ② 禁掉 transition。Element 给控件加了 `transition: var(--el-transition-all)`
+ * ② 禁掉 transition / animation（**两个主题都要**）。Element 给控件加了 `transition: var(--el-transition-all)`
  *    （300ms 颜色过渡）。摘掉 dark 之后所有颜色同时开始过渡，
  *    此时立刻读 computed style 拿到的是**中间色** ——
  *    axe 会把「正在变暗的白字」当成最终颜色，量出 1.1:1 这种不存在的对比度。
  *    这个 bug 一度让浅色模式显示「101 处违规」，我为此写了 `!important`、
  *    提特异度、翻 Element 源码改变量，三轮全是在跟一个测量假象打架。
  *
+ * ③ 给所有 .sg-reveal 补上 .is-revealed（**两个主题都要**）。
+ *    这条是后来补的，而且它才是首页误报的真正原因。
+ *    入场用 `--reveal-delay` 做阶梯（最多 6 × 60ms），IntersectionObserver
+ *    逐张把卡片从 opacity:0 推到 1。页面加载慢时采样会撞在阶梯中间，
+ *    同一个 `.time` 类同时呈现三种灰度（#7b7b7c / #6c6c6d / #5c5c5d），
+ *    axe 把半透明前景当成最终颜色，报出 7 处不存在的「对比度不足」。
+ *
+ *    光禁 transition 不够：那只让**已经**加上 is-revealed 的卡片瞬间到位，
+ *    还没被 observer 命中的卡片仍然停在 opacity:0。必须显式补 class。
+ *
+ * 为什么以前没暴露：这个版本把 ①② 绑在 `if (!on) return` 后面，
+ * 深色模式直接跳过，于是深色审计一次动效都没禁过。平时跑得够快、
+ * 动画已经结束，所以看不出来。
+ * 实测触发条件是「刚改完 vite.config、dev server 正在重新优化依赖」，
+ * 而 CI 的 dev server 永远是冷的 —— 那不是偶发，是 CI 的常态。
+ *
  * ⚠️ 每次 page.goto() 之后都要重做一遍：导航会重置页面，
  *    dark class 回来、注入的样式也没了。设置页的面板审计每开一个抽屉
  *    就重新导航一次，之前漏在这里，导致 11 个面板其实都跑在深色模式下。
  */
-async function forceLight(page, on) {
-  if (!on) return
-  await page.evaluate(() => {
-    document.documentElement.classList.remove('dark')
+async function freezeForMeasurement(page, light) {
+  await page.evaluate((isLight) => {
+    if (isLight) document.documentElement.classList.remove('dark')
     const s = document.createElement('style')
-    s.textContent =
-      '*,*::before,*::after{transition:none !important;animation:none !important}'
+    s.textContent = '*,*::before,*::after{transition:none !important;animation:none !important}'
     document.head.appendChild(s)
-  })
-  await page.waitForTimeout(300)
+    // ③ 入场动画直接推到终态 —— 见上面关于 --reveal-delay 阶梯的说明
+    for (const el of document.querySelectorAll('.sg-reveal')) {
+      el.classList.add('is-revealed')
+    }
+  }, light)
 }
 
 async function probeBackend() {
@@ -423,8 +438,8 @@ async function auditPage(ctx, loggedIn) {
       await p.locator('main, .standalone').first().waitFor({ state: 'visible', timeout: 15000 })
       await p.waitForTimeout(700)
 
-      // 详见 forceLight：切主题 + 禁过渡必须成对做，且每次导航后重做。
-      await forceLight(p, LIGHT)
+      // 详见 freezeForMeasurement：禁动效 + 推入场动画到终态，每次导航后重做。
+      await freezeForMeasurement(p, LIGHT)
 
       /*
        * 守卫二：确认没被重定向。
@@ -500,8 +515,8 @@ async function auditPage(ctx, loggedIn) {
           await p.goto(`${BASE}${target.path}`, { waitUntil: 'domcontentloaded' })
           await p.locator('.item-row.clickable').first().waitFor({ timeout: 15000 })
           await p.waitForTimeout(500)
-          // 重新导航会重置页面：dark class 和注入的禁过渡样式都没了
-          await forceLight(p, LIGHT)
+          // 重新导航会重置页面：dark class、注入的禁动效样式、补上的 class 全没了
+          await freezeForMeasurement(p, LIGHT)
 
           // ⚠️ 别把点击错误吞掉。第一版写了 `.catch(() => {})`，
           // 结果「点不动」和「点了没反应」在报告里长得一模一样 ——
