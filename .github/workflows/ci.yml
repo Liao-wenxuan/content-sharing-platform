@@ -132,6 +132,14 @@ jobs:
 
       - uses: ./.github/actions/web-env
 
+      - name: Warm up the dev server
+        # vite 的依赖预优化是边跑边发现的：每发现一批新依赖就重新预构建，
+        # 并且**触发一次整页 reload**。一次 e2e 跑下来能砸出七八轮，
+        # 页面被强制刷新 = SPA 状态全丢，断言就开始随机失败。
+        # 本地看不到（依赖早缓存好了），CI 的 dev server 永远是冷的。
+        # 先把所有路由跑一遍把这份成本付掉，见 scripts/warmup-web.mjs。
+        run: node scripts/warmup-web.mjs
+
       - name: Run 14 e2e suites
         # 脚本自己会跑完 14 套再汇总，而不是第一个失败就停 ——
         # 停了就只能知道「有东西坏了」，跑完才知道是哪几个。
