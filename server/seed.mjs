@@ -15,7 +15,7 @@
  */
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
-import { readdirSync, existsSync } from 'node:fs'
+import { readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
@@ -35,9 +35,45 @@ db.pragma('foreign_keys = ON')
 //
 // 第一版直接 readdirSync(DEMO_DIR)，于是在新 clone 上 seed 直接 ENOENT 崩掉，
 // 后面所有「话题 / 关注 / 市集 / 钱包」的数据都种不下去。
-// 缺图不该让种子脚本失败：笔记、话题、关注关系这些才是 e2e 真正依赖的东西，
-// 配图只是好看。降级成 0 张并说清楚，比崩掉有用得多。
+// 但也不能就这么降级成 0 张图：**e2e 断言的是有图的页面**。
+// 摘录一次真实失败（把 e2e 搬进 CI 的第二轮）：
+//
+//   topic-smoke: 库里没有同时满足「有封面」和「有相关话题」的话题。
+//     已尝试：美食(无封面)、游戏(无封面)、穿搭(无封面) …… 12 个话题全部无封面
+//   comment / view-history: 零失败请求 -> HTTP 404（/uploads/demo/* 根本不存在）
+//
+// 「没有图」不是「少个装饰」，而是让一半的断言失去意义 ——
+// 元素不渲染 → 测不到 → 回归门形同虚设。
+//
+// 所以缺图时**就地生成占位图**。用 SVG 是因为它是纯文本：
+// 一个字节的二进制都不用往仓库里塞，也不涉及把 Unsplash 的照片
+// 提交进公开仓库的授权问题。命名沿用 d<N>- 前缀，
+// 下面那段索引逻辑一行都不用改。
+function generatePlaceholders(count = 12) {
+  mkdirSync(DEMO_DIR, { recursive: true })
+  const hues = [18, 42, 96, 150, 186, 208, 246, 274, 310, 340, 8, 62]
+  for (let i = 1; i <= count; i++) {
+    const h = hues[i - 1]
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="720" viewBox="0 0 960 720">` +
+      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+      `<stop offset="0" stop-color="hsl(${h} 32% 26%)"/>` +
+      `<stop offset="1" stop-color="hsl(${(h + 38) % 360} 28% 14%)"/>` +
+      `</linearGradient></defs>` +
+      `<rect width="960" height="720" fill="url(#g)"/>` +
+      `<text x="480" y="368" text-anchor="middle" font-family="sans-serif" ` +
+      `font-size="64" fill="hsl(${h} 30% 78%)">演示配图 ${i}</text>` +
+      `</svg>`
+    writeFileSync(join(DEMO_DIR, `d${i}-placeholder.svg`), svg, 'utf8')
+  }
+  return count
+}
+
 const photos = new Map()
+if (!existsSync(DEMO_DIR)) {
+  const n = generatePlaceholders()
+  console.log(`uploads/demo/ 不存在，已生成 ${n} 张占位图（npm run seed:photos 可换成真照片）`)
+}
 if (existsSync(DEMO_DIR)) {
   for (const f of readdirSync(DEMO_DIR)) {
     const m = /^d(\d+)-/.exec(f)

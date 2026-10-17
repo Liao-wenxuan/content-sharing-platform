@@ -147,6 +147,11 @@ jobs:
             .e2e-logs/
             ${{ runner.temp }}/*.log
           retention-days: 7
+          # ⚠️ 必须显式开这个：upload-artifact v4 默认 include-hidden-files=false，
+          # 而 `.e2e-logs/` 以点开头会被当成隐藏目录**静默跳过** ——
+          # 上传照样「成功」，但里面只有 $RUNNER_TEMP 里那两个日志，
+          # 真正想留的逐套输出一个都没有。
+          include-hidden-files: true
 
   # ===== 浏览器侧：无障碍 =====
   a11y:
