@@ -15,7 +15,7 @@
  */
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
-import { readdirSync } from 'node:fs'
+import { readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
@@ -28,12 +28,29 @@ const db = new Database(DB_PATH)
 db.pragma('foreign_keys = ON')
 
 // ---------- 1. 图片索引：按 d 前缀查文件 ----------
+//
+// demo 配图是 `npm run seed:photos` 从 Unsplash 下载到 uploads/demo/ 的，
+// 而 uploads/ 整个被 gitignore 排除 —— 所以在一个新 clone 里
+// （以及 CI 的 runner 上）这个目录**根本不存在**。
+//
+// 第一版直接 readdirSync(DEMO_DIR)，于是在新 clone 上 seed 直接 ENOENT 崩掉，
+// 后面所有「话题 / 关注 / 市集 / 钱包」的数据都种不下去。
+// 缺图不该让种子脚本失败：笔记、话题、关注关系这些才是 e2e 真正依赖的东西，
+// 配图只是好看。降级成 0 张并说清楚，比崩掉有用得多。
 const photos = new Map()
-for (const f of readdirSync(DEMO_DIR)) {
-  const m = /^d(\d+)-/.exec(f)
-  if (m) photos.set(`d${m[1]}`, `/uploads/demo/${f}`)
+if (existsSync(DEMO_DIR)) {
+  for (const f of readdirSync(DEMO_DIR)) {
+    const m = /^d(\d+)-/.exec(f)
+    if (m) photos.set(`d${m[1]}`, `/uploads/demo/${f}`)
+  }
+  console.log(`可用配图 ${photos.size} 张`)
+} else {
+  console.log(
+    `可用配图 0 张（${DEMO_DIR} 不存在）——\n` +
+      '  笔记/话题/关注/市集/钱包仍会完整写入，只有封面图缺失。\n' +
+      '  需要配图的话跑：npm run seed:photos'
+  )
 }
-console.log(`可用配图 ${photos.size} 张`)
 
 const img = (key) => photos.get(key) || null
 const imgs = (...keys) => {
