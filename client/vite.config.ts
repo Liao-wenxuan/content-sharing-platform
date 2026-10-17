@@ -117,6 +117,30 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  /**
+   * 依赖预构建的扫描入口：把**所有**源文件都算进去，一次发现完。
+   *
+   * 背景：深路径导入有 30 多个（element-plus/es/components/<name>），
+   * 而 vite 默认「边跑边发现」—— 每发现一批新依赖就重新预构建，
+   * 并且**触发一次整页 reload**。症状是 CI 里 e2e 随机失败：
+   *
+   *     page.waitForURL: Timeout ... navigated to ".../post/4"  ← 同一个 URL 两次
+   *
+   * 本地永远看不到（依赖早缓存好了），CI 的 dev server 永远是冷的。
+   *
+   * 只跑一遍路由做预热是不够的：设置页那些 el-drawer 里的组件
+   * （switch / input-number / descriptions…）**要打开抽屉才会加载**，
+   * 于是它们会在套件跑到一半时才被发现、才触发 reload ——
+   * 实测预热把 10 次里的 8 次提前付掉了，剩下 2 次仍然砸在测试中间。
+   *
+   * 把入口列全，扫描器一次看完全部 import，就只有一轮预构建。
+   * 这比手写 optimizeDeps.include 三十多个组件名好：
+   * 那个方案多一份「新增组件忘了加」的债，而漏掉一个的症状
+   * 恰好就是这次要消灭的整页 reload。
+   */
+  optimizeDeps: {
+    entries: ['index.html', 'src/**/*.vue', 'src/**/*.ts']
+  },
   // dev 时把上传图片的相对 URL /uploads/* 反代给 Express 后端（3000），
   // server 返回的 url 字段是相对路径（/uploads/xxx.png），如果不在这里配，
   // 浏览器请求会落到 Vite SPA fallback 返 text/html，<img> 加载失败。
