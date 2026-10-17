@@ -425,6 +425,32 @@ html.dark .el-button--danger.is-plain,
   border-color: color-mix(in srgb, var(--destructive) 45%, transparent) !important;
 }
 
+/*
+ * 话题标签用的就是 el-tag danger plain，同一个毛病，同一个修法。
+ *
+ * 这条是搬 e2e 进 CI 时被 a11y 审计抓出来的，测法很典型：
+ * 审计脚本取的是「库里 id 最小的那篇笔记」。在个人库里那篇恰好既没有
+ * 话题标签也没有图，于是这个元素**根本没渲染**，扫出来当然是 0；
+ * 换到隔离库，id 最小的笔记带话题标签，元素渲染出来了，
+ * 一测就是 4.25:1，卡在 AA 的 4.5 门槛下面。
+ *
+ * 也就是说之前的「0 违规」是有条件的：条件是「被审的那篇笔记没有话题标签」。
+ *
+ * 危险色的 12% 染色和亮一档的红字沿用上面按钮那套 ——
+ * 不重新试比例，因为那套已经量过了。
+ *
+ * ⚠️ 类名是 `el-tag--plain` 而不是 `is-plain`：
+ * 按钮的 plain 态叫 is-plain，标签的叫 el-tag--plain，
+ * 两边不统一。第一版照着按钮写成了 .is-plain，选择器**一条都没匹配上**，
+ * 页面上看到的还是 Element 原色 —— 而「规则写了但没生效」在报告里
+ * 和「规则没写」长得一模一样。
+ */
+.el-tag.el-tag--danger.el-tag--plain {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent) !important;
+  color: var(--destructive-text) !important;
+  border-color: color-mix(in srgb, var(--destructive) 45%, transparent) !important;
+}
+
 /* 开关：内嵌进面板的控件，不要太圆 */
 .el-switch {
   --el-switch-on-color: var(--el-color-primary);

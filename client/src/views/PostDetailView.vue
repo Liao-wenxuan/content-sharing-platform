@@ -432,6 +432,7 @@ watch(
             :src="post.imageUrls[currentImageIndex]"
             :preview-src-list="post.imageUrls"
             :initial-index="currentImageIndex"
+            :alt="`${post.author?.nickname ?? '作者'} 的笔记配图`"
             preview-teleported
             hide-on-click-modal
             fit="contain"
