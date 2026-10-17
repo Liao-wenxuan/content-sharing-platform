@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -86,7 +87,7 @@ async function api(path, opts = {}) {
  * 所以直接写库 + 用同一个 JWT_SECRET 本地签 token，和后端签出来的是同一种。
  */
 function ensureUser(email, nickname) {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare(`SELECT id, email FROM users WHERE email = ?`).get(email)
   if (!row) {
     const hash = bcrypt.hashSync(PASSWORD, 10)
@@ -103,8 +104,7 @@ function ensureUser(email, nickname) {
   db.prepare(`DELETE FROM conversations WHERE user_a_id = ? OR user_b_id = ?`).run(row.id, row.id)
   db.close()
 
-  const envText = readFileSync(path.join(ROOT, 'server', '.env'), 'utf8')
-  const secret = /JWT_SECRET=(.*)/.exec(envText)?.[1]?.trim() ?? 'dev-secret-please-change-in-prod'
+  const secret = getJwtSecret(ROOT)
 
   return { id: row.id, token: jwt.sign({ userId: row.id, email }, secret) }
 }

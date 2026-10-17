@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -43,9 +44,8 @@ const HOT_TOPIC = '美食'
  * 断言就变成「在只有三条内容时排序对不对」—— 那和真实规模下的表现是两回事。
  */
 function setup() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
-  const envText = readFileSync(path.join(ROOT, 'server', '.env'), 'utf8')
-  const secret = /JWT_SECRET=(.*)/.exec(envText)?.[1]?.trim() ?? 'dev-secret-please-change-in-prod'
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
+  const secret = getJwtSecret(ROOT)
 
   const ensureUser = (email, nickname) => {
     const row = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
@@ -152,7 +152,7 @@ async function renderedIds() {
 
 /** 直接查库：这个账号还剩几条屏蔽 */
 function countMuted(userId) {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   const n = db
     .prepare(`SELECT COUNT(*) c FROM post_feedback WHERE user_id = ? AND action = 'not_interested'`)
     .get(userId).c

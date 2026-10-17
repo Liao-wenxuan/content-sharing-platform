@@ -21,6 +21,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -33,13 +34,12 @@ const VIEWPORT = vpArg ? { width: Number(vpArg), height: 1000 } : { width: 1600,
 function user() {
   const Database = serverRequire('better-sqlite3')
   const jwt = serverRequire('jsonwebtoken')
-  const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
   const row = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(process.env.DESIGN_USER_EMAIL || '1044696157@qq.com')
   db.close()
   if (!row) throw new Error('库里没有该用户，设置 DESIGN_USER_EMAIL')
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return { ...row, token: jwt.sign({ userId: row.id }, secret) }
 }
 

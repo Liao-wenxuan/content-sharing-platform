@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -26,13 +27,12 @@ const jwt = serverRequire('jsonwebtoken')
 
 const EMAIL = process.env.REVEAL_USER_EMAIL || '1044696157@qq.com'
 
-const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
+const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
 const user = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(EMAIL)
 db.close()
 if (!user) throw new Error(`库里没有 ${EMAIL}`)
 const secret =
-  /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-  'dev-secret-please-change-in-prod'
+  getJwtSecret(ROOT)
 const token = jwt.sign({ userId: user.id, email: EMAIL }, secret)
 
 const browser = await chromium.launch()

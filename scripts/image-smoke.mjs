@@ -26,6 +26,7 @@ import { readFileSync, statSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -43,7 +44,7 @@ const NICK = '图片测试号'
 const MAX_EDGE = 2000
 
 function ensureAccount() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
     const info = db
@@ -57,8 +58,7 @@ function ensureAccount() {
   db.close()
 
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return { id, token: jwt.sign({ userId: id, email: EMAIL }, secret) }
 }
 

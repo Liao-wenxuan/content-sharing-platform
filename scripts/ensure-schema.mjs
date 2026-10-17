@@ -34,7 +34,7 @@ export async function ensureSchema(tables, base = 'http://localhost:3000') {
   }
 
   const Database = serverRequire('better-sqlite3')
-  const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
   try {
     const existing = new Set(
       db

@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { ensureSchema } from './ensure-schema.mjs'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -54,10 +55,9 @@ const check = (label, ok, detail = '') => {
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '  -> ' + detail : ''}`)
 }
 
-const dbPath = path.join(ROOT, 'server', 'data.db')
+const dbPath = (process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'))
 const SECRET =
-  /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-  'dev-secret'
+  getJwtSecret(ROOT)
 
 function withDb(fn) {
   const db = new Database(dbPath)

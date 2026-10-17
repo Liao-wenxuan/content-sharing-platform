@@ -29,6 +29,7 @@ import { createRequire } from 'node:module'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -284,7 +285,7 @@ const axeSource = readFileSync(rootRequire.resolve('axe-core/axe.min.js'), 'utf8
 
 function ensureUser() {
   const Database = serverRequire('better-sqlite3')
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id, nickname FROM users WHERE email = ?').get('a11y_audit@test.local')
   if (!row) {
     const bcrypt = serverRequire('bcryptjs')
@@ -296,20 +297,80 @@ function ensureUser() {
   db.close()
   const jwt = serverRequire('jsonwebtoken')
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return { id: row.id, nickname: row.nickname, token: jwt.sign({ userId: row.id }, secret) }
 }
 
 const user = ensureUser()
 
-/** 从库里取一个真实存在的笔记 / 用户，保证审的是有内容的页面 */
+/**
+ * 从库里取一个真实存在的笔记 / 用户，保证审的是有内容的页面。
+ *
+ * ⚠️ 这里**不能**用 `ORDER BY id LIMIT 1`。第一版就是那么写的，
+ * 而它让「0 违规」这个结论变成有条件的：
+ *
+ * 取到的那篇笔记如果既没有配图也没有话题标签，详情页上
+ * 「主图」和「话题标签」这两个元素就**根本不渲染**，
+ * axe 自然扫不到它们，报告上是 0 个问题。
+ *
+ * 于是两个真实缺陷整整躲了好几轮：
+ *   <el-image> 主图没写 alt        → image-alt（critical）
+ *   <el-tag type="danger"> 话题标签对比度 4.25:1 → 低于 AA 的 4.5
+ *
+ * 是在把 e2e 搬进 CI、换了个库之后才暴露的 ——
+ * 新库里 id 最小的笔记恰好带话题标签，元素渲染出来了，一测就红。
+ *
+ * 判据：**断言依赖被选中的数据时，选择器必须保证待审元素真的会出现。**
+ * 和 topic-smoke 挑话题是同一个毛病，那边也是「挑数据时没保证前提」。
+ *
+ * 现在按「最能暴露问题」优先选：先要带图且带话题标签的，
+ * 逐级降级，最后才退回任意一篇；并且把选中的是哪篇打印出来，
+ * 让「0 违规」这个结论可追溯。
+ */
 function sampleIds() {
   const Database = serverRequire('better-sqlite3')
-  const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
-  const post = db.prepare('SELECT id FROM posts ORDER BY id LIMIT 1').get()
-  const author = db.prepare('SELECT user_id AS id FROM posts WHERE user_id IS NOT NULL LIMIT 1').get()
+  const db = new Database(process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'), {
+    readonly: true
+  })
+
+  const hasImages = "image_urls IS NOT NULL AND json_array_length(image_urls) > 0"
+  const hasTopic = "topic_tag IS NOT NULL AND topic_tag <> ''"
+
+  const post =
+    db
+      .prepare(
+        `SELECT id FROM posts WHERE ${hasImages} AND ${hasTopic} ORDER BY id LIMIT 1`
+      )
+      .get() ??
+    db.prepare(`SELECT id FROM posts WHERE ${hasImages} ORDER BY id LIMIT 1`).get() ??
+    db.prepare(`SELECT id FROM posts WHERE ${hasTopic} ORDER BY id LIMIT 1`).get() ??
+    db.prepare('SELECT id FROM posts ORDER BY id LIMIT 1').get()
+
+  const author = db
+    .prepare('SELECT user_id AS id FROM posts WHERE user_id IS NOT NULL ORDER BY id LIMIT 1')
+    .get()
+
+  const detail = post
+    ? db
+        .prepare('SELECT id, topic_tag, image_urls FROM posts WHERE id = ?')
+        .get(post.id)
+    : null
+
   db.close()
+
+  if (detail) {
+    const imgs = JSON.parse(detail.image_urls || '[]').length
+    console.log(
+      `审计对象：笔记 #${detail.id}（${imgs} 张配图${detail.topic_tag ? '，话题 #' + detail.topic_tag : '，无话题'}）`
+    )
+    if (!imgs || !detail.topic_tag) {
+      console.log(
+        '  ⚠ 这篇笔记缺少配图或话题标签，对应的元素不会渲染 —— ' +
+          '扫不到它们不等于它们没问题。先跑 npm run seed。'
+      )
+    }
+  }
+
   return { post: post?.id, author: author?.id }
 }
 

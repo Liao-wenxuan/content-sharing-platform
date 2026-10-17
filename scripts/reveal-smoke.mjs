@@ -18,6 +18,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -26,29 +27,39 @@ const Database = serverRequire('better-sqlite3')
 const jwt = serverRequire('jsonwebtoken')
 
 /**
- * 借一个现成的登录态。
+ * 借一个现成的登录态；借不到就自建一个。
  *
- * 刻意**不自建测试账号**：这个脚本只读首页的入场效果，不发任何内容，
- * 而每个测试账号都是要手动 cleanup 的债。能借就不借。
+ * 原本是「只借不自建」，默认账号写死成 `1044696157@qq.com` ——
+ * 那是**个人库里才有的账号**，换一台机器（CI runner、一台干净的开发机）
+ * 就必然不存在，脚本会以「库里没有 xxx」直接退出。
+ *
+ * 这个假设当时看不出来，因为在那台机器上它永远成立。
+ * 直到准备把这个脚本放进 CI 才发现：它是 14 套里唯一一个
+ * 依赖「我的个人数据」的，其余每一套都会自建账号。
+ *
+ * 借不到就自建：成本是多一条 insert（邮箱固定，重复跑不会累积），
+ * 比起「换台机器就红」划算得多。
+ *
  * 想指定别的账号：$env:REVEAL_USER_EMAIL='xxx@test.local'
  */
 const EMAIL = process.env.REVEAL_USER_EMAIL || '1044696157@qq.com'
 
 function makeToken() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
-  const row = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(EMAIL)
-  db.close()
+  const dbPath = process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')
+  const db = new Database(dbPath)
+  let row = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
-    throw new Error(
-      `库里没有 ${EMAIL}。\n` +
-        `这个脚本只借一个登录态（首页的入场动画不需要造数据），\n` +
-        `所以直接复用种子账号即可；也可以用环境变量指定：\n` +
-        `$env:REVEAL_USER_EMAIL='xxx@test.local'; npm run test:reveal`
-    )
+    const bcrypt = serverRequire('bcryptjs')
+    const info = db
+      .prepare('INSERT INTO users (email, password_hash, nickname) VALUES (?, ?, ?)')
+      .run(EMAIL, bcrypt.hashSync('RevealTest!2345', 10), '入场测试号')
+    row = { id: Number(info.lastInsertRowid), email: EMAIL, nickname: '入场测试号' }
+    console.log(`库里没有 ${EMAIL}，已自建（id=${row.id}）`)
   }
+  db.close()
+
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return {
     id: row.id,
     token: jwt.sign({ userId: row.id, email: EMAIL }, secret),

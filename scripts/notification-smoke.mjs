@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { ensureSchema } from './ensure-schema.mjs'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -61,7 +62,7 @@ function watchErrors(page, tag) {
 }
 
 function ensureUser(email, nickname) {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id, email FROM users WHERE email = ?').get(email)
   if (!row) {
     const info = db
@@ -84,8 +85,7 @@ function ensureUser(email, nickname) {
   }
   db.close()
 
-  const envText = readFileSync(path.join(ROOT, 'server', '.env'), 'utf8')
-  const secret = /JWT_SECRET=(.*)/.exec(envText)?.[1]?.trim() ?? 'dev-secret-please-change-in-prod'
+  const secret = getJwtSecret(ROOT)
   return { id: row.id, token: jwt.sign({ userId: row.id, email }, secret) }
 }
 
@@ -94,7 +94,7 @@ const B = ensureUser(EMAIL_B, NICK_B)
 
 /** 作者发一篇笔记，B 拿来互动 */
 function createPost() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   db.prepare('DELETE FROM posts WHERE user_id = ? AND content LIKE ?').run(A.id, '通知测试笔记%')
   const info = db
     .prepare('INSERT INTO posts (user_id, content) VALUES (?, ?)')

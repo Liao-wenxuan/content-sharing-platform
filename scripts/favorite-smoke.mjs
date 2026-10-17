@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -45,7 +46,7 @@ const FOLDER_NAME = '旅行灵感'
 
 /** 直接写库 + 本地签 JWT，绕开 register/login 的限流 */
 function setup() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id, email FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
     const info = db
@@ -71,8 +72,7 @@ function setup() {
 
   if (!post) throw new Error('库里没有可用的笔记，先跑 npm run seed')
 
-  const envText = readFileSync(path.join(ROOT, 'server', '.env'), 'utf8')
-  const secret = /JWT_SECRET=(.*)/.exec(envText)?.[1]?.trim() ?? 'dev-secret-please-change-in-prod'
+  const secret = getJwtSecret(ROOT)
 
   return {
     id: row.id,

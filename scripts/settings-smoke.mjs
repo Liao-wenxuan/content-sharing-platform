@@ -17,6 +17,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -29,7 +30,7 @@ const EMAIL = 'settings_check@test.local'
 const PASSWORD = 'Set12345'
 
 function ensureUser() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
     const bcrypt = serverRequire('bcryptjs')
@@ -40,8 +41,7 @@ function ensureUser() {
   }
   db.close()
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return { id: row.id, token: jwt.sign({ userId: row.id, email: EMAIL }, secret) }
 }
 
@@ -53,7 +53,7 @@ const user = ensureUser()
  * 提到模块作用域是因为第 5b 组要用它去捞一张真实存在的图片 URL ——
  * 写在里面的话，第 6 组声明的 `db` 在它后面才存在，拿不到。
  */
-const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
+const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
 
 /**
  * 拿到一份完整的默认偏好。

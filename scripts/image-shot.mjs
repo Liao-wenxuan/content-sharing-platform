@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -25,7 +26,7 @@ const EMAIL = 'shot_test@test.local'
 const PASSWORD = 'Shot12345'
 const NICK = '截图号'
 
-const db = new Database(path.join(ROOT, 'server', 'data.db'))
+const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
 let row = db.prepare('SELECT id FROM users WHERE email = ?').get(EMAIL)
 if (!row) {
   const info = db
@@ -37,8 +38,7 @@ const userId = Number(row.id)
 db.close()
 
 const secret =
-  /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-  'dev-secret-please-change-in-prod'
+  getJwtSecret(ROOT)
 const token = jwt.sign({ userId, email: EMAIL }, secret)
 
 // 视口放宽、缩放调小：拖拽框本身很高，不这样截到的是空的框而不是压缩结果

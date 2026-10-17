@@ -77,7 +77,7 @@ async function makeThumb(page, url) {
 }
 
 async function main() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
 
   // 收集所有还缺缩略图的笔记
   const rows = db

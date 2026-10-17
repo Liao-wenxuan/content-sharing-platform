@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { ensureSchema } from './ensure-schema.mjs'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -44,7 +45,7 @@ const NICK = '话题测试号'
  * 直接写库 + 本地签 JWT，绕开 register/login 的限流。
  */
 function ensureUser() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id, email FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
     const info = db
@@ -54,8 +55,7 @@ function ensureUser() {
   }
   db.close()
 
-  const envText = readFileSync(path.join(ROOT, 'server', '.env'), 'utf8')
-  const secret = /JWT_SECRET=(.*)/.exec(envText)?.[1]?.trim() ?? 'dev-secret-please-change-in-prod'
+  const secret = getJwtSecret(ROOT)
   return { id: row.id, token: jwt.sign({ userId: row.id, email: EMAIL }, secret) }
 }
 
@@ -81,13 +81,50 @@ page.on(
 )
 
 /** 找库里笔记最多的那个话题，用它当测试对象（断言才能写死数字） */
-async function topTopic() {
-  const res = await fetch('http://localhost:3000/api/topics?limit=1')
+/**
+ * 挑一个**满足断言前提**的话题，而不是「笔记最多的那个」。
+ *
+ * 第一版用 `?limit=1` 直接取笔记最多的，在 CI 里翻车了：
+ * 前面跑过的 desktop-smoke 往 #桌面重构 塞了 5 条没配图的笔记，
+ * 它成了「笔记最多」的话题，于是两条断言必然挂：
+ *
+ *   有封面图    ← 这个话题的笔记一条图都没有
+ *   有相关话题  ← 写它的人各自只发过这一条，
+ *                 「同一个人还写了什么」当然查不出来
+ *
+ * 两条断言说的都是**被选中数据的性质**，不是话题页这个组件的性质。
+ * 挑数据的时候不先保证前提，测的就不是组件而是运气 ——
+ * 而运气取决于这套件跑在第几位、前面那些套件留下了什么。
+ *
+ * 现在按笔记数排序逐个试，用详情接口确认它真的有封面、真的有关联话题；
+ * 都不满足就明确报错并列出已尝试过哪些，让人知道该去跑 seed。
+ */
+async function pickTopic() {
+  const res = await fetch('http://localhost:3000/api/topics?limit=50')
   const body = await res.json()
-  return body.list[0]
+  const candidates = body.list ?? []
+  const tried = []
+
+  for (const c of candidates) {
+    if (!c.cover) {
+      tried.push(`${c.tag}(无封面)`)
+      continue
+    }
+    const detail = await fetch(
+      `http://localhost:3000/api/topics/${encodeURIComponent(c.tag)}`
+    ).then((r) => r.json())
+    const related = detail.related?.length ?? 0
+    if (detail.topic?.cover && related > 0) return detail.topic
+    tried.push(`${c.tag}(相关${related})`)
+  }
+
+  console.error('库里没有同时满足「有封面」和「有相关话题」的话题。')
+  console.error('先跑： npm run seed')
+  if (tried.length) console.error(`已尝试：${tried.join('、')}`)
+  process.exit(1)
 }
 
-const topic = await topTopic()
+const topic = await pickTopic()
 if (!topic) {
   console.error('库里没有任何话题，先跑 npm run seed')
   process.exit(1)

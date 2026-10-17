@@ -12,6 +12,7 @@ import { chromium } from 'playwright'
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = 'D:/my/sg'
@@ -25,7 +26,7 @@ const sel = rest[1] ?? 'body'
 
 function token() {
   const Database = serverRequire('better-sqlite3')
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db
     .prepare('SELECT id, nickname FROM users WHERE email = ?')
     .get('a11y_audit@test.local')
@@ -38,8 +39,7 @@ function token() {
   }
   db.close()
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return { id: row.id, nickname: row.nickname, t: serverRequire('jsonwebtoken').sign({ userId: row.id }, secret) }
 }
 

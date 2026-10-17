@@ -13,6 +13,7 @@ import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const API = 'http://localhost:3000'
@@ -27,7 +28,7 @@ const PASSWORD = 'Chat12345'
 const NICK = '动效检查'
 
 function ensureUser() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare(`SELECT id, email FROM users WHERE email = ?`).get(EMAIL)
   if (!row) {
     const info = db
@@ -42,8 +43,7 @@ function ensureUser() {
   db.prepare(`DELETE FROM conversations WHERE user_a_id = ? OR user_b_id = ?`).run(row.id, row.id)
   db.close()
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret-please-change-in-prod'
+    getJwtSecret(ROOT)
   return { id: row.id, token: jwt.sign({ userId: row.id, email: EMAIL }, secret) }
 }
 
@@ -51,7 +51,7 @@ const user = ensureUser()
 
 /** 和一个已存在的用户建会话：没有会话时 ChatView 是空状态，连输入框都没有 */
 async function ensureConversation() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'), { readonly: true })
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
   const peer = db.prepare(`SELECT id FROM users WHERE id <> ? LIMIT 1`).get(user.id)
   db.close()
   if (!peer) throw new Error('库里没有可对话的用户，先跑 npm run seed')

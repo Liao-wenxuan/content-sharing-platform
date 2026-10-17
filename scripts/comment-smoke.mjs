@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { ensureSchema } from './ensure-schema.mjs'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -36,7 +37,7 @@ const check = (label, ok, detail = '') => {
 }
 
 function ensureUser(email, nickname) {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
   if (!row) {
     const info = db
@@ -54,8 +55,7 @@ function ensureUser(email, nickname) {
   db.close()
 
   const secret =
-    /JWT_SECRET=(.*)/.exec(readFileSync(path.join(ROOT, 'server', '.env'), 'utf8'))?.[1]?.trim() ??
-    'dev-secret'
+    getJwtSecret(ROOT)
   return { id: row.id, token: jwt.sign({ userId: row.id, email }, secret) }
 }
 
@@ -64,7 +64,7 @@ const visitor = ensureUser(VISITOR.email, VISITOR.nick)
 
 // 作者发一篇笔记，给评论用
 {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   const info = db
     .prepare('INSERT INTO posts (user_id, content, image_urls) VALUES (?, ?, ?)')
     .run(author.id, '评论回归专用笔记：用来验证回复 / 点赞 / 置顶', '["/uploads/demo/d1-14954744.jpg"]')

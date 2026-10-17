@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { getJwtSecret } from './lib/secret.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -48,7 +49,7 @@ const TARGET_NICK = '一只柚子'
 
 /** 直接写库 + 本地签 JWT，绕开 register/login 的限流 */
 function ensureUser() {
-  const db = new Database(path.join(ROOT, 'server', 'data.db'))
+  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   let row = db.prepare('SELECT id, email FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
     const info = db
@@ -66,8 +67,7 @@ function ensureUser() {
     throw new Error(`演示用户「${TARGET_NICK}」不存在，先跑 npm run seed`)
   }
 
-  const envText = readFileSync(path.join(ROOT, 'server', '.env'), 'utf8')
-  const secret = /JWT_SECRET=(.*)/.exec(envText)?.[1]?.trim() ?? 'dev-secret-please-change-in-prod'
+  const secret = getJwtSecret(ROOT)
 
   return { id: row.id, targetId, token: jwt.sign({ userId: row.id, email: EMAIL }, secret) }
 }
