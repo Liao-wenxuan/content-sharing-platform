@@ -1,0 +1,89 @@
+name: Web env
+description: 装依赖、起后端与前端、等健康检查通过。给 e2e 和 a11y 两个 job 复用。
+
+# 抽成 composite 是因为两边的前置完全一样，而这段前置有五步、
+# 每一步都有各自的坑 —— 复制一份出去，改一处就会漏另一处。
+#
+# 两个必须知道的约束（都是真跑过 CI 才会撞到的）：
+#
+# ① **DB_PATH 要让服务端和 e2e 脚本指向同一个库**。
+#    套件不是纯黑盒：它们用 serverRequire 直接打开 SQLite 文件做清理和断言。
+#    两边指向不同的库时，脚本按邮箱查到的用户 id 在服务端并不存在，
+#    表现为 POST /api/conversations 返回 404「用户不存在」。
+#    CI 里两者都用默认路径，所以天然一致；但这条约束要留在注释里，
+#    免得哪天有人加一个 DB_PATH 就踩了。
+#
+# ② **必须先 seed 再跑套件**。
+#    搜索建议下拉读「热门话题」，空库下 .suggest-panel 根本不渲染，
+#    第一套就会超时。seed 不依赖配图（配图目录 uploads/demo/ 被 gitignore，
+#    新 clone 里不存在，seed.mjs 已经能降级成 0 张继续跑）。
+
+runs:
+  using: composite
+  steps:
+    - name: Install deps
+      shell: bash
+      run: |
+        npm ci
+        npm --prefix server ci
+        npm --prefix client ci
+
+    - name: Install Chromium
+      # --with-deps 会用 sudo 装系统库。ubuntu-latest 上这是标准做法，
+      # 但它确实要 root，所以别指望它能跑在容器里。
+      shell: bash
+      run: npx playwright install --with-deps chromium
+
+    - name: Build server
+      # 跑构建产物而不是 tsx watch：CI 里不需要 watch，
+      # 而 watch 进程会一直挂在后台占着端口。
+      shell: bash
+      run: npm --prefix server run build
+
+    - name: Start API
+      shell: bash
+      run: |
+        nohup node server/dist/index.js > "$RUNNER_TEMP/server.log" 2>&1 &
+        for i in $(seq 1 60); do
+          curl -sf http://localhost:3000/api/health > /dev/null && break
+          sleep 1
+        done
+        # 等不出来就把日志打出来再失败 —— 只报「启动超时」等于什么都没说
+        curl -sf http://localhost:3000/api/health > /dev/null || {
+          echo "::group::server log"
+          cat "$RUNNER_TEMP/server.log"
+          echo "::endgroup::"
+          exit 1
+        }
+        echo "API up on :3000"
+
+    - name: Seed demo data
+      shell: bash
+      run: node server/seed.mjs
+
+    - name: Build web
+      shell: bash
+      run: npm --prefix client run build
+
+    - name: Start web
+      # 用 preview 而不是 dev：CI 里要验的是**生产产物**，
+      # 而且 preview 是静态服务，冷启动比 vite dev 快得多
+      # （vite dev 第一次请求要现编译，正是「页面加载慢」的元凶）。
+      #
+      # --port 5173 是因为所有 e2e 脚本都写死了这个端口；
+      # --strictPort 保证端口被占用时直接失败，而不是悄悄换一个 ——
+      # 悄悄换端口的话，脚本会全部连不上，报错却指向不到真正的原因。
+      shell: bash
+      run: |
+        nohup npm --prefix client run preview -- --port 5173 --strictPort > "$RUNNER_TEMP/web.log" 2>&1 &
+        for i in $(seq 1 60); do
+          curl -sf http://localhost:5173/ > /dev/null && break
+          sleep 1
+        done
+        curl -sf http://localhost:5173/ > /dev/null || {
+          echo "::group::web log"
+          cat "$RUNNER_TEMP/web.log"
+          echo "::endgroup::"
+          exit 1
+        }
+        echo "web up on :5173"

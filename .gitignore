@@ -40,6 +40,8 @@ shots/
 # 但 README 用的正式截图要入库
 !docs/screenshots/
 !docs/screenshots/**
+# e2e 逐套日志（scripts/run-e2e-ci.mjs 生成，CI 失败时作为 artifact 上传）
+.e2e-logs/
 # 用户上传文件（运行时生成，不入版本库）
 uploads/
 **/uploads/

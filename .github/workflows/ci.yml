@@ -109,3 +109,75 @@ jobs:
       - name: Prettier check
         run: npm run format:check
         continue-on-error: false
+
+  # ===== 浏览器侧：14 套 e2e =====
+  #
+  # 不设 needs：故意和上面三个 job 并行。挂上 needs 看着省事（前面红了就不用跑），
+  # 但代价是**一次 push 只拿一份信号** —— 单测挂了就看不到 e2e 到底坏没坏，
+  # 只能改完再推一次才知道。这个仓库是公开的，Actions 不计费，那就全跑。
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - uses: ./.github/actions/web-env
+
+      - name: Run 14 e2e suites
+        # 脚本自己会跑完 14 套再汇总，而不是第一个失败就停 ——
+        # 停了就只能知道「有东西坏了」，跑完才知道是哪几个。
+        run: node scripts/run-e2e-ci.mjs
+
+      - name: Upload logs
+        # CI 里失败现场最容易丢：日志在滚屏里滚过去就没了。
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs
+          path: |
+            .e2e-logs/
+            ${{ runner.temp }}/*.log
+          retention-days: 7
+
+  # ===== 浏览器侧：无障碍 =====
+  a11y:
+    name: A11Y (axe-core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependity-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - uses: ./.github/actions/web-env
+
+      - name: Dark theme
+        run: npm run a11y
+
+      - name: Light theme
+        # 两个主题都要跑：浅色的违规曾经单独出现过 101 处，
+        # 只审深色等于把一半的代码路径没验过。
+        run: npm run a11y -- --light
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-logs
+          path: ${{ runner.temp }}/*.log
+          retention-days: 7

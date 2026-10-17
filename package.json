@@ -37,7 +37,8 @@
     "seed:thumbs": "node scripts/gen-thumbs.mjs",
     "layout:measure": "node scripts/layout-measure.mjs",
     "check:css": "node scripts/check-css.mjs",
-    "perf:budget": "node scripts/bundle-budget.mjs"
+    "perf:budget": "node scripts/bundle-budget.mjs",
+    "test:e2e:all": "node scripts/run-e2e-ci.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",
