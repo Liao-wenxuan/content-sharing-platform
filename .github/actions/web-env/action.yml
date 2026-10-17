@@ -1,6 +1,12 @@
 name: Web env
 description: 装依赖、起后端与前端、等健康检查通过。给 e2e 和 a11y 两个 job 复用。
 
+inputs:
+  web-mode:
+    description: 前端用 dev 还是 preview。见下面「Start web」的说明。
+    required: false
+    default: dev
+
 # 抽成 composite 是因为两边的前置完全一样，而这段前置有五步、
 # 每一步都有各自的坑 —— 复制一份出去，改一处就会漏另一处。
 #
@@ -80,22 +86,30 @@ runs:
       run: npm --prefix client run build
 
     - name: Start web
-      # 用 **dev server** 而不是 preview。
+      # 两个 job 用不同的模式，是有理由的，不是一时随便选的：
       #
-      # 一开始用的是 preview（静态服务、更快、验的是生产产物），
-      # 结果 image-smoke 直接挂在：
-      #   Failed to fetch dynamically imported module: /src/utils/image.ts
-      # 因为它在页面里 import 了**源码模块**，那是 dev server 才有的路径。
-      # 那一段是有意的白盒测试（注释写明是为了把「EXIF 解析器坏了」
-      # 和「压缩链路坏了」分开）—— 为迁就 CI 去改它不划算，
-      # 应该让 CI 跟本地一致。
+      # **e2e 用 dev**：image-smoke 在页面里 import 了 /src/utils/image.ts ——
+      #   那是 dev server 才有的路径，preview 里根本没有。
+      #   而那一段是**有意的白盒测试**（注释写明是为了把「EXIF 解析器坏了」
+      #   和「压缩链路坏了」分开，两者外在表现完全一样）。
+      #   为迁就 CI 去改一个刻意写好的测试，是把成本放错了地方。
+      #
+      # **a11y 用 preview**：无障碍本来就应该验**生产产物** ——
+      #   用户拿到的是 dist，不是 dev server。顺带快得多：
+      #   vite dev 每个路由首次访问要现编译，37 个页面状态跑下来非常慢。
       #
       # --port 5173 是因为所有 e2e 脚本都写死了这个端口；
       # --strictPort 保证端口被占用时直接失败，而不是悄悄换一个 ——
       # 悄悄换端口的话脚本会全部连不上，报错却指向不到真正的原因。
       shell: bash
+      env:
+        WEB_MODE: ${{ inputs.web-mode }}
       run: |
-        nohup npm --prefix client run dev -- --port 5173 --strictPort > "$RUNNER_TEMP/web.log" 2>&1 &
+        if [ "$WEB_MODE" = "preview" ]; then
+          nohup npm --prefix client run preview -- --port 5173 --strictPort > "$RUNNER_TEMP/web.log" 2>&1 &
+        else
+          nohup npm --prefix client run dev -- --port 5173 --strictPort > "$RUNNER_TEMP/web.log" 2>&1 &
+        fi
         for i in $(seq 1 90); do
           curl -sf http://localhost:5173/ > /dev/null && break
           sleep 1
@@ -106,4 +120,4 @@ runs:
           echo "::endgroup::"
           exit 1
         }
-        echo "web up on :5173"
+        echo "web up on :5173 ($WEB_MODE)"

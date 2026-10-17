@@ -170,6 +170,10 @@ jobs:
             client/package-lock.json
 
       - uses: ./.github/actions/web-env
+        with:
+          # 无障碍验的是**生产产物** —— 用户拿到的是 dist，不是 dev server。
+          # 顺带快得多：vite dev 每个路由首次访问要现编译。
+          web-mode: preview
 
       - name: Dark theme
         run: npm run a11y
