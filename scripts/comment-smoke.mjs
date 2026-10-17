@@ -16,6 +16,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { ensureSchema } from './ensure-schema.mjs'
 import { getJwtSecret } from './lib/secret.mjs'
+import { requireDemoImage } from './lib/demo-image.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -62,12 +63,16 @@ function ensureUser(email, nickname) {
 const author = ensureUser(AUTHOR.email, AUTHOR.nick)
 const visitor = ensureUser(VISITOR.email, VISITOR.nick)
 
-// 作者发一篇笔记，给评论用
+// 作者发一篇笔记，给评论用。
+// 配图 URL 在运行时从 uploads/demo/ 里挑一张真存在的 —— 原来硬编码的
+// `d1-14954744.jpg` 是某次 seed:photos 恰好生成的文件名，
+// 换台机器（新 clone / CI）就 404，而这个 suite 的
+// 「零 console error / 零失败请求」守卫会把那个 404 直接报成页面有错。
 {
   const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
   const info = db
     .prepare('INSERT INTO posts (user_id, content, image_urls) VALUES (?, ?, ?)')
-    .run(author.id, '评论回归专用笔记：用来验证回复 / 点赞 / 置顶', '["/uploads/demo/d1-14954744.jpg"]')
+    .run(author.id, '评论回归专用笔记：用来验证回复 / 点赞 / 置顶', JSON.stringify([requireDemoImage(ROOT)]))
   globalThis.__postId = Number(info.lastInsertRowid)
   db.close()
 }

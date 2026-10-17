@@ -20,6 +20,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { ensureSchema } from './ensure-schema.mjs'
 import { getJwtSecret } from './lib/secret.mjs'
+import { requireDemoImage } from './lib/demo-image.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -73,7 +74,10 @@ const postIds = []
   for (const text of ['浏览记录回归专用 A', '浏览记录回归专用 B']) {
     const info = db
       .prepare('INSERT INTO posts (user_id, content, image_urls, topic_tag) VALUES (?, ?, ?, ?)')
-      .run(author.id, text, '["/uploads/demo/d1-14954744.jpg"]', '家居')
+      // 配图在运行时挑一张真存在的，不再硬编码某个 seed:photos 的产物文件名 ——
+    // 换台机器那个文件名就不存在，而这个 suite 的「零失败请求」守卫
+    // 会把图片 404 直接报成页面有错。详见 scripts/lib/demo-image.mjs
+    .run(author.id, text, JSON.stringify([requireDemoImage(ROOT)]), '家居')
     postIds.push(Number(info.lastInsertRowid))
   }
   // 「翻记录的人」自己也发一篇，用来验证「看自己的不记」
