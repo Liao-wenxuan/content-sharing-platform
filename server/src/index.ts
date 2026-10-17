@@ -5,6 +5,7 @@ import { env } from './lib/env' // 必须在最前，加载 .env + 校验
 import { mountApiRouters } from './lib/mount-routes'
 import { attachWebSocketServer } from './ws/server'
 import { notFoundHandler, errorHandler } from './middleware/error'
+import db from './lib/db'
 
 const app = express()
 
@@ -20,12 +21,34 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 mountApiRouters(app)
 
 // ===== 测试路由 =====
+//
+// ⚠️ 这个端点**必须真的碰一下数据库**，否则它不算健康检查。
+//
+// 第一版只是回一个静态 JSON，于是在一台全新机器（CI runner）上：
+//   curl /api/health  → 200 → CI 认为后端好了
+//   node seed.mjs     → SqliteError: no such table: users
+//
+// 因为 lib/db.ts 导出的是**惰性 Proxy**：schema 只在第一次有人真的
+// 访问 DB 时才跑 initSchema 建表，而静态健康检查从不触发它。
+// 「进程在监听端口」和「数据库可用」是两件事，而原来的检查只看前者。
+//
+// 一条 SELECT 1 同时做三件事：建表、验证文件可写、验证不是只读打开。
+// 顺带把失败说清楚 —— 503 + 原因，比让调用方在下一步撞
+// 「no such table」再回头猜要好得多。
 app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    message: '后端跑起来了 🎉'
-  })
+  try {
+    db.prepare('SELECT 1').get()
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      message: '后端跑起来了 🎉'
+    })
+  } catch (err: any) {
+    res.status(503).json({
+      status: 'degraded',
+      message: `数据库不可用：${err?.message ?? err}`
+    })
+  }
 })
 
 // ===== 错误兜底（必须在所有 route 之后）=====
