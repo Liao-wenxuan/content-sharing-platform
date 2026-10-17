@@ -36,7 +36,8 @@
     "a11y": "node scripts/a11y-audit.mjs",
     "seed:thumbs": "node scripts/gen-thumbs.mjs",
     "layout:measure": "node scripts/layout-measure.mjs",
-    "check:css": "node scripts/check-css.mjs"
+    "check:css": "node scripts/check-css.mjs",
+    "perf:budget": "node scripts/bundle-budget.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",

@@ -78,6 +78,14 @@ jobs:
       - name: Build (catches SSR/build-time errors)
         run: npm run build
 
+      - name: Bundle budget (entry chunk)
+        # 上一步刚产出生产构建，这里直接量它。
+        # 放在 CI 而不是只在本地跑，是因为「改完先在本地过一遍」这件事
+        # 必然会有忘记的时候 —— 而首屏体积退化恰恰是那种没人会主动想起来
+        # 去检查的东西：它不报错、功能正常，只是慢慢变慢。
+        # 脚本只用 node 内置模块，不需要在 client/ 再装依赖。
+        run: node ../scripts/bundle-budget.mjs
+
   # ===== 根目录 lint（husky 已经在本地跑，这里做远程兜底）=====
   lint:
     name: Lint (root)
