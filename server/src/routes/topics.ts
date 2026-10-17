@@ -63,10 +63,21 @@ router.get('/', optionalAuth, (req: Request, res: Response) => {
                 --
                 -- COALESCE 而不是先查 thumbs 再回退 urls：这样只扫一次行，
                 -- 且「有主图但没缩略图」的老数据天然拿到主图。
+                --
+                -- ⚠️ 过滤条件是 json_array_length(...) > 0，不是 IS NOT NULL。
+                -- 没配图的笔记存的是 [] （空 JSON 数组）而不是 NULL ——
+                -- 它是 NOT NULL，会被 IS NOT NULL 放进候选，
+                -- 而 json_extract('[]', '$[0]') 取出 NULL，
+                -- 于是「最新那篇恰好没图」就把整个话题的封面顶没了，
+                -- 哪怕这个话题里别的笔记都配了图。
+                -- 症状：话题列表和话题页的头图忽然变空。
+                -- 这个 bug 是把 e2e 搬进 CI 时被 topic-smoke 抓到的：
+                -- 前一套测试刚好往 #家居 塞了一篇没图的笔记。
                 (SELECT COALESCE(json_extract(s.image_thumbs, '$[0]'),
                                  json_extract(s.image_urls, '$[0]'))
                  FROM posts s
-                 WHERE s.topic_tag = p.topic_tag AND s.image_urls IS NOT NULL
+                 WHERE s.topic_tag = p.topic_tag
+                   AND json_array_length(s.image_urls) > 0
                  ORDER BY s.created_at DESC, s.id DESC
                  LIMIT 1) AS cover
          FROM posts p
@@ -157,7 +168,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
           `SELECT COALESCE(json_extract(image_thumbs, '$[0]'),
                           json_extract(image_urls, '$[0]')) AS cover
            FROM posts
-           WHERE topic_tag = ? AND image_urls IS NOT NULL
+           WHERE topic_tag = ? AND json_array_length(image_urls) > 0
            ORDER BY created_at DESC, id DESC LIMIT 1`
         )
         .get(tag) as any
