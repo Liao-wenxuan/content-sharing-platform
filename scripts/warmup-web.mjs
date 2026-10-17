@@ -51,6 +51,39 @@ const ROUTES = [
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
+/*
+ * 预热要用登录态：设置页那些抽屉是登录后才渲染的，
+ * 游客进去看到的只有一个「请登录」，点不出任何面板 —— 实测 0 个。
+ * 这里现造一个临时账号（邮箱带时间戳，跑完留在库里也不碍事，
+ * a11y-audit 用的就是这个办法）。
+ */
+const API = process.env.SG_API ?? 'http://localhost:3000'
+const email = `warmup_${Date.now()}_${Math.floor(Math.random() * 1e6)}@test.local`
+let token = null
+let user = null
+try {
+  const res = await fetch(`${API}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'WarmUp12345!', nickname: '预热号' })
+  })
+  if (res.ok) {
+    const body = await res.json()
+    token = body.accessToken
+    user = body.userInfo ?? { nickname: '预热号', avatar: null, cover: null }
+  }
+} catch (err) {
+  console.log(`  ~ 造登录态失败：${String(err.message).split('\n')[0]}`)
+}
+
+if (token) {
+  await page.addInitScript(
+    ([t, u]) => localStorage.setItem('auth', JSON.stringify({ user: u, token: t })),
+    [token, user]
+  )
+  console.log(`  已造登录态 ${email}`)
+}
+
 const started = Date.now()
 let ok = 0
 for (const route of ROUTES) {
@@ -62,13 +95,47 @@ for (const route of ROUTES) {
     console.log(`  ~ ${route}  ${String(err.message).split('\n')[0]}`)
   }
 }
+
+/*
+ * 设置页的抽屉必须**真的点开**。
+ *
+ * 实测：只跑路由的话，10 次 reload 里能提前付掉 8 次，
+ * 剩下 2 次仍然砸在套件运行中间 —— 因为 el-drawer 里的
+ * switch / input-number / descriptions / radio-button 这些组件，
+ * 要点开抽屉才会被加载。
+ *
+ * 这是实测补出来的，不是推断出来的：漏掉的两次 reload
+ * 正好落在 desktop-smoke 走设置页那段。
+ */
+let panels = 0
+try {
+  await page.goto(BASE + '/settings', { waitUntil: 'networkidle', timeout: 30000 })
+  const rows = page.locator('.item-row.clickable')
+  const n = await rows.count()
+  for (let i = 0; i < n; i++) {
+    try {
+      await rows.nth(i).click({ timeout: 5000 })
+      await page.waitForTimeout(900) // 等抽屉里的组件加载 + 渲染
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(500)
+      panels++
+    } catch {
+      // 跳转类菜单点不出抽屉，跳过即可 —— 这里只负责把组件预热出来
+    }
+  }
+} catch (err) {
+  console.log(`  ~ 设置页抽屉预热失败：${String(err.message).split('\n')[0]}`)
+}
+
 await browser.close()
 
 // 最后一轮 reload 可能正在路上，等它落地，否则第一套套件照样被砸
 await new Promise((r) => setTimeout(r, 3000))
 
 console.log(
-  `预热完成：${ok}/${ROUTES.length} 条路由，用时 ${Math.round((Date.now() - started) / 1000)}s`
+  `预热完成：${ok}/${ROUTES.length} 条路由 + ${panels} 个设置抽屉，用时 ${Math.round(
+    (Date.now() - started) / 1000
+  )}s`
 )
 console.log('提示：预热期间 vite 会打印若干次 "optimized dependencies changed. reloading"，')
 console.log('      那正是我们要提前付掉的成本；跑套件时应该不再出现。')
