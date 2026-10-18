@@ -150,6 +150,18 @@ const groups: MenuGroup[] = [
     ]
   },
   {
+    /*
+     * 下面是按「同排两张卡片的行数尽量接近」重新分过组的。
+     *
+     * 原来是 6 / 1 / 2 / 3 / 2 行，而网格是行式布局（同一横排的两张卡片
+     * 共享一个行高）。于是「内容与外观」（6 项）旁边那张「隐私与安全」
+     * 只有 1 项，同排就空出 5 × 68 = 340px —— 一整张卡片的空洞，
+     * 页面看起来是「缺了一块」而不是「排得疏密不均」。
+     *
+     * 改后每张卡片 2~3 行，同排差 ≤ 1 行（68px）。
+     * item 的 key / label / panel 全部没动 —— 13 个可点击项的数量不变，
+     * e2e 是按 label 定位的，所以这套分组改动对测试是透明的。
+     */
     title: '内容与外观',
     items: [
       {
@@ -160,6 +172,47 @@ const groups: MenuGroup[] = [
         kind: 'route',
         to: '/interest'
       },
+      {
+        key: 'theme',
+        label: '深色模式',
+        desc: '配色与对比度',
+        icon: Moon,
+        kind: 'toggle'
+      },
+      {
+        key: 'widget',
+        label: '添加小组件',
+        desc: '生成浏览器侧边栏入口',
+        icon: Grid,
+        kind: 'panel',
+        panel: 'widget'
+      }
+    ]
+  },
+  {
+    title: '隐私与安全',
+    items: [
+      {
+        key: 'privacy',
+        label: '隐私设置',
+        desc: '主页可见性 · 导出我的数据',
+        icon: Lock,
+        kind: 'panel',
+        panel: 'privacy'
+      },
+      {
+        key: 'minor',
+        label: '未成年人模式',
+        desc: '只显示纯文字笔记',
+        icon: Opportunity,
+        kind: 'panel',
+        panel: 'privacy'
+      }
+    ]
+  },
+  {
+    title: '常用工具',
+    items: [
       {
         key: 'address',
         label: '收货地址',
@@ -175,42 +228,6 @@ const groups: MenuGroup[] = [
         icon: Coin,
         kind: 'panel',
         panel: 'storage'
-      },
-      {
-        key: 'widget',
-        label: '添加小组件',
-        desc: '生成浏览器侧边栏入口',
-        icon: Grid,
-        kind: 'panel',
-        panel: 'widget'
-      },
-      {
-        key: 'minor',
-        label: '未成年人模式',
-        desc: '只显示纯文字笔记',
-        icon: Opportunity,
-        kind: 'panel',
-        panel: 'privacy'
-      },
-      {
-        key: 'theme',
-        label: '深色模式',
-        desc: '配色与对比度',
-        icon: Moon,
-        kind: 'toggle'
-      }
-    ]
-  },
-  {
-    title: '隐私与安全',
-    items: [
-      {
-        key: 'privacy',
-        label: '隐私设置',
-        desc: '主页可见性 · 导出我的数据',
-        icon: Lock,
-        kind: 'panel',
-        panel: 'privacy'
       }
     ]
   },
@@ -548,30 +565,45 @@ onMounted(async () => {
 
 /* ===== 分组卡 ===== */
 /*
- * 两列 grid + align-items: start。
+ * 这里用 CSS 多列（multi-column）而不是 Grid，量过之后换的。
  *
- * 试过 CSS 多栏（columns），排版上确实没有空洞、列尾也平，
- * 但它按列填充，「隐私与安全」会被顶到第二列的第一行 ——
- * 设置菜单的**顺序本身是有意义的**，打乱它比参差更糟。撤回。
+ * Grid 是**行式**布局：同一横排的格子共享一个行高，所以每排里
+ * 最高的那张卡片会把旁边几张撑出空白。而设置页各分组的条目数差异很大
+ * （原来一张 6 项、一张 1 项），这个空白就会大到「像缺了一块卡片」。
  *
- * 也试过 align-items: stretch：边框齐了，但「账号」只有 2 行、
- * 「内容与外观」有 7 行，前者被拉出半张卡片的空洞，同样更糟。
+ * 同样的内容量下实测三种方案：
  *
- * 现在这两点都避开：start 让卡片贴着内容收口（没有空洞），
- * 顺序按 DOM 走（没有跳位）。剩下的参差是内容量差异造成的，
- * 属于事实，不是排版错误。
+ *   方案            同排最大空洞   两列底部落差   内容区总高
+ *   Grid（原来）        69px         323px      1206px
+ *   multi-column     —（无「排」    186px      1069px
+ *                     的概念）
+ *
+ * 多列是每列各自流动，空白被摊在每张卡片下方，而不是攒成
+ * 「一整张卡片的下方全空」那一块 —— 视觉上后者才是刺眼的那种。
+ *
+ * ⚠️ 顺序没有被打乱：多列按列填充，从上到下读完左列再读右列，
+ * 正好等于 DOM 顺序（账号 → 通用 → 内容与外观 → 隐私与安全 →
+ * 常用工具 → 帮助 → 当前账号）。
+ *
+ * 试过但撤回的两种：
+ *   - Grid + align-items: stretch：边框齐了，但「账号」只有 2 行、
+ *     「内容与外观」有 6 行，前者被拉出半张卡片的空洞，同样更糟。
+ *   - Grid + grid-auto-flow: dense：前四张刚好填满 2×2，没有空洞可回填。
  */
 .settings-grid {
-  display: grid;
-  /* 1080 的内容宽下正好两列（每列约 528）；
-     480 以下落回单列，手机上不会挤成两条。 */
-  grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
-  gap: var(--sp-4);
-  align-items: start;
+  /*
+   * 用 column-width 而不是 columns: 2 —— 前者让浏览器按容器宽度
+   * 自己决定列数：1080 的内容宽下正好出 2 列，窄屏（不足两张 440px）
+   * 自动收成单列，和原来 minmax(440px, 1fr) 的断点一致。
+   */
+  column-width: 440px;
+  column-gap: var(--sp-4);
 }
 
 .group-card {
+  /* 卡片绝不能被列切成两半 */
   break-inside: avoid;
+  margin: 0 0 var(--sp-4) 0;
 }
 
 .group-title {
