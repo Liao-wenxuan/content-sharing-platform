@@ -195,7 +195,7 @@ const groups: MenuGroup[] = [
       {
         key: 'theme',
         label: '深色模式',
-        desc: '',
+        desc: '配色与对比度',
         icon: Moon,
         kind: 'toggle'
       }
@@ -594,7 +594,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  padding: 11px 0;
+  /*
+   * 用 --sp-3 而不是量出来的 11px，是为了让密度档位真的生效。
+   *
+   * 行高由「图标高」和「文字高」两者取大决定，而 .item-text 在没有
+   * desc 时只有一行 —— 那时行高被 32px 的图标卡住，量下来三档都是
+   * 54px 纹丝不动。切「界面密度」时只有卡片之间的 gap 在变，
+   * 行与行的呼吸感完全不变，看着就像密度只生效了一半。
+   */
+  padding: var(--sp-3) 0;
 }
 
 /*
@@ -638,7 +646,12 @@ onMounted(async () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  /*
+   * 原来是 1px。在 comfortable 档（line-height 1.9）下 label 占 26.6px、
+   * desc 占 22.8px，中间那 1px 完全看不出来，标题和说明糊成一团。
+   * 4px 才够把「这是什么」和「这里面有什么」分成两行。
+   */
+  gap: var(--sp-1);
 }
 
 .item-label {
