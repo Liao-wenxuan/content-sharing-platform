@@ -225,28 +225,40 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，421 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，28 文件 432 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，406 条）
+cd server && npm test        # 后端单测（vitest + supertest，21 文件 422 条）
 
-npm run test:e2e             # Playwright 桌面端全流程回归（登录态）
-npm run test:search          # 搜索功能 + 注入防护
+npm run test:e2e             # Playwright 桌面端全流程回归（登录态，47 断言）
+npm run test:search          # 搜索功能 + 注入防护（31 断言）
 npm run test:center          # 1920 宽屏下逐页检查左右留白是否居中
-npm run test:chat            # 即时通信：多端同步 / 已读回执 / 断线重连补发（开两个浏览器上下文）
-npm run test:follow          # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮（28 断言）
-npm run test:favorite        # 收藏与收藏夹：建夹 / 批量移入 / 删夹退回未分类 / 他人主页私密（32 断言）
-npm run test:notify          # 通知中心：双浏览器验证 WS 实时铃铛 / 去重 / 不通知自己 / 通知开关 / 已读持久化（35 断言）
-npm run test:topic           # 话题页：三处入口是否都通 / 精确匹配语义 / 404 空态不打错（31 断言）
-npm run test:comment         # 评论增强：两级回复 / 点赞持久化 / 置顶权限与排序（34 断言，双上下文）
-npm run test:history        # 浏览记录：进详情页自动记一笔 / 重复看不重复 / 游客不记 / 清空（21 断言）
+npm run test:chat            # 即时通信：多端同步 / 已读回执 / 断线重连补发（开两个浏览器上下文，20 断言）
+npm run test:follow          # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮（27 断言）
+npm run test:favorite        # 收藏与收藏夹：建夹 / 批量移入 / 删夹退回未分类 / 他人主页私密（34 断言）
+npm run test:notify          # 通知中心：双浏览器验证 WS 实时铃铛 / 去重 / 不通知自己 / 通知开关 / 已读持久化（25 断言）
+npm run test:topic           # 话题页：三处入口是否都通 / 精确匹配语义 / 404 空态不打错（27 断言）
+npm run test:comment         # 评论增强：两级回复 / 点赞持久化 / 置顶权限与排序（32 断言，双上下文）
+npm run test:history        # 浏览记录：进详情页自动记一笔 / 重复看不重复 / 游客不记 / 清空（19 断言）
 npm run test:market         # 市集：发布 → 加购 → 下架 → 下单 → 支付 → 发货 → 收货 → 退款 → 全局对账（54 断言，双上下文）
-npm run test:feed           # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（29 断言）
+npm run test:feed           # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（26 断言）
 npm run test:reveal         # 滚动入场：逐帧证明动效在推进 / reduced-motion 真的停 / 没有 IntersectionObserver 不白屏（14 断言）
-npm run test:settings       # 设置页：逐个点 13 项验证零静默 / 11 个面板有内容 / 存储显示真实统计值 / 偏好真落库（14 断言）
-npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 照片型 PNG 落盘是 WebP（17 断言）
+npm run test:settings       # 设置页：逐个点 13 项验证零静默 / 11 个面板有内容 / 存储显示真实统计值 / 偏好真落库（22 断言）
+npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 照片型 PNG 落盘是 WebP（23 断言）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
+npm run test:e2e:all         # 按 CI 的方式顺序跑完 14 套（每套日志落 .e2e-logs/，跑完汇总）
 npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
 ```
+
+> **上面这些条数是代码里的断言点，不是某次跑出来的次数。**
+> 单测条数对 `npx vitest run` 的末尾汇总；
+> e2e 条数数的是 `scripts/*-smoke-mjs` 里的 `check(` 调用点 ——
+> 任何一个数字都能自己数出来复核，不用信作者。
+> 之所以写死口径而不写「实跑次数」：套件里有循环（同一段断言跑多遍），
+> 实跑次数随数据变，写进文档就是个会漂的数字。
+
+**这套数字为什么曾经是错的**：README 里同一批断言数被手抄了两遍（测试章节 + 项目结构），
+每加一条断言要改两处，漏一处就出现「同一个套件在两处写着不同条数」。
+现在只留一处，另一处只写职责 —— **重复的数字一定会漂**。
 
 > **性能与体积**：这三个脚本不是回归测试，是量数字的工具（都能复现下面的实测值）
 >
@@ -294,8 +306,8 @@ content-sharing-platform/
 ├─ docker-compose.yml            # 一键起全栈：web(nginx) + server(+ seed profile)
 ├─ client/                       # Vue 3 + Vite 前端
 │  ├─ src/
-│  │  ├─ views/                  # 16 个页面组件 = 15 条路由 + ChatView（嵌在 MessagesView 里，不单独占路由）
-│  │  │                          # Home / PostDetail / Publish / Profile / FollowList / Messages / Search / Settings / Favorites / Topic / Login / NotFound / Interest（兴趣画像）
+│  │  ├─ views/                  # 20 个页面组件 / 19 条路由（ChatView 嵌在 MessagesView 里，不单独占路由）
+│  │  │                          # Home / PostDetail / Publish / Profile / FollowList / Messages / Search / Settings / Favorites / Topic / Login / NotFound / Interest（兴趣画像）/ Market / ProductDetail / Cart / Orders / Wallet
 │  │  ├─ components/             # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ MarketTabs（市集分区，购物车角标）/ EmptyState / ErrorBoundary
 │  │  ├─ assets/styles/          # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）+ motion.css（五档时长 / 缓动字典 / reduced-motion 兜底）
 │  │  ├─ composables/            # useWebSocket（连接状态机 / 退避重连 / 心跳）/ useChat（乐观发送 + ack 收敛）
@@ -315,9 +327,9 @@ content-sharing-platform/
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
 │  │  ├─ router/                 # Vue Router 配置（19 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，27 文件 419 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，28 文件 432 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
-│  │  ├─ image.test.ts           # 图片纯函数（40 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
+│  │  ├─ image.test.ts           # 图片纯函数（41 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
 │  │  ├─ websocket-machine.test.ts  # 握手语义 / 退避重连 / 4401 / 心跳保活
 │  │  ├─ use-chat.test.ts        # 乐观发送 / 乱序 ack 收敛 / 已读回执 / 游标分页
 │  │  ├─ use-notifications.test.ts   # 模块级单例 / WS 覆盖而非 +1 / markRead 失败回滚
@@ -362,29 +374,29 @@ content-sharing-platform/
 │  │  ├─ lib/feed.ts             # 取候选 → 打分 → 冻结成快照 → 游标翻页 + 负反馈落库
 │  │  ├─ lib/wallet.ts           # 余额变动的唯一入口：加钱 / 扣钱都和写流水成对出现，扣钱走条件 UPDATE
 │  │  └─ constants.ts            # 服务端常量（与 client mirror）
-│  ├─ tests/                     # vitest + supertest（19 文件 397 条）
+│  ├─ tests/                     # vitest + supertest（21 文件 422 条）
 │  ├─ Dockerfile                 # 多阶段：构建期装原生模块工具链，运行时 prune 掉 devDeps
 │  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边 + 11 件商品（含 1 件下架演示）+ 各 2000 元余额，幂等，DB_PATH 与后端一致）
 │  └─ uploads/                   # multer 落地目录（.gitignore）
 │
-├─ scripts/                      # Playwright 自动化 + 文档配图生成（31 个）
+├─ scripts/                      # Playwright 自动化 + 文档配图生成（48 个）
 │  ├─ ensure-schema.mjs          # e2e 前置：先打一个必然碰库的接口把懒建表触发出来，再校验表在
-│  ├─ desktop-smoke.mjs          # 桌面端登录态全流程回归（40+ 断言，含零 console error 断言）
-│  ├─ follow-smoke.mjs           # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮（28 断言）
-│  ├─ favorite-smoke.mjs         # 收藏与收藏夹：建夹 / 批量移入 / 删夹退回未分类 / 他人主页私密（32 断言）
-│  ├─ notification-smoke.mjs     # 通知中心：双浏览器验 WS 实时铃铛 / 去重 / 不通知自己 / 通知开关（35 断言）
-│  ├─ topic-smoke.mjs            # 话题页：三处入口是否都通 / 精确匹配语义 / 404 空态不打错（31 断言）
-│  ├─ comment-smoke.mjs          # 评论增强：两级回复 / 点赞持久化 / 置顶权限与排序（34 断言，双上下文）
-│  ├─ view-history-smoke.mjs      # 浏览记录：自动记一笔 / 重复看不重复 / 游客不记 / 清空（21 断言）
-│  ├─ market-smoke.mjs          # 市集完整生命周期：发布→加购→下架→下单→支付→发货→收货→退款→流水对账（54 断言，双上下文）
-│  ├─ feed-smoke.mjs            # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（29 断言）
-│  ├─ image-smoke.mjs           # 图片压缩：真 canvas 压下去 / EXIF 摆正后宽高交换 / 落盘文件比原图小（15 断言）
+│  ├─ desktop-smoke.mjs          # 桌面端登录态全流程回归（含零 console error 断言）
+│  ├─ follow-smoke.mjs           # 关注体系：按钮翻转 / 计数 / 粉丝列表方向 / 关注流 / 侧栏高亮
+│  ├─ favorite-smoke.mjs         # 收藏与收藏夹：建夹 / 批量移入 / 删夹退回未分类 / 他人主页私密
+│  ├─ notification-smoke.mjs     # 通知中心：双浏览器验 WS 实时铃铛 / 去重 / 不通知自己 / 通知开关
+│  ├─ topic-smoke.mjs            # 话题页：三处入口是否都通 / 精确匹配语义 / 404 空态不打错
+│  ├─ comment-smoke.mjs          # 评论增强：两级回复 / 点赞持久化 / 置顶权限与排序
+│  ├─ view-history-smoke.mjs      # 浏览记录：自动记一笔 / 重复看不重复 / 游客不记 / 清空
+│  ├─ market-smoke.mjs          # 市集完整生命周期：发布→加购→下架→下单→支付→发货→收货→退款→流水对账
+│  ├─ feed-smoke.mjs            # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销
+│  ├─ image-smoke.mjs           # 图片压缩：真 canvas 压下去 / EXIF 摆正后宽高交换 / 落盘文件比原图小
 │  ├─ image-shot.mjs            # 发布页压缩界面的配图（大图省 80%、小图不显示假收益）
-│  ├─ reveal-smoke.mjs          # 滚动入场：逐帧采样证明动效在推进 / 降级不白屏（14 断言）
-│  ├─ settings-smoke.mjs        # 设置页：13 项逐个点验证零静默 / 11 个面板有真实内容 / 零占位文案（14 断言）
+│  ├─ reveal-smoke.mjs          # 滚动入场：逐帧采样证明动效在推进 / 降级不白屏
+│  ├─ settings-smoke.mjs        # 设置页：13 项逐个点验证零静默 / 11 个面板有真实内容 / 零占位文案
 │  ├─ reveal-shot.mjs           # 动效配图：错峰中途 / 完成 / 降低动效 三态对比
-│  ├─ search-smoke.mjs           # 搜索功能回归（24 断言）
-│  ├─ chat-smoke.mjs             # 即时通信回归（20 断言，多端同步 / 断线重连补发）
+│  ├─ search-smoke.mjs           # 搜索功能回归
+│  ├─ chat-smoke.mjs             # 即时通信回归（多端同步 / 断线重连补发）
 │  ├─ motion-check.mjs           # 逐帧采样证明动效真的在推进，且 reduced-motion 下真的停
 │  ├─ center-audit.mjs           # 1920 宽屏下逐页量左右留白，防止"看起来居中其实没居中"
 │  └─ screenshot-docs.mjs        # 生成 docs/screenshots/ 下的 README 配图
@@ -592,10 +604,10 @@ main.ts → App.vue → TopBar.vue → element-plus/es/components/avatar
 > 别急着相信「没有这类问题」。这次两处都是这样 ——
 > 一处是 CSS 检查器从没执行过，一处是字节归因只给数字不给来源。
 
-## 🚦 回归防线：把 456 个断言搬进 CI
+## 🚦 回归防线：把 401 个断言搬进 CI
 
 上一轮结束时，CI 里只有三个 job：后端测试、前端单测、lint。
-**14 套 e2e（约 456 个断言点）只能在本地跑** —— 也就是说，
+**14 套 e2e（401 个断言点）只能在本地跑** —— 也就是说，
 push 之后没有任何东西验证过用户真正会走的那些路径。
 
 这不是理论风险。我在这个项目里**被它咬过一次**：三个断言红了很久没人知道，
@@ -864,10 +876,10 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 422 例）/ `client`（vue-tsc + vitest 432 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**14 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：248 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
+| **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：432 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **端到端冒烟**                           | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，40+ 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **端到端冒烟**                           | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，47 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **搜索三路匹配 + 注入防护**              | `GET /api/posts/search` 同时匹配正文 / 话题标签 / 作者昵称。`LIKE` 通配符 `%` `_` 必须转义并配 `ESCAPE`，否则用户搜 "100%" 会退化成全表通配；排序走白名单枚举，绝不把 `req.query` 直接拼进 `ORDER BY`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **搜索建议独立接口**                     | `GET /api/posts/search/suggest` 单独开而不复用 `/search`：结果页要「按排序分页的完整列表」，建议框要「少量、去重、按相关度稳定的短列表」，语义和排序都不同。`q` 为空时返回按笔记数排序的热门话题填充下拉；前端 250ms 防抖 + 请求序号丢弃过期响应，避免快速连打时被旧响应覆盖                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **真瀑布流分列**                         | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
