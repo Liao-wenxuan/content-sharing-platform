@@ -140,8 +140,8 @@ jobs:
         # 先把所有路由跑一遍把这份成本付掉，见 scripts/warmup-web.mjs。
         run: node scripts/warmup-web.mjs
 
-      - name: Run 14 e2e suites
-        # 脚本自己会跑完 14 套再汇总，而不是第一个失败就停 ——
+      - name: Run 15 e2e suites
+        # 脚本自己会跑完全部 15 套再汇总，而不是第一个失败就停 ——
         # 停了就只能知道「有东西坏了」，跑完才知道是哪几个。
         run: node scripts/run-e2e-ci.mjs
 
