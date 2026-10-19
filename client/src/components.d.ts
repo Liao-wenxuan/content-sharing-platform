@@ -11,6 +11,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AiEntry: typeof import('./components/AiEntry.vue')['default']
+    AiPanel: typeof import('./components/AiPanel.vue')['default']
     ElAlert: typeof import('element-plus/es/components/alert/index')['ElAlert']
     ElAvatar: typeof import('element-plus/es/components/avatar/index')['ElAvatar']
     ElBadge: typeof import('element-plus/es/components/badge/index')['ElBadge']

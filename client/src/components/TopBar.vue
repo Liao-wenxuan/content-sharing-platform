@@ -36,6 +36,7 @@ import { useSearchHistory } from '@/composables/useSearchHistory'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { topicPath } from '@/api/topics'
+import AiEntry from '@/components/AiEntry.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -409,6 +410,9 @@ function onOutsideClick(e: MouseEvent) {
     </div>
 
     <div class="bar-actions">
+      <!-- 站内 AI 入口：点开是「想了解些什么」 -->
+      <AiEntry />
+
       <el-button type="primary" :icon="EditPen" class="publish-btn" @click="goPublish">
         发布笔记
       </el-button>

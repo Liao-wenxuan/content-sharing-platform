@@ -33,6 +33,13 @@ const router = createRouter({
       component: () => import('@/views/PostDetailView.vue')
     },
     {
+      // 站内 AI 对话。游客可进（问的是公开内容），
+      // 登录只是为了「根据你的兴趣」给得更准。
+      path: '/ai',
+      name: 'ai-chat',
+      component: () => import('@/views/AiChatView.vue')
+    },
+    {
       path: '/publish',
       name: 'publish',
       component: () => import('@/views/PublishView.vue'),
