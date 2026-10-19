@@ -54,6 +54,29 @@ const STOPWORDS = new Set([
   '吧'
 ])
 
+/** CJK 统一表意文字（基本区 + 扩展 A）。用来判断二元组该不该切 */
+const CJK_CHAR = /[\u3400-\u9fff]/
+
+/**
+ * 二元组只在**两个汉字之间**切。
+ *
+ * 为什么不能用「任意相邻两字符」：
+ * 数字和拉丁字母不是词。一个 13 位的毫秒时间戳 `1792376026411` 会被切成
+ * 12 个数字二元组（`17`、`79`、`92`……），而这些串在任何带时间戳的文本里
+ * 都可能出现 —— 召回门槛只要 3 个弱命中，于是「站内绝对没有」的问题
+ * 会随机命中一条毫不相关的笔记。
+ *
+ * 这不是假想：CI 里 e2e 几乎每套都会把 `Date.now()` 写进笔记正文，
+ * 带着时间戳的笔记一多，问「量子纠缠拓扑不变量」就能撞出 1 条，
+ * 答案于是自信地说「站内找到 1 条相关笔记」并附上引用。
+ *
+ * 纯数字 / 纯字母的短词（「2024」「iPhone15」）不受影响：
+ * 它们走「≤8 字整体保留」那条路，本来就是强词。
+ */
+function isCjk(ch: string): boolean {
+  return CJK_CHAR.test(ch)
+}
+
 export interface AiPostSource {
   type: 'post'
   id: number
@@ -139,7 +162,7 @@ function stripStopwords(segment: string): string {
  *   2. 剥掉前后停用词（「如何搭配」→「搭配」）
  *   3. 长度 ≤ 8 的片段整体作为一个词（话题名、专有名词多在这一档），
  *      同时也切二元组提高召回（「咖啡拉花」整体匹配不到时还能靠「咖啡」命中）
- *   4. 更长的片段只切二元组
+ *   4. 更长的片段只切二元组，且**只在两个汉字之间切**（数字/拉丁不算词，见 isCjk）
  *   5. 单字不要（中文单字噪音太大）
  *
  * 纯函数，不碰 DB —— 这样能单独测，也能在前端复用同一套口径。
@@ -168,6 +191,8 @@ export function extractKeywords(query: string): string[] {
      */
     if (seg.length <= 8) out.add(seg)
     for (let i = 0; i < seg.length - 1; i++) {
+      // 只在两个汉字之间切，见 isCjk 上面的说明
+      if (!isCjk(seg[i]) || !isCjk(seg[i + 1])) continue
       const gram = seg.slice(i, i + 2)
       if (!STOPWORDS.has(gram)) out.add(gram)
     }

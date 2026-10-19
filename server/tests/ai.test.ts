@@ -105,6 +105,25 @@ describe('关键词切分', () => {
     expect(extractKeywords('')).toEqual([])
     expect(extractKeywords('   ')).toEqual([])
   })
+
+  it('数字串不再切成二元组', () => {
+    // 回归：13 位毫秒时间戳曾被切成 12 个数字二元组，
+    // 其中 3 个就够越过召回门槛，于是「站内没有」的问题会随机命中一条笔记
+    const kws = extractKeywords('量子纠缠拓扑不变量1792376026411')
+    expect(kws).not.toContain('17')
+    expect(kws).not.toContain('79')
+    expect(kws).not.toContain('92')
+    // 中文部分照常切，不能为了躲数字把召回也一起关了
+    expect(kws).toContain('量子')
+    expect(kws).toContain('拓扑')
+    expect(kws).toContain('变量')
+  })
+
+  it('短数字词仍然整体保留', () => {
+    // 「2024」「iPhone15」是整词，不该被数字规则误伤
+    expect(extractKeywords('2024 露营')).toContain('2024')
+    expect(extractKeywords('iPhone15 拍照')).toContain('iPhone15')
+  })
 })
 
 describe('检索', () => {
@@ -150,6 +169,23 @@ describe('检索', () => {
     const r = retrieve('通勤穿搭怎么搭配才不像去开会')
     expect(r.posts.length).toBeGreaterThan(0)
     expect(r.posts[0].content).toContain('通勤穿搭')
+  })
+
+  it('笔记里的时间戳不算命中（数字串不再当词）', () => {
+    // 这条是 CI 真实失败过的场景：e2e 几乎每套都往笔记正文写 Date.now()，
+    // 而时间戳里的「17」「79」「92」曾被切成二元组，3 个弱命中就过了门槛，
+    // 于是「站内绝对没有」的问题能撞出 1 条，答案还附上了引用编号。
+    // 这里自己造一条带时间戳的笔记，不依赖别的套件留下了什么。
+    const stamp = String(Date.now())
+    const r = db.prepare('SELECT id FROM users LIMIT 1').get() as { id: number }
+    const post = db
+      .prepare('INSERT INTO posts (user_id, content, topic_tag, created_at) VALUES (?, ?, ?, ?)')
+      .run(r.id, `桌面端冒烟测试 ${stamp}`, '桌面重构', '2026-05-01 08:00:00')
+    const noiseId = Number(post.lastInsertRowid)
+
+    const found = retrieve(`量子纠缠拓扑不变量${stamp}`)
+    expect(found.posts.some((p) => p.id === noiseId)).toBe(false)
+    expect(found.posts.length).toBe(0)
   })
 })
 
