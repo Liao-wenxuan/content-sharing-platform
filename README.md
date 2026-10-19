@@ -228,7 +228,7 @@ npm run dev          # vite
 ```bash
 npm run test:client          # 前端单测（vitest + @vue/test-utils，29 文件 441 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，22 文件 445 条）
+cd server && npm test        # 后端单测（vitest + supertest，22 文件 449 条）
 
 npm run test:e2e             # Playwright 桌面端全流程回归（登录态，47 断言）
 npm run test:search          # 搜索功能 + 注入防护（31 断言）
@@ -378,7 +378,7 @@ content-sharing-platform/
 │  │  ├─ lib/feed.ts             # 取候选 → 打分 → 冻结成快照 → 游标翻页 + 负反馈落库
 │  │  ├─ lib/wallet.ts           # 余额变动的唯一入口：加钱 / 扣钱都和写流水成对出现，扣钱走条件 UPDATE
 │  │  └─ constants.ts            # 服务端常量（与 client mirror）
-│  ├─ tests/                     # vitest + supertest（22 文件 445 条）
+│  ├─ tests/                     # vitest + supertest（22 文件 449 条）
 │  ├─ Dockerfile                 # 多阶段：构建期装原生模块工具链，运行时 prune 掉 devDeps
 │  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边 + 11 件商品（含 1 件下架演示）+ 各 2000 元余额，幂等，DB_PATH 与后端一致）
 │  └─ uploads/                   # multer 落地目录（.gitignore）
@@ -677,7 +677,7 @@ push 之后没有任何东西验证过用户真正会走的那些路径。
 
 | Job                | 内容                                                      |
 | ------------------ | --------------------------------------------------------- |
-| `Server (Node 24)` | tsc + vitest（445 用例）                                  |
+| `Server (Node 24)` | tsc + vitest（449 用例）                                  |
 | `Client (Node 24)` | vue-tsc + vitest 覆盖率（441 用例）+ build + **体积预算** |
 | `Lint (root)`      | eslint + **CSS 检查** + prettier                          |
 | `E2E (Playwright)` | 15 套顺序跑，跑完再汇总                                   |
@@ -718,7 +718,7 @@ push 之后没有任何东西验证过用户真正会走的那些路径。
 `choices[0].delta.content`），换厂商只要改三个环境变量。
 上游抽风则自动降级回确定性组织器：_一个 AI 功能因为模型不可用就整个不可用，比降级更糟_。
 
-### 三个真正难的地方
+### 四个真正难的地方
 
 **① 检索太宽的话，「站内没有」就永远不可能出现。**
 
@@ -743,16 +743,40 @@ Node 16+ 里 `req` 的 'close' 在**请求体读完**时就触发了（不是「
 `res.end()` 也没人调，响应永远不结束，客户端只能等到超时。
 必须听 `res` 的 close，而且要区分「正常收尾」和「客户端真的走了」。
 
+**④ 数字不是词，而二元组切得太顺手就会把数字切成词。**
+
+这条是 CI 第一次真跑挂掉的原因，而且是**本地全绿、CI 红了**那种。
+「问一个站内绝对没有的东西，必须明说没有」这条断言，
+本地连着跑一百遍都是绿的，一到 CI 就稳定红。
+
+根因不在测试，在切词器：问题末尾那串防撞的时间戳 `1792376026411`
+被切成了 12 个**数字**二元组（`17`、`79`、`92`……），其中 3 个落进了召回词表。
+而 e2e 几乎每套都会往笔记正文里写 `Date.now()` ——
+于是「问一个站里根本没有的物理名词」能撞出 1 条笔记，
+答案还自信地说「站内找到 1 条相关笔记」并附上 `[1]` 引用编号。
+
+本地绿是因为单独跑这套时，前面的套件已经把自己的笔记清掉了；
+CI 里它排在第 15 位、跑在所有套件之后，库里的时间戳笔记一多就必红。
+
+现在二元组**只在两个汉字之间切**（数字和拉丁字母不参与）。
+这条修复同时让断言与「库里恰好有什么」彻底解耦 ——
+它验证的是检索行为，而不是某次跑的数据快照。
+
+> 判据：**一条断言如果会因为「别的测试留下了什么」而改变结果，
+> 那它测的就不是被测代码，是环境的脏度。**
+> 修法不是去清理环境，是把被测代码里那个过宽的匹配收窄到不依赖环境。
+
 ### 数字
 
-| 项           | 值                                                                  |
-| ------------ | ------------------------------------------------------------------- |
-| 切词         | 整段 + 2-gram，剥掉前后停用词（≤8 字整体保留）                      |
-| 召回门槛     | ≥1 个强关键词（≥3 字）或 ≥3 个不同的弱关键词                        |
-| 单次引用来源 | 6 条笔记 + 4 个话题 + 4 个作者                                      |
-| 后端单测     | 23 条（切词 / 门槛 / 引用编号对齐 / 搜不到就说没有）                |
-| 前端单测     | 9 条（来源先于答案 / 流式是追加不是替换 / 三类来源 tab）            |
-| e2e          | 16 条断言（命中自己造的那条 / 问不存在的必须说没有 / 点来源跳原帖） |
+| 项           | 值                                                                    |
+| ------------ | --------------------------------------------------------------------- |
+| 切词         | 整段 + 2-gram，剥掉前后停用词（≤8 字整体保留，2-gram 只在汉字之间切） |
+| 召回词上限   | 12 个，按信号强度取（3 字以上的整词优先，不按出现顺序）               |
+| 召回门槛     | ≥1 个强关键词（≥3 字）或 ≥3 个不同的弱关键词                          |
+| 单次引用来源 | 6 条笔记 + 4 个话题 + 4 个作者                                        |
+| 后端单测     | 27 条（切词 / 数字不当词 / 门槛 / 引用编号对齐 / 搜不到就说没有）     |
+| 前端单测     | 9 条（来源先于答案 / 流式是追加不是替换 / 三类来源 tab）              |
+| e2e          | 16 条断言（命中自己造的那条 / 问不存在的必须说没有 / 点来源跳原帖）   |
 
 e2e 里最关键的一条：**自己造一条带独特标记词的笔记，然后问那个标记词**。
 答案里出现标记词，说明检索 → 来源 → 引用这条路真的通了；
@@ -945,7 +969,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 445 例）/ `client`（vue-tsc + vitest 441 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 449 例）/ `client`（vue-tsc + vitest 441 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：441 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -1029,8 +1053,8 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 ---
 
-**验证基线**：前端 441 条单测（29 文件）/ 后端 445 条（22 文件）/ 15 套 Playwright e2e /
-lint 0 error / 覆盖率 73.87%（门槛 60%）/ CI 三个 job 全绿。
+**验证基线**：前端 441 条单测（29 文件）/ 后端 449 条（22 文件）/ 15 套 Playwright e2e /
+lint 0 error / 前端覆盖率 lines 73.24%（门槛 60%）/ CI 五个 job 全绿。
 
 ## 📚 文档
 
