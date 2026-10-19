@@ -18,6 +18,7 @@ import feedRouter from '../routes/feed'
 import settingsRouter from '../routes/settings'
 import addressesRouter from '../routes/addresses'
 import accountsRouter from '../routes/accounts'
+import aiRouter from '../routes/ai'
 
 /**
  * 统一挂载所有 API 路由
@@ -62,4 +63,7 @@ export function mountApiRouters(app: Express): void {
   app.use('/api/settings', settingsRouter)
   app.use('/api/addresses', addressesRouter)
   app.use('/api/accounts', accountsRouter)
+  // 站内 AI 问答。独占 /api/ai 前缀，内部只有 /suggest 和 /chat 两个
+  // 字面量路由，没有 /:id，所以不存在顺序问题。
+  app.use('/api/ai', aiRouter)
 }
