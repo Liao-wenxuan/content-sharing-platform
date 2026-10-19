@@ -242,7 +242,8 @@ function staticScan() {
         kind: 'click-only',
         file: path.relative(ROOT, file),
         line: lineOf(source, tplStart + tag.offset),
-        detail: `<${name}> 有 @click 但不是原生可聚焦元素` +
+        detail:
+          `<${name}> 有 @click 但不是原生可聚焦元素` +
           (role ? `（role="${role}"）` : '（无 role）') +
           (tabindex === null ? '，无 tabindex' : `，tabindex=${tabindex}`) +
           (hasKeyboard ? '' : '，无键盘处理')
@@ -269,7 +270,8 @@ function staticScan() {
         kind: 'list-item-as-control',
         file: path.relative(ROOT, file),
         line: lineOf(source, tplStart + tag.offset),
-        detail: `<li role="${role}"> 覆盖了 listitem 语义，` +
+        detail:
+          `<li role="${role}"> 覆盖了 listitem 语义，` +
           `但 <li> 不是原生控件 —— 应改成 <li> 里放 <button>`
       })
     }
@@ -285,8 +287,10 @@ const axeSource = readFileSync(rootRequire.resolve('axe-core/axe.min.js'), 'utf8
 
 function ensureUser() {
   const Database = serverRequire('better-sqlite3')
-  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
-  let row = db.prepare('SELECT id, nickname FROM users WHERE email = ?').get('a11y_audit@test.local')
+  const db = new Database(process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'))
+  let row = db
+    .prepare('SELECT id, nickname FROM users WHERE email = ?')
+    .get('a11y_audit@test.local')
   if (!row) {
     const bcrypt = serverRequire('bcryptjs')
     const info = db
@@ -296,8 +300,7 @@ function ensureUser() {
   }
   db.close()
   const jwt = serverRequire('jsonwebtoken')
-  const secret =
-    getJwtSecret(ROOT)
+  const secret = getJwtSecret(ROOT)
   return { id: row.id, nickname: row.nickname, token: jwt.sign({ userId: row.id }, secret) }
 }
 
@@ -333,14 +336,12 @@ function sampleIds() {
     readonly: true
   })
 
-  const hasImages = "image_urls IS NOT NULL AND json_array_length(image_urls) > 0"
+  const hasImages = 'image_urls IS NOT NULL AND json_array_length(image_urls) > 0'
   const hasTopic = "topic_tag IS NOT NULL AND topic_tag <> ''"
 
   const post =
     db
-      .prepare(
-        `SELECT id FROM posts WHERE ${hasImages} AND ${hasTopic} ORDER BY id LIMIT 1`
-      )
+      .prepare(`SELECT id FROM posts WHERE ${hasImages} AND ${hasTopic} ORDER BY id LIMIT 1`)
       .get() ??
     db.prepare(`SELECT id FROM posts WHERE ${hasImages} ORDER BY id LIMIT 1`).get() ??
     db.prepare(`SELECT id FROM posts WHERE ${hasTopic} ORDER BY id LIMIT 1`).get() ??
@@ -351,9 +352,7 @@ function sampleIds() {
     .get()
 
   const detail = post
-    ? db
-        .prepare('SELECT id, topic_tag, image_urls FROM posts WHERE id = ?')
-        .get(post.id)
+    ? db.prepare('SELECT id, topic_tag, image_urls FROM posts WHERE id = ?').get(post.id)
     : null
 
   db.close()
@@ -386,6 +385,7 @@ const GUEST_PAGES = [
   { name: '话题页', path: '/topic/%E7%BE%8E%E9%A3%9F' },
   { name: '市集', path: '/market' },
   { name: '兴趣画像', path: '/interest' },
+  { name: 'AI 对话', path: '/ai?q=%E7%A9%BF%E6%90%AD' },
   { name: '404', path: '/this-route-does-not-exist' }
 ]
 
@@ -481,7 +481,9 @@ async function auditPage(ctx, loggedIn) {
   )
   const res = await ctx.request.get(`${API}/api/feed`).catch(() => null)
   if (!res || !res.ok()) {
-    console.error(`\n接口不通（${API}/api/feed -> ${res ? res.status() : '连接失败'}），页面会是空壳。`)
+    console.error(
+      `\n接口不通（${API}/api/feed -> ${res ? res.status() : '连接失败'}），页面会是空壳。`
+    )
     console.error('axe 会把每个页面都扫成「0 个问题」—— 那是假绿，不是满分。')
     console.error('请先启动 server 再跑。')
     process.exit(1)
@@ -498,6 +500,16 @@ async function auditPage(ctx, loggedIn) {
       // 等主区域真的出现内容，而不是只等 DOM ready
       await p.locator('main, .standalone').first().waitFor({ state: 'visible', timeout: 15000 })
       await p.waitForTimeout(700)
+
+      // AI 对话页的答案是**流式**吐出来的，统一那 700ms 不足以等它吐完 ——
+      // 扫到半成品会得到一份「动画中的对比度」的成绩单。
+      // 所以等页面自己报出「准备好了」（data-ai-ready），而不是猜该等多久。
+      if (target.path.startsWith('/ai')) {
+        await p
+          .locator('[data-ai-ready="true"]')
+          .waitFor({ state: 'attached', timeout: 20000 })
+          .catch(() => {})
+      }
 
       // 详见 freezeForMeasurement：禁动效 + 推入场动画到终态，每次导航后重做。
       await freezeForMeasurement(p, LIGHT)
@@ -524,7 +536,9 @@ async function auditPage(ctx, loggedIn) {
       // 守卫一：空壳页面会安静地报「0 违规」
       const nodeCount = await p.evaluate(() => document.querySelectorAll('*').length)
       if (nodeCount < 50) {
-        console.log(`  ${'SKIP'.padEnd(4)} ${target.name.padEnd(10)}  页面只有 ${nodeCount} 个节点，跳过`)
+        console.log(
+          `  ${'SKIP'.padEnd(4)} ${target.name.padEnd(10)}  页面只有 ${nodeCount} 个节点，跳过`
+        )
         continue
       }
 
@@ -711,7 +725,9 @@ async function main() {
     console.log('  无违规')
   } else {
     for (const [id, v] of [...byRule.entries()].sort((a, b) => b[1].count - a[1].count)) {
-      console.log(`  ${id.padEnd(26)} ${String(v.count).padStart(4)} 处  页面: ${[...v.pages].join(', ')}`)
+      console.log(
+        `  ${id.padEnd(26)} ${String(v.count).padStart(4)} 处  页面: ${[...v.pages].join(', ')}`
+      )
     }
   }
 
@@ -729,7 +745,12 @@ async function main() {
         const d = n.data
         if (!d || d.contrastRatio === undefined) return
         const key = `${d.fgColor}|${d.bgColor}|${d.expectedContrastRatio}`
-        const cur = contrast.get(key) ?? { ratio: d.contrastRatio, n: 0, pages: new Set(), html: [] }
+        const cur = contrast.get(key) ?? {
+          ratio: d.contrastRatio,
+          n: 0,
+          pages: new Set(),
+          html: []
+        }
         cur.n++
         cur.pages.add(r.page)
         if (cur.html.length < 3) cur.html.push(n.html)
