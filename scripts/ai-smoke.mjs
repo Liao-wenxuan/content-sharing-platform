@@ -35,8 +35,19 @@ const PASSWORD = 'AiSmoke12345'
 const MARK = '雾岛回声标记'
 /**
  * 站内绝对没有的东西。
- * 尾巴那串数字是时间戳：保证这个短语在任何一个 seed 库里都不可能已经存在，
- * 不然「站内没有」这条断言会随演示数据的变化而漂。
+ *
+ * 两层保险，缺一不可：
+ *   1. 中文部分（量子纠缠拓扑不变量）是一串站内不会出现的物理名词 ——
+ *      召回门槛要 3 个不同的弱命中（二元组），库里不会有笔记同时含其中三个。
+ *   2. 尾巴那串数字是时间戳，保证整个短语在任何库里都不可能已经存在，
+ *      不然「站内没有」这条断言会随演示数据的变化而漂。
+ *
+ * ⚠️ 第 2 层曾经反而害了这个断言：
+ * 时间戳里的数字曾被切词器切成「17」「79」「92」这样的二元组，
+ * 3 个就够过门槛，于是任何一条正文里带 Date.now() 的笔记都会被命中 ——
+ * 而 e2e 几乎每套都会写一条。本地跑这套时前面的套件已把自己的笔记清了所以绿，
+ * CI 里它排在第 15 位、跑在最后，就红了。
+ * 数字不再当词之后，这条断言才真正与「库里有什么」无关。
  */
 const MISSING = `量子纠缠拓扑不变量${Date.now()}`
 
@@ -162,6 +173,14 @@ await page.waitForFunction(() => !document.querySelector('.bot-text.typing'), { 
 const missAnswer = (await page.textContent('.bot-text'))?.trim() ?? ''
 check('明说「没有找到」', missAnswer.includes('没有找到'), missAnswer.slice(0, 40))
 check('没有编造引用编号', !missAnswer.includes('[1]'))
+// 失败时把「到底命中了谁」打出来。
+// 只看答案前 40 字的话，症状只是「站内找到 1 条相关笔记」——
+// 而这条假命中是哪来的，是排查里最花时间的一步。
+if (!missAnswer.includes('没有找到')) {
+  const src = page.locator('.sources').last()
+  const text = (await src.count()) ? ((await src.textContent()) ?? '') : ''
+  console.log(`  ↳ 实际命中的来源：${text.replace(/\s+/g, ' ').slice(0, 200) || '（来源栏为空）'}`)
+}
 
 console.log('\n[7] 控制台干净')
 const realErrors = errors.filter((e) => !e.includes('401') || !e.includes('/api/auth/me'))
