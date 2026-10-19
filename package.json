@@ -29,6 +29,7 @@
     "test:image": "node scripts/image-smoke.mjs",
     "test:reveal": "node scripts/reveal-smoke.mjs",
     "test:settings": "node scripts/settings-smoke.mjs",
+    "test:ai": "node scripts/ai-smoke.mjs",
     "test:motion": "node scripts/motion-check.mjs",
     "perf": "node scripts/perf-smoke.mjs",
     "perf:bundle": "node scripts/analyze-bundle.mjs",

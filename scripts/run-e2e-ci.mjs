@@ -42,7 +42,8 @@ const SUITES = [
   ['feed', 'test:feed'],
   ['image', 'test:image'],
   ['reveal', 'test:reveal'],
-  ['settings', 'test:settings']
+  ['settings', 'test:settings'],
+  ['ai', 'test:ai']
 ]
 
 if (existsSync(LOG_DIR)) rmSync(LOG_DIR, { recursive: true, force: true })
