@@ -34,10 +34,10 @@ const KiB = 1024
 
 const BUDGET = [
   // 名称,          实测值,  上限,   含义
-  ['entry js gzip', 95.03, 105, '首屏 JS 的传输体积 —— 限速下最贵的那一项'],
-  ['entry js raw', 273.41, 300, 'entry chunk 原始体积'],
-  ['entry css gzip', 17.58, 21, '首屏 CSS 的传输体积'],
-  ['entry css raw', 112.02, 125, '首屏 CSS 原始体积']
+  ['entry js gzip', 95.44, 105, '首屏 JS 的传输体积 —— 限速下最贵的那一项'],
+  ['entry js raw', 275.14, 300, 'entry chunk 原始体积'],
+  ['entry css gzip', 17.6, 21, '首屏 CSS 的传输体积'],
+  ['entry css raw', 112.08, 125, '首屏 CSS 原始体积']
 ]
 
 if (!existsSync(join(DIST, 'index.html'))) {

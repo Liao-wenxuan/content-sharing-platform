@@ -29,6 +29,7 @@
 | 个人主页 | 封面 banner / 头像 / 三栏统计 / 4 个 tab + 公开/私密/合集筛选 / ElDialog 编辑资料 / 推荐关注；「常用功能」里**没有假按钮** —— 曾经「发布新笔记」点了提示"即将上线"，而发布流程早就做完了                                                                                                                                                                                                                                                                                      |
 | 话题     | `/topic/:tag` 话题页：封面 + 笔记数 + 参与人数 + 相关话题（按「同话题作者的其它话题」推）+ 瀑布流；**不建 topics 表**，话题是 `posts.topic_tag` 的现算聚合视图，零维护、不可能有空壳话题；话题精确匹配（搜索联想才模糊）；三处入口全通：笔记详情标签 / 搜索建议 / 发布页热门话题一键填                                                                                                                                                                                        |
 | 通知     | 五个来源（赞 / 收藏 / 关注 / 评论 / @提及）落一张可回溯的流水；**同一组合只保留一条**（重复互动浮到顶部并重新点亮，而不是刷屏）；未读数靠 **WS 帧实时更新**（别人点赞的那一刻铃铛就 +1，不用轮询）；三个分类可分别「全部已读」+ **按分类的通知开关**（关掉只影响之后的新通知，历史不删）；笔记被删后通知仍在，显示「原笔记已删除」                                                                                                                                            |
+| AI 问答  | 顶栏入口 →「想了解些什么」+ 两组快捷问题 → 对话页**流式**吐答案，**每条结论挂着可点回原帖的来源**（笔记 / 话题 / 用户三类分开成 tab）；答案只来自站内真实笔记，**找不到就明说没有**；**不接模型 API**（无 key、离线可跑、CI 里确定），靠检索 + 证据组织                                                                                                                                                                                                                       |
 | 消息     | 两个顶层 Tab：通知（真实后端，见上一行）+ **实时聊天**（WebSocket 1v1：会话列表 / 历史分页 / 未读红点 / 已读回执 / 正在输入 / 多端同步 / 断线重连补发）；顶栏铃铛显示**聊天 + 通知**的合并未读                                                                                                                                                                                                                                                                                |
 | 市集     | 完整 C2C 交易链路：商品橱窗（搜索 / 三种排序 / 翻页 / **发布商品**）/ 商品详情（**卖家视角**改价改库存上下架，买家视角加购直购）/ **购物车按卖家分组**结算 / **站内余额支付**（真的条件扣减 + 账本流水）/ 订单（我买的我卖的两个 tab，付款发货收货退款）/ 钱包（余额 + 可核对的流水 + 充值）。金额**全程整数分**，订单行是快照，库存用条件 UPDATE 防超卖，钱包有 `CHECK (balance >= 0)` 兜底                                                                                  |
 | 支付     | 站内余额支付（真实现），微信 / 支付宝**置灰标注「未接入」而不是假装能点** —— 做成可点的话点了只能弹一句「模拟成功」，那比没有更糟。结算框里会列出三种方式和各自状态，让讨论有落点                                                                                                                                                                                                                                                                                             |
@@ -225,9 +226,9 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，28 文件 432 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，29 文件 441 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components）
-cd server && npm test        # 后端单测（vitest + supertest，21 文件 422 条）
+cd server && npm test        # 后端单测（vitest + supertest，22 文件 445 条）
 
 npm run test:e2e             # Playwright 桌面端全流程回归（登录态，47 断言）
 npm run test:search          # 搜索功能 + 注入防护（31 断言）
@@ -245,7 +246,7 @@ npm run test:reveal         # 滚动入场：逐帧证明动效在推进 / reduc
 npm run test:settings       # 设置页：逐个点 13 项验证零静默 / 11 个面板有内容 / 存储显示真实统计值 / 偏好真落库（22 断言）
 npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 照片型 PNG 落盘是 WebP（23 断言）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
-npm run test:e2e:all         # 按 CI 的方式顺序跑完 14 套（每套日志落 .e2e-logs/，跑完汇总）
+npm run test:e2e:all         # 按 CI 的方式顺序跑完 15 套（每套日志落 .e2e-logs/，跑完汇总）
 npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配图
 ```
 
@@ -306,16 +307,16 @@ content-sharing-platform/
 ├─ docker-compose.yml            # 一键起全栈：web(nginx) + server(+ seed profile)
 ├─ client/                       # Vue 3 + Vite 前端
 │  ├─ src/
-│  │  ├─ views/                  # 20 个页面组件 / 19 条路由（ChatView 嵌在 MessagesView 里，不单独占路由）
+│  │  ├─ views/                  # 21 个页面组件 / 20 条路由（ChatView 嵌在 MessagesView 里，不单独占路由；AiChatView 是 AI 对话页）
 │  │  │                          # Home / PostDetail / Publish / Profile / FollowList / Messages / Search / Settings / Favorites / Topic / Login / NotFound / Interest（兴趣画像）/ Market / ProductDetail / Cart / Orders / Wallet
-│  │  ├─ components/             # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ MarketTabs（市集分区，购物车角标）/ EmptyState / ErrorBoundary
+│  │  ├─ components/             # SideNav（左侧导航）/ TopBar（顶部栏）/ PostMasonry（最短列优先瀑布流，首页与搜索页共用）/ MarketTabs（市集分区，购物车角标）/ EmptyState / ErrorBoundaryAiEntry（顶栏 AI 入口，同步）/ AiPanel（AI 展开面板，**懒加载**）/
 │  │  ├─ assets/styles/          # theme.css（自有 design token） + element-theme.css（Element Plus 变量接管）+ motion.css（五档时长 / 缓动字典 / reduced-motion 兜底）
 │  │  ├─ composables/            # useWebSocket（连接状态机 / 退避重连 / 心跳）/ useChat（乐观发送 + ack 收敛）
 │  │  │                          # useNotifications（模块级单例 + WS 覆盖而非 +1）/ useFollow / useFavorite（乐观更新 + 失败回滚）
 │  │  │                          # useTheme / useSearchHistory / useRelativeTime / useCart（市集共用购物车，模块级单例 + 按 sellerId 分组）
 │  │  │                          # useFeed（推荐会话：游标翻页 + 本地去重 + 屏蔽先本地生效、失败回滚到原下标）
 │  │  │                          # useReveal（滚动错峰入场：默认可见的降级顺序 + 档位封顶）
-│  │  ├─ api/                    # request.ts（axios 实例 + 拦截器 + getOrNull）/ auth / posts（含点赞）/ uploads
+│  │  ├─ api/                    # request.ts（axios 实例 + 拦截器 + getOrNull）/ auth / posts（含点赞）/ uploads / ai（SSE 流式，**用原生 fetch 不走 axios**）
 │  │  │                          # comments / follows / favorites / notifications / topics / conversations / wsProtocol（WS 协议的前端镜像）
 │  │  │                          # 市集四个：products / cart / orders / wallet —— 与服务端 routes 一一对应，字段名照抄不改
 │  │  │                          # feed（推荐流：sessionId + cursor 游标，注意和 posts/feed 的 offset 分页是两套东西）
@@ -325,10 +326,11 @@ content-sharing-platform/
 │  │  │                          # image.ts（纯函数层：尺寸换算 / mime 决策 / EXIF 字节解析 / 朝向变换，不碰 DOM）
 │  │  │                          # imageCompress.ts（canvas 重编码 + 降级阶梯 + 串行处理；jsdom 里测不了，靠 e2e）
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
-│  │  ├─ router/                 # Vue Router 配置（19 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
+│  │  ├─ router/                 # Vue Router 配置（20 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，28 文件 432 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，29 文件 441 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
+│  │  ├─ ai-chat-view.test.ts    # AI 对话页：来源先于答案 / 流式是追加不是替换 / 三类来源 tab
 │  │  ├─ image.test.ts           # 图片纯函数（41 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
 │  │  ├─ websocket-machine.test.ts  # 握手语义 / 退避重连 / 4401 / 心跳保活
 │  │  ├─ use-chat.test.ts        # 乐观发送 / 乱序 ack 收敛 / 已读回执 / 游标分页
@@ -359,12 +361,14 @@ content-sharing-platform/
 │  │  ├─ index.ts                # 入口，挂载中间件 + 路由 + WS + 优雅退出
 │  │  ├─ ws/                     # protocol（帧类型）/ hub（Map<userId, Set<WebSocket>>）
 │  │  │                          # instance（hub 单例，路由与 HTTP 侧共用）/ server（握手鉴权 / 心跳 / 路由）
+│  │  ├─ lib/ai-retrieve.ts      # AI 检索层：切词 + 召回门槛 + 话题/作者聚合
+│  │  ├─ lib/ai-answer.ts        # AI 生成层：证据组织（无 key 降级）/ 可选 LLM
 │  │  ├─ lib/db.ts               # better-sqlite3 连接 + Proxy 注入（DB_PATH 可配，测试换 :memory:）
 │  │  ├─ lib/schema.ts           # 全部 DDL + 幂等 ALTER 迁移（生产与每个测试文件共用同一份）
 │  │  ├─ lib/notify.ts           # 写通知的唯一入口：不通知自己 / 同组合去重 / 按分类开关决定发不发
 │  │  ├─ lib/mount-routes.ts     # mountApiRouters()：生产与测试挂同一份路由（避免"测试全 404 但文件绿"）
 │  │  ├─ middleware/auth.ts      # JWT 校验 (requireAuth / optionalAuth)
-│  │  ├─ routes/                 # auth / users / posts / likes / comments / favorites / notifications / topics / viewHistory / uploads / conversations / feed
+│  │  ├─ routes/                 # auth / users / posts / likes / comments / favorites / notifications / topics / viewHistory / uploads / conversations / feed / ai（站内问答：SSE 流式 + 快捷问题）
 │  │  │                          # 市集四条独立前缀：products / cart / orders / wallet（不和 /api/posts 混，涨跌互不影响）
 │  │  │                          # 推荐流独占 /api/feed：GET / 翻页、POST+DELETE /feedback、GET /profile
 │  │  │                          # 注意：关注的 5 个接口（follow / relation / followers / following / suggestions）挂在 users.ts 里，
@@ -374,7 +378,7 @@ content-sharing-platform/
 │  │  ├─ lib/feed.ts             # 取候选 → 打分 → 冻结成快照 → 游标翻页 + 负反馈落库
 │  │  ├─ lib/wallet.ts           # 余额变动的唯一入口：加钱 / 扣钱都和写流水成对出现，扣钱走条件 UPDATE
 │  │  └─ constants.ts            # 服务端常量（与 client mirror）
-│  ├─ tests/                     # vitest + supertest（21 文件 422 条）
+│  ├─ tests/                     # vitest + supertest（22 文件 445 条）
 │  ├─ Dockerfile                 # 多阶段：构建期装原生模块工具链，运行时 prune 掉 devDeps
 │  ├─ seed.mjs                   # 演示数据种子（39 条笔记 + 6 用户 + 关注边 + 11 件商品（含 1 件下架演示）+ 各 2000 元余额，幂等，DB_PATH 与后端一致）
 │  └─ uploads/                   # multer 落地目录（.gitignore）
@@ -398,6 +402,7 @@ content-sharing-platform/
 │  ├─ search-smoke.mjs           # 搜索功能回归
 │  ├─ chat-smoke.mjs             # 即时通信回归（多端同步 / 断线重连补发）
 │  ├─ motion-check.mjs           # 逐帧采样证明动效真的在推进，且 reduced-motion 下真的停
+│  ├─ ai-smoke.mjs              # AI 问答：命中自己造的笔记 / 问不存在的必须说没有 / 点来源跳原帖
 │  ├─ center-audit.mjs           # 1920 宽屏下逐页量左右留白，防止"看起来居中其实没居中"
 │  └─ screenshot-docs.mjs        # 生成 docs/screenshots/ 下的 README 配图
 │
@@ -604,10 +609,10 @@ main.ts → App.vue → TopBar.vue → element-plus/es/components/avatar
 > 别急着相信「没有这类问题」。这次两处都是这样 ——
 > 一处是 CSS 检查器从没执行过，一处是字节归因只给数字不给来源。
 
-## 🚦 回归防线：把 401 个断言搬进 CI
+## 🚦 回归防线：把 417 个断言搬进 CI
 
 上一轮结束时，CI 里只有三个 job：后端测试、前端单测、lint。
-**14 套 e2e（401 个断言点）只能在本地跑** —— 也就是说，
+**15 套 e2e（417 个断言点）只能在本地跑** —— 也就是说，
 push 之后没有任何东西验证过用户真正会走的那些路径。
 
 这不是理论风险。我在这个项目里**被它咬过一次**：三个断言红了很久没人知道，
@@ -625,7 +630,7 @@ push 之后没有任何东西验证过用户真正会走的那些路径。
 | **`seed.mjs` 崩在第 32 行**             | ENOENT                                      | `readdirSync('uploads/demo/')`，而 `uploads/` 被 gitignore |
 | **20 个脚本写死 `server/data.db`**      | `POST /api/conversations => 404 用户不存在` | 忽略 `DB_PATH`，服务端和脚本看的是两个文件                 |
 | **20 处读 `server/.env` 取 JWT_SECRET** | 每套都崩在读密钥那行                        | `.env` 被 gitignore，且兜底值还各写各的                    |
-| **`reveal-smoke` 借个人账号**           | 1 秒内退出                                  | 14 套里唯一依赖「我的个人数据」的一个                      |
+| **`reveal-smoke` 借个人账号**           | 1 秒内退出                                  | 15 套里唯一依赖「我的个人数据」的一个                      |
 | **CI 里没有 demo 配图**                 | 12 个话题全部「无封面」+ 一堆 404           | 缺图时 seed 降级成 0 张 —— 而一半断言测的是**有图的页面**  |
 
 ### 搬进去之后，它立刻抓出来的
@@ -672,10 +677,10 @@ push 之后没有任何东西验证过用户真正会走的那些路径。
 
 | Job                | 内容                                                      |
 | ------------------ | --------------------------------------------------------- |
-| `Server (Node 24)` | tsc + vitest（422 用例）                                  |
-| `Client (Node 24)` | vue-tsc + vitest 覆盖率（432 用例）+ build + **体积预算** |
+| `Server (Node 24)` | tsc + vitest（445 用例）                                  |
+| `Client (Node 24)` | vue-tsc + vitest 覆盖率（441 用例）+ build + **体积预算** |
 | `Lint (root)`      | eslint + **CSS 检查** + prettier                          |
-| `E2E (Playwright)` | 14 套顺序跑，跑完再汇总                                   |
+| `E2E (Playwright)` | 15 套顺序跑，跑完再汇总                                   |
 | `A11Y (axe-core)`  | 深色 + 浅色各扫一遍（37 个页面状态）                      |
 
 不挂 `needs` 是因为挂上去看着省事，代价是**一次 push 只拿一份信号**：
@@ -688,13 +693,78 @@ push 之后没有任何东西验证过用户真正会走的那些路径。
 > 是找出「靠本机状态才通过」的测试最便宜的手段** —— 比逐条读断言可靠得多。
 > 这一轮四处（DB_PATH、JWT secret、个人账号、审计对象）全是这么冒出来的。
 
+## 🤖 站内 AI 问答：每条答案都要能点回原帖
+
+顶栏右侧一个入口，点开是「想了解些什么」，底下两张快捷卡片；进去之后答案**流式**吐出来，
+每条结论后面挂着可点回原帖的来源。
+
+### 先说清楚边界：这个项目没接任何模型 API
+
+它做的是**检索式问答**：
+
+1. 把问题切成检索词（整段 + 二元组，剥掉前后停用词）
+2. 从 SQLite 里捞出相关的笔记 / 话题 / 用户
+3. 把这些**证据**组织成答案，并标上出处
+
+为什么这么定：
+
+- 这个项目的主张是「clone 下来就能跑、每条答案都能核对」，接上模型和 key 就不成立了
+- 站内笔记就是它唯一的知识来源，模型是**组织者**不是知识源
+- CI 里跑的必须是确定性的 —— 同样的问题得给同样的答案，才测得出来
+
+`AI_API_KEY` + `AI_BASE_URL` + `AI_MODEL` 三个环境变量齐了就会走 OpenAI 兼容的
+流式接口，让模型来写答案。**这一分支本机没有 key，验证过的只有降级分支** ——
+调用格式用的是 OpenAI 兼容约定（`POST {base}/chat/completions`，SSE 里读
+`choices[0].delta.content`），换厂商只要改三个环境变量。
+上游抽风则自动降级回确定性组织器：_一个 AI 功能因为模型不可用就整个不可用，比降级更糟_。
+
+### 三个真正难的地方
+
+**① 检索太宽的话，「站内没有」就永远不可能出现。**
+
+二元组匹配很宽：问「量子纠缠拓扑不变量」会被切成十几个二元组，
+随便一个撞上库里的内容，这条笔记就进了候选。那样站内几乎永远「有」答案 ——
+答案看起来带着出处，其实在硬凑，这比明说「没有」糟糕得多。
+
+所以加了**召回门槛**：命中 ≥1 个强关键词（3 字以上，话题名多在这一档）
+或者 ≥3 个不同的弱关键词（二元组），够不到就当没找到。
+这条门槛是「站内没有」能成立的前提，不是调参。
+
+**② 切词的边界：5 字的专有名词不能被切成二元组。**
+
+「雾岛回声标记」是 5 字，落在「只切二元组」那一档 ——
+强关键词直接归零，只剩「雾岛」「标记」两个弱命中，够不到门槛，
+**自己造的笔记反而查不到自己**。现在 ≤8 字的片段整体保留，更长的才只取二元组。
+
+**③ SSE 的 close 事件挂在 `req` 上会直接把流掐死。**
+
+Node 16+ 里 `req` 的 'close' 在**请求体读完**时就触发了（不是「客户端断开」）。
+挂在 req 上会让「已断开」标志立刻为真 —— 后面所有 delta 被丢掉，
+`res.end()` 也没人调，响应永远不结束，客户端只能等到超时。
+必须听 `res` 的 close，而且要区分「正常收尾」和「客户端真的走了」。
+
+### 数字
+
+| 项           | 值                                                                  |
+| ------------ | ------------------------------------------------------------------- |
+| 切词         | 整段 + 2-gram，剥掉前后停用词（≤8 字整体保留）                      |
+| 召回门槛     | ≥1 个强关键词（≥3 字）或 ≥3 个不同的弱关键词                        |
+| 单次引用来源 | 6 条笔记 + 4 个话题 + 4 个作者                                      |
+| 后端单测     | 23 条（切词 / 门槛 / 引用编号对齐 / 搜不到就说没有）                |
+| 前端单测     | 9 条（来源先于答案 / 流式是追加不是替换 / 三类来源 tab）            |
+| e2e          | 16 条断言（命中自己造的那条 / 问不存在的必须说没有 / 点来源跳原帖） |
+
+e2e 里最关键的一条：**自己造一条带独特标记词的笔记，然后问那个标记词**。
+答案里出现标记词，说明检索 → 来源 → 引用这条路真的通了；
+没出现，说明它在编 —— 而编出来的答案**看起来和真的完全一样**。
+
 ## ♿ 可访问性：先量，再改
 
 首屏优化收尾之后，接了一轮 WCAG 2.1 A/AA。结论同样来自实测，不是凭印象：
 
 | 指标                                           | 优化前  | 深色模式（默认） | 浅色模式 |
 | ---------------------------------------------- | ------- | ---------------- | -------- |
-| axe 违规（游客 + 登录，17 条路由 + 11 个面板） | **155** | **0**            | **0**    |
+| axe 违规（游客 + 登录，18 条路由 + 11 个面板） | **155** | **0**            | **0**    |
 | 受检 DOM 节点                                  | 5968    | 12937            | 12974    |
 | 「有 @click 但键盘够不到」的元素               | 4       | **0**            | **0**    |
 
@@ -875,8 +945,8 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 422 例）/ `client`（vue-tsc + vitest 432 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**14 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：432 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 445 例）/ `client`（vue-tsc + vitest 441 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：441 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **端到端冒烟**                           | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，47 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -885,7 +955,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **真瀑布流分列**                         | 不用 CSS grid（行高被最高卡撑开，短卡下面留大片空白），也不用 CSS columns（column-major 阅读顺序变竖读），改用「最短列优先」自建分列 + ResizeObserver 算列数；首页和搜索页共用同一个 `PostMasonry` 组件                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **零 console 残留**                      | 调试日志统一走 `[Prefix]` 格式，方便后期清理或加日志级别                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **容器化一键起全栈**                     | `docker compose up --build`：`web`(nginx 托管静态产物并反代 `/api`、`/uploads`、`/ws`) + `server`(只在容器网络内 expose，单一 origin 无跨域)。四个值得讲的点：① 后端镜像只在**构建阶段**装 `python3/make/g++`(`better-sqlite3` 编译原生模块用)，运行时 `npm prune --omit=dev` 删掉 devDeps，工具链不进最终镜像；② `CMD ["node", "dist/index.js"]` 而不是 `npm start` —— npm 多起一层进程转发信号，后端的优雅退出钩子(先关 WS 再关 HTTP)会收不到 `SIGTERM`，只能等超时被强杀；③ SQLite 是**单个文件**而 Docker 的 named volume 只能挂目录挂不了文件，所以把 `DB_PATH` 暴露成环境变量、compose 里挂目录再指进去(默认路径不变，本地开发无感)；④ `VITE_API_BASE` 必须在**构建期**注入，vite 会把 `import.meta.env.VITE_*` 静态替换进 bundle，运行时再设环境变量没用(产物里已不含任何 `localhost:3000` 硬编码，grep 验证过)                                                                |
-| **14 套 Playwright 脚本 = 可执行的文档** | 每个功能模块一个 smoke 脚本（关注 28 / 收藏 32 / 通知 35 / 话题 31 / 评论 34 / 推荐流 29 / 图片压缩 15 断言），全部用固定邮箱 + 直连 SQLite 建号 + 本地签 JWT 绕开登录限流，跑完自己清理。相比"手动点一遍"，它的价值是**每个断言都写清了期望的语义**，面试时可以直接当用例清单讲                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **15 套 Playwright 脚本 = 可执行的文档** | 每个功能模块一个 smoke 脚本（关注 27 / 收藏 34 / 通知 25 / 话题 27 / 评论 32 / 推荐流 26 / 图片压缩 23 断言），全部用固定邮箱 + 直连 SQLite 建号 + 本地签 JWT 绕开登录限流，跑完自己清理。相比"手动点一遍"，它的价值是**每个断言都写清了期望的语义**，面试时可以直接当用例清单讲                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **测试的 `beforeEach` 必须清「根状态」** | 测「重复点赞不产生第二条通知」时，只清 `notifications` 表是不够的 —— 上一轮留下的 `likes` 行还在，`INSERT OR IGNORE` 的 `changes === 0`，代码**正确地**没有再发通知，但我测的其实是"什么都没发生"。凡是测幂等 / 去重 / 不重复产生副作用，清理时必须把**关系本身**也删掉                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 表现是"第一次跑绿、第二次跑红"。本项目已经因此踩了三次：后端 vitest 一次、Playwright 一次、通知偏好配置（`notify_prefs`）又一次                  |
 | **给组件写 stub 要照抄真实契约**         | 测话题页时给 `el-empty` 写的 stub 只透传了插槽，漏了 `description` prop —— 而 EmptyState 的主标题恰恰是传给 `description` 的。结果三条「空态文案」断言全红，**页面在浏览器里却完全正常**。stub 丢掉的不是装饰，可能就是被断言的唯一出口                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 某个断言失败、而页面明明是对的，先怀疑 stub 而不是先怀疑源码。断言之前确认一遍：被断言的那个东西，到底是从 prop 进来的还是从插槽进来的           |
 | **服务端 schema 是懒执行的**             | `initSchema()` 只在第一次真的碰到 db proxy 时才跑。这是对的（导入模块无副作用，单测才能换 `:memory:`），代价是**刚重启后磁盘上还没有新表**。e2e 统一走 `ensureSchema(['表', ...])`：先打一个必然碰库的公开接口把 schema 触发出来，再查表在不在                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 底层报错（`no such table`）不会告诉你真正的原因。遇到"刚加的东西不存在"，先验证那段代码到底有没有被执行过，再怀疑运行环境                        |
@@ -917,7 +987,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 ### 二、可访问性：141 处对比度问题，其实只有 4 个根因
 
-> 我用 axe-core 扫了 17 条路由 + 11 个设置面板，深浅两个主题。
+> 我用 axe-core 扫了 18 条路由 + 11 个设置面板，深浅两个主题。
 
 - **155 → 0**，深浅都是 0；静态扫描另外抓出 4 处「鼠标能点、键盘到不了」的元素
 - 最大的 51 处不是配色错，是**根本没有那条规则**：
@@ -959,7 +1029,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 ---
 
-**验证基线**：前端 432 条单测（28 文件）/ 后端 422 条（21 文件）/ 14 套 Playwright e2e /
+**验证基线**：前端 441 条单测（29 文件）/ 后端 445 条（22 文件）/ 15 套 Playwright e2e /
 lint 0 error / 覆盖率 73.87%（门槛 60%）/ CI 三个 job 全绿。
 
 ## 📚 文档
