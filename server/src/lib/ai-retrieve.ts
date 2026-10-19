@@ -77,6 +77,23 @@ function isCjk(ch: string): boolean {
   return CJK_CHAR.test(ch)
 }
 
+/** 最多检索多少个词 —— SQL 会长一大截，而且词越多噪音越大 */
+const MAX_TERMS = 12
+
+/**
+ * 截词时按**信号强度**排，不按出现顺序。
+ *
+ * 为什么不能直接 `slice(0, 12)`：
+ * 切词是「整段 + 二元组」混在一起的，一个 14 字的从句能一口气产出 13 个二元组，
+ * 把后半句里的整词（比如话题名「雨天骑行」）顶到 12 名开外 —— 从头到尾没被检索过。
+ * 整词的权重是 6，二元组是 1，让一个排在后面的强词输给前面的噪音是纯粹的召回损失。
+ */
+function pickTerms(keywords: string[]): string[] {
+  const strong = keywords.filter((k) => k.length >= 3)
+  const weak = keywords.filter((k) => k.length < 3)
+  return [...strong, ...weak].slice(0, MAX_TERMS)
+}
+
 export interface AiPostSource {
   type: 'post'
   id: number
@@ -238,8 +255,8 @@ export function retrieve(query: string, limit = 6): RetrieveResult {
   const empty: RetrieveResult = { posts: [], topics: [], users: [], keywords, phrase }
   if (!phrase || keywords.length === 0) return empty
 
-  // 关键词太多会让 SQL 变得很长而且噪音上升，只取前 12 个
-  const terms = keywords.slice(0, 12)
+  // 截词按信号强度而不是出现顺序，见 pickTerms
+  const terms = pickTerms(keywords)
   const patterns = terms.map(likePattern)
 
   // 拼 OR 条件：正文 / 话题标签 / 作者昵称 任一命中

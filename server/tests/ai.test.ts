@@ -187,6 +187,13 @@ describe('检索', () => {
     expect(found.posts.some((p) => p.id === noiseId)).toBe(false)
     expect(found.posts.length).toBe(0)
   })
+
+  it('强词不会被长句的二元组挤出检索词表', () => {
+    // 14 字的从句一口气产出 13 个二元组，直接 slice 会把后半句的整词顶到 12 名开外，
+    // 于是「雨天骑行」从头到尾没被检索过 —— 位置不该决定召回与否
+    const r = retrieve('一二三四五六七八九十一二三四 雨天骑行')
+    expect(r.keywords).toContain('雨天骑行')
+  })
 })
 
 describe('答案组织', () => {
