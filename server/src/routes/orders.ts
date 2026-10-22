@@ -2,8 +2,9 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { requireAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
-import { toISO } from '../lib/time'
+import { toISO, toSqliteDateTime } from '../lib/time'
 import { holdFromBuyer, settleToSeller, releaseToBuyer } from '../lib/transit'
+import { ORDER_PAY_TIMEOUT_MINUTES } from '../lib/order-expiry'
 
 /**
  * 订单 / 支付 / 发货
@@ -144,9 +145,14 @@ router.post('/', shopLimiter, requireAuth, (req: Request, res: Response) => {
     let total = 0
     for (const r of cartRows) total += r.price_cents * r.quantity
 
+    // 到期时间 = 下单时刻 + 付款时限。
+    // 超时的待付款订单会被自动取消，库存还回去 ——
+    // 库存是下单时扣的，没人付款就一直占着，货就卖不出去了。
+    const expiresAt = new Date(Date.now() + ORDER_PAY_TIMEOUT_MINUTES * 60_000)
+
     const orderInfo = db
-      .prepare('INSERT INTO orders (user_id, status, total_cents) VALUES (?, ?, ?)')
-      .run(userId, 'pending', total)
+      .prepare('INSERT INTO orders (user_id, status, total_cents, expires_at) VALUES (?, ?, ?, ?)')
+      .run(userId, 'pending', total, toSqliteDateTime(expiresAt))
     const orderId = Number(orderInfo.lastInsertRowid)
 
     const insertItem = db.prepare(

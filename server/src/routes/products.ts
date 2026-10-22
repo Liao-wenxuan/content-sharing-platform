@@ -4,6 +4,7 @@ import { requireAuth, optionalAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { PRODUCT_TITLE_MAX, PRODUCT_DESC_MAX, PRODUCT_CATEGORIES } from '../constants'
+import { cancelExpiredOrders } from '../lib/order-expiry'
 
 /**
  * 商品
@@ -78,6 +79,19 @@ const PUBLIC_SELECT = `
 // 两条字面量路由必须排在 /:id 之前，否则会被 :id 当成商品 id 吃掉。
 router.get('/', optionalAuth, (req: Request, res: Response) => {
   try {
+    // 读商品列表时顺手扫一次过期的待付款订单。
+    //
+    // 为什么要在这里扫：库存是下单时扣的，卖家在橱窗里看到「库存 0」
+    // 却不知道为什么卖不掉 —— 因为有一笔没人付款的订单把货占着。
+    // 橱窗是唯一会把「卖不掉」直接显示出来的地方，所以在这里清最合适。
+    //
+    // 扫是幂等的（见 lib/order-expiry.ts），多扫几次没有副作用。
+    try {
+      cancelExpiredOrders()
+    } catch (err) {
+      console.error('[Order Expiry Error]', err)
+    }
+
     const page = Math.max(1, parseInt(String(req.query.page)) || 1)
     const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
     const offset = (page - 1) * pageSize

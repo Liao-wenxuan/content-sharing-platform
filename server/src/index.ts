@@ -5,6 +5,7 @@ import { env } from './lib/env' // 必须在最前，加载 .env + 校验
 import { mountApiRouters } from './lib/mount-routes'
 import { attachWebSocketServer } from './ws/server'
 import { notFoundHandler, errorHandler } from './middleware/error'
+import { cancelExpiredOrders } from './lib/order-expiry'
 import db from './lib/db'
 
 const app = express()
@@ -68,9 +69,29 @@ const httpServer = app.listen(env.PORT, () => {
 // ws 会自己监听 upgrade 事件并只处理 path === '/ws' 的，其余放行给 HTTP。
 const wsHandle = attachWebSocketServer(httpServer)
 
+/*
+ * 每分钟扫一次过期的待付款订单。
+ *
+ * 库存是在**下单**那一刻扣的，所以买家不付款 = 那件货被一直占着。
+ * 橱窗里读商品列表时也会扫一次（见 routes/products.ts），那是给人看的那一次；
+ * 这个定时器是兜底 —— 万一没人逛商店，货也得自己回来。
+ *
+ * unref()：这个定时器不该让进程活着。进程要退出的时候它跟着走。
+ */
+const expiryTimer = setInterval(() => {
+  try {
+    const n = cancelExpiredOrders()
+    if (n > 0) console.log(`[Order Expiry] 取消了 ${n} 笔超时未付款的订单，库存已退回`)
+  } catch (err: any) {
+    console.error('[Order Expiry Error]', err)
+  }
+}, 60_000)
+expiryTimer.unref()
+
 // 优雅退出：先踢连接再关 server，否则挂着的 WS 连接会让进程关不掉
 const shutdown = async (signal: string) => {
   console.log(`\n[Server] ${signal} 收到，正在关闭…`)
+  clearInterval(expiryTimer)
   await wsHandle.close()
   httpServer.close(() => process.exit(0))
   // 兜底：3 秒还没关干净就强退，避免 CI / 脚本挂住

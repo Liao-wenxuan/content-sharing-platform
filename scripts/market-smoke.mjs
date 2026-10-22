@@ -434,7 +434,42 @@ try {
     check('守恒律仍然成立', auditBalance().diff === 0, JSON.stringify(auditBalance()))
   }
 
-  console.log('\n[9] 钱包：流水能求和算回余额，且全局账平')
+  console.log('\n[9] 超时未付款的订单会自动取消，库存还回去')
+  {
+    // 库存是在**下单**那一刻扣的，不是付款时。
+    // 所以买家下单不付款 = 那件货被一直占着，
+    // 卖家在橱窗里只看到「库存 0」，却不知道货被谁占着 —— 那个洞必须堵上。
+    //
+    // 这里把到期时间拨到过去，模拟「下单之后一直没人付款」。
+    // 真的等 30 分钟的话，CI 上就是一条永远等不到的红线。
+    await open(pageBuyer, `/market/product/${productId}`, '.product-detail')
+    await pageBuyer.locator('.buy-row .el-button', { hasText: '加入购物车' }).click()
+    await pageBuyer.waitForTimeout(800)
+    await open(pageBuyer, '/market/cart', '.cart-view')
+    await pageBuyer.locator('.group-foot .el-button', { hasText: '结算这一家' }).click()
+    await pageBuyer.locator('.el-dialog').waitFor({ state: 'visible', timeout: 8000 })
+    await dialogAction(pageBuyer, '确认下单')
+    const text = await pageBuyer.locator('.el-dialog').innerText()
+    const timeoutOrderId = Number(text.match(/#(\d+)/)[1])
+
+    check('下单后库存被占了', stockOf(productId) === 8, `实际 ${stockOf(productId)}`)
+
+    // 把到期时间拨到过去
+    withDb((db) =>
+      db.prepare("UPDATE orders SET expires_at = '2000-01-01 00:00:00' WHERE id = ?").run(timeoutOrderId)
+    )
+
+    // 读商品列表会顺手扫一次过期订单（服务端 lib/order-expiry.ts）
+    await pageSeller.goto('http://localhost:5173/market', { waitUntil: 'networkidle' })
+    await pageSeller.waitForTimeout(600)
+
+    check('超时后订单自动取消', orderStatusOf(timeoutOrderId) === 'cancelled', orderStatusOf(timeoutOrderId))
+    check('库存回来了', stockOf(productId) === 9, `实际 ${stockOf(productId)}`)
+    check('钱没动过（没付款就没钱进在途）', transitBalance() === 0, `实际 ${transitBalance()}`)
+    check('守恒律仍然成立', auditBalance().diff === 0, JSON.stringify(auditBalance()))
+  }
+
+  console.log('\n[10] 钱包：流水能求和算回余额，且全局账平')
   {
     await open(pageBuyer, '/market/wallet', '.wallet')
     const shown = await pageBuyer.locator('.balance-value').innerText()
@@ -481,7 +516,7 @@ try {
     }))
   }
 
-  console.log('\n[10] 控制台干净')
+  console.log('\n[11] 控制台干净')
   check('零 console error / 零失败请求', errs.length === 0, errs.slice(0, 3).join(' | '))
 } catch (e) {
   console.error('\n脚本异常：', e.message)

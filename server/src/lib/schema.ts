@@ -443,6 +443,26 @@ export function initSchema(db: Database.Database): void {
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC)`)
 
+  // ===== 待付款订单的到期时间 =====
+  //
+  // 库存是在**下单**那一刻扣的，不是付款时。
+  // 所以没有这个时限的话，买家下单不付款 = 那件货被永久占着，
+  // 而且没有任何界面能看出它是被谁占着的。
+  //
+  // 有了它，超时的待付款订单会被自动取消，库存还回去。
+  // NULL 表示「没有时限」（老订单），扫的时候跳过。
+  const orderCols = new Set(
+    (db.pragma('table_info(orders)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!orderCols.has('expires_at')) {
+    db.exec('ALTER TABLE orders ADD COLUMN expires_at DATETIME')
+    console.log('[DB] Migrated: orders.expires_at added')
+  }
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_orders_pending_expiry
+       ON orders(status, expires_at)`
+  )
+
   // ===== 订单行：必须快照标题和单价 =====
   // ⚠️ 这里的 title / price_cents **是下单那一刻的副本**，不 JOIN 商品表。
   // 理由：商品改价或改名之后，历史订单显示的必须是当时成交的那一条。
