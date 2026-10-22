@@ -20,8 +20,6 @@ declare module 'vue' {
     ElCard: typeof import('element-plus/es/components/card/index')['ElCard']
     ElCheckbox: typeof import('element-plus/es/components/checkbox/index')['ElCheckbox']
     ElConfigProvider: typeof import('element-plus/es/components/config-provider/index')['ElConfigProvider']
-    ElDescriptions: typeof import('element-plus/es/components/descriptions/index')['ElDescriptions']
-    ElDescriptionsItem: typeof import('element-plus/es/components/descriptions/index')['ElDescriptionsItem']
     ElDialog: typeof import('element-plus/es/components/dialog/index')['ElDialog']
     ElDivider: typeof import('element-plus/es/components/divider/index')['ElDivider']
     ElDrawer: typeof import('element-plus/es/components/drawer/index')['ElDrawer']
