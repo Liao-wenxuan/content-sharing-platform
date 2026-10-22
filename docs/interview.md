@@ -806,7 +806,7 @@ composable 和组件级的（最早全是纯函数）。
 
 ### Q：CI 配了什么？遇到过什么问题？
 
-**我做的**：**5 个并行 job** —— `server`（tsc + vitest）/
+**我做的**：**两个工作流、5 个并行 job** —— `server`（tsc + vitest）/
 `client`（vue-tsc + vitest+coverage + build + 首屏体积预算）/
 `lint`（eslint + CSS 检查 + prettier）/
 `e2e`（15 套 Playwright 顺序跑，跑完汇总）/
@@ -815,7 +815,7 @@ composable 和组件级的（最早全是纯函数）。
 **故意不挂 `needs`**：挂上去看着省事，代价是**一次 push 只拿一份信号** ——
 单测挂了看不到 e2e 坏没坏，只能改完再推一次才知道。公开仓库 Actions 不计费，那就全跑。
 
-**但贵的那两个 job 有个例外：纯文档提交跳过。**
+**但贵的那两个 job 有个例外：纯文档提交跳过**（它们单独放在 `browser.yml`）。
 浏览器侧要装 Playwright、起 dev server、跑 15 套 e2e，约 5 分钟，
 而 README 和文档的改动碰不到任何运行时行为。
 
@@ -825,8 +825,23 @@ composable 和组件级的（最早全是纯函数）。
 > 你以为验过了，其实没有。`paths-ignore` 只在**所有**改动都是文档时才跳过，
 > 其余一律全跑 —— 默认方向是「跑」，不是「不跑」。
 >
-> 另外三个 job（typecheck / 单测 / prettier）**永远跑**：它们便宜，
+> 另外三个 job（typecheck / 单测 / prettier）在 `ci.yml` 里，**永远跑**：它们便宜，
 > 而且 prettier 也检查 markdown，文档提交同样得过格式检查。
+>
+> **追问：为什么过滤要放在工作流级、而不是 job 级？**
+> 因为 `paths-ignore` **不是 job 的合法键** —— 它只存在于 `on.<event>` 层。
+> 写成 `jobs.<id>.paths-ignore` 的话，整个工作流文件会被判为非法：
+> `Invalid workflow file ... Unexpected value 'paths-ignore'`。
+>
+> 这个坑特别值得讲，因为**本地所有检查都是绿的**：YAML 解析器能过、
+> eslint 能过、prettier 能过，只有 GitHub 自己的 schema 校验会拒绝，
+> 而症状是「run 在同一秒内失败、0 个 job、0 个日志」。
+>
+> 修法有两层：
+>
+> 1. **结构上** —— 过滤必须在工作流级，所以那两个 job 拆到 `browser.yml`；
+> 2. **工具上** —— `npm run lint` 里加一道对着 GitHub 官方 schema 的校验，
+>    改完工作流**先本地验再推**。
 
 e2e 和 a11y 这两个 job 是最新加的：原本 15 套 e2e（422 个断言点）只能在本地跑，
 也就是说 push 之后没有任何东西验证过用户真正会走的那些路径。
