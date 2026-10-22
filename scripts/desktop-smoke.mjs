@@ -179,10 +179,14 @@ for (const t of ['赞和收藏', '新增关注', '评论和@']) check(`消息 ta
 // 「存在」只能证明界面画出来了，「切得动」才证明它接上了接口。
 const notifySwitches = page.locator('.switch-row .el-switch')
 check('通知设置里有开关', (await notifySwitches.count()) >= 3, `${await notifySwitches.count()} 个`)
-const notifyBefore = await notifySwitches.first().evaluate((el) => el.classList.contains('is-checked'))
+const notifyBefore = await notifySwitches
+  .first()
+  .evaluate((el) => el.classList.contains('is-checked'))
 await notifySwitches.first().click()
 await page.waitForTimeout(700)
-const notifyAfter = await notifySwitches.first().evaluate((el) => el.classList.contains('is-checked'))
+const notifyAfter = await notifySwitches
+  .first()
+  .evaluate((el) => el.classList.contains('is-checked'))
 check('通知开关切得动', notifyBefore !== notifyAfter, `checked: ${notifyBefore} -> ${notifyAfter}`)
 
 // ⚠️ 必须切回去。
@@ -193,8 +197,14 @@ check('通知开关切得动', notifyBefore !== notifyAfter, `checked: ${notifyB
 // ② 更糟的是残留状态会带到下一次运行，第二次跑就变成「翻转两次等于没变」。
 await notifySwitches.first().click()
 await page.waitForTimeout(700)
-const notifyRestored = await notifySwitches.first().evaluate((el) => el.classList.contains('is-checked'))
-check('通知开关能切回来（不留脏状态给后续断言）', notifyRestored === notifyBefore, `${notifyAfter} -> ${notifyRestored}`)
+const notifyRestored = await notifySwitches
+  .first()
+  .evaluate((el) => el.classList.contains('is-checked'))
+check(
+  '通知开关能切回来（不留脏状态给后续断言）',
+  notifyRestored === notifyBefore,
+  `${notifyAfter} -> ${notifyRestored}`
+)
 
 // 切 tab
 await page.locator('.msg-tabs .el-tabs__item', { hasText: '新增关注' }).click()
@@ -222,7 +232,24 @@ await page.waitForURL('**/settings')
 await page.locator('.settings .group-card').first().waitFor({ state: 'visible' })
 check('设置页标题', (await page.locator('.page-title').innerText()) === '设置')
 check('分组卡片数量 >= 4', (await page.locator('.group-card').count()) >= 4)
-check('账号摘要 ElDescriptions', await page.locator('.el-descriptions').isVisible())
+
+/*
+ * 账号摘要这里原来断言的是「ElDescriptions 可见」——
+ * 也就是**断言了一个组件的类名**，而不是断言它显示了账号信息。
+ *
+ * 账号摘要从竖排改成页脚里的横排之后（el-descriptions → dl/dt/dd），
+ * 那个断言就红了：组件换了，内容一个字没少。
+ *
+ * 断言应该钉住**内容**而不是**实现**：
+ * 这张卡存在的意义是「让人看见自己是谁、当前什么状态」，
+ * 所以就查这两件事 —— 昵称是不是当前昵称（不是注册时的，是刚改过的那个）、
+ * 用户 ID 在不在。
+ */
+const accountCard = page.locator('.account-card')
+check('账号摘要在', await accountCard.isVisible())
+const accountText = (await accountCard.innerText()) ?? ''
+check('账号摘要显示的是当前昵称', accountText.includes(newNick), newNick)
+check('账号摘要显示了用户 ID', accountText.includes('用户 ID'))
 
 // 主题开关
 const wasDark = await page.evaluate(() => document.documentElement.classList.contains('dark'))
@@ -249,16 +276,17 @@ await page.waitForTimeout(900)
 // 用户刚点完「退出登录」，最可能的下一步就是换一个号登进来。
 // 断言跟着改成验 /login，别再拿旧的「回首页」当标准。
 check('退出后跳登录页', new URL(page.url()).pathname === '/login', new URL(page.url()).pathname)
-check(
-  '登录页是未登录态',
-  await page.locator('.standalone, .login-page, form').first().isVisible()
-)
+check('登录页是未登录态', await page.locator('.standalone, .login-page, form').first().isVisible())
 
 // 回首页验游客态的侧栏
 await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1200)
 const navAfter = await page.locator('.nav-menu').innerText()
-check('侧栏恢复游客项（无发布/设置）', !navAfter.includes('发布') && !navAfter.includes('设置'), navAfter.replace(/\s+/g, ' ').slice(0, 60))
+check(
+  '侧栏恢复游客项（无发布/设置）',
+  !navAfter.includes('发布') && !navAfter.includes('设置'),
+  navAfter.replace(/\s+/g, ' ').slice(0, 60)
+)
 check(
   '退出后顶栏铃铛消失',
   (await page.locator('.top-bar button[aria-label="消息"]').count()) === 0
