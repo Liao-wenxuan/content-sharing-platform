@@ -150,15 +150,41 @@ const groups: MenuGroup[] = [
     ]
   },
   {
+    title: '隐私与安全',
+    items: [
+      {
+        key: 'privacy',
+        label: '隐私设置',
+        desc: '主页可见性 · 导出我的数据',
+        icon: Lock,
+        kind: 'panel',
+        panel: 'privacy'
+      },
+      {
+        key: 'minor',
+        label: '未成年人模式',
+        desc: '只显示纯文字笔记',
+        icon: Opportunity,
+        kind: 'panel',
+        panel: 'privacy'
+      }
+    ]
+  },
+  {
     /*
-     * 下面是按「同排两张卡片的行数尽量接近」重新分过组的。
+     * 卡片顺序是**算出来的**，不是随手排的。
      *
-     * 原来是 6 / 1 / 2 / 3 / 2 行，而网格是行式布局（同一横排的两张卡片
-     * 共享一个行高）。于是「内容与外观」（6 项）旁边那张「隐私与安全」
-     * 只有 1 项，同排就空出 5 × 68 = 340px —— 一整张卡片的空洞，
-     * 页面看起来是「缺了一块」而不是「排得疏密不均」。
+     * 布局是多列（column-width），浏览器只能**整卡断列** ——
+     * 一张 3 行的卡不可能被拆到两列去。所以两列想一样高，
+     * 唯一的办法是让每列各含一张 3 行的卡：
      *
-     * 改后每张卡片 2~3 行，同排差 ≤ 1 行（68px）。
+     *   左列 账号(2) + 通用(3) + 隐私与安全(2)     = 7 行
+     *   右列 内容与外观(3) + 常用工具(2) + 帮助(2) = 7 行
+     *
+     * 交换「内容与外观」和「隐私与安全」之前，右列是 2+2+2 行，
+     * 和左列差整整一张 3 行卡 —— 实测列底落差 137px，右下角空一块。
+     * 换完之后，三档密度的落差实测全是 0px。
+     *
      * item 的 key / label / panel 全部没动 —— 13 个可点击项的数量不变，
      * e2e 是按 label 定位的，所以这套分组改动对测试是透明的。
      */
@@ -186,27 +212,6 @@ const groups: MenuGroup[] = [
         icon: Grid,
         kind: 'panel',
         panel: 'widget'
-      }
-    ]
-  },
-  {
-    title: '隐私与安全',
-    items: [
-      {
-        key: 'privacy',
-        label: '隐私设置',
-        desc: '主页可见性 · 导出我的数据',
-        icon: Lock,
-        kind: 'panel',
-        panel: 'privacy'
-      },
-      {
-        key: 'minor',
-        label: '未成年人模式',
-        desc: '只显示纯文字笔记',
-        icon: Opportunity,
-        kind: 'panel',
-        panel: 'privacy'
       }
     ]
   },
@@ -377,20 +382,50 @@ onMounted(async () => {
           </li>
         </ul>
       </el-card>
+    </div>
 
-      <!-- 账号摘要 -->
+    <!--
+      页脚带：账号摘要 + 危险操作。
+
+      这两张卡原来一张在多列流里、一张在流外。
+      「当前账号」那张有 4 行摘要 + 协议链接，在列里是 307px，
+      而且排在最后 —— 于是右列 4 张卡、左列 3 张，列底落差 186px，
+      底下空出一大块。
+
+      挪到页脚并把摘要横排之后：
+        - 列里只剩 6 张卡，浏览器按 3/3 均分；
+        - 账号摘要自己变成一条 ~130px 的信息带，和「退出登录」并排；
+        - 整页比原来矮 220px。
+    -->
+    <div class="settings-footer">
       <el-card shadow="never" class="group-card account-card">
         <template #header><span class="group-title">当前账号</span></template>
-        <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="昵称">
-            {{ auth.user?.nickname || '未登录' }}
-          </el-descriptions-item>
-          <el-descriptions-item label="用户 ID">
-            <span class="tnum">{{ auth.user?.id ?? '-' }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="当前主题">{{ themeHint }}</el-descriptions-item>
-          <el-descriptions-item label="界面库">Element Plus（主题已接管）</el-descriptions-item>
-        </el-descriptions>
+        <!--
+          横排而不是竖排。竖排 4 行摘要把卡撑到 307px，
+          而这里是页脚，越矮越像信息带、越不像又一张卡片。
+          用 dl/dt/dd 而不是 el-descriptions：
+          el-descriptions 的列数是写死的 prop，没法跟着宽度换，
+          窄屏就得再写一个 media query 把 4 列压回 1 列。
+          flex + wrap 天然会换行，不需要额外的断点。
+        -->
+        <dl class="account-facts">
+          <div class="fact">
+            <dt>昵称</dt>
+            <dd>{{ auth.user?.nickname || '未登录' }}</dd>
+          </div>
+          <div class="fact">
+            <dt>用户 ID</dt>
+            <dd class="tnum">{{ auth.user?.id ?? '-' }}</dd>
+          </div>
+          <div class="fact">
+            <dt>当前主题</dt>
+            <dd>{{ themeHint }}</dd>
+          </div>
+          <div class="fact">
+            <dt>界面库</dt>
+            <dd>Element Plus（主题已接管）</dd>
+          </div>
+        </dl>
 
         <div class="legal">
           <span class="legal-title">协议与政策</span>
@@ -418,18 +453,18 @@ onMounted(async () => {
           </div>
         </div>
       </el-card>
-    </div>
 
-    <!-- 危险操作 -->
-    <el-card shadow="never" class="group-card danger-card">
-      <div class="danger-row">
-        <div class="danger-info">
-          <div class="danger-title">退出登录</div>
-          <p class="danger-hint">退出后需要重新输入邮箱和密码。你的笔记、设置和订单都不会丢。</p>
+      <!-- 危险操作 -->
+      <el-card shadow="never" class="group-card danger-card">
+        <div class="danger-row">
+          <div class="danger-info">
+            <div class="danger-title">退出登录</div>
+            <p class="danger-hint">退出后需要重新输入邮箱和密码。你的笔记、设置和订单都不会丢。</p>
+          </div>
+          <el-button type="danger" plain :icon="SwitchButton" @click="logout">退出登录</el-button>
         </div>
-        <el-button type="danger" plain :icon="SwitchButton" @click="logout">退出登录</el-button>
-      </div>
-    </el-card>
+      </el-card>
+    </div>
 
     <!-- ============ 面板 ============ -->
     <el-drawer
@@ -573,17 +608,19 @@ onMounted(async () => {
  *
  * 同样的内容量下实测三种方案：
  *
- *   方案            同排最大空洞   两列底部落差   内容区总高
- *   Grid（原来）        69px         323px      1206px
- *   multi-column     —（无「排」    186px      1069px
- *                     的概念）
+ *   方案                同排最大空洞   两列底部落差   内容区总高
+ *   Grid（原来）            69px         323px      1206px
+ *   multi-column（第一版）  —（无「排」   186px      1069px
+ *                         的概念）
+ *   + 账号摘要挪进页脚带      —           137px       883px
+ *   + 分组重新分配（这一版）  —             0px       814px
  *
  * 多列是每列各自流动，空白被摊在每张卡片下方，而不是攒成
  * 「一整张卡片的下方全空」那一块 —— 视觉上后者才是刺眼的那种。
  *
  * ⚠️ 顺序没有被打乱：多列按列填充，从上到下读完左列再读右列，
- * 正好等于 DOM 顺序（账号 → 通用 → 内容与外观 → 隐私与安全 →
- * 常用工具 → 帮助 → 当前账号）。
+ * 正好等于 DOM 顺序（账号 → 通用 → 隐私与安全 → 内容与外观 →
+ * 常用工具 → 帮助）。「当前账号」挪到了页脚带，不参与分列。
  *
  * 试过但撤回的两种：
  *   - Grid + align-items: stretch：边框齐了，但「账号」只有 2 行、
@@ -719,9 +756,29 @@ onMounted(async () => {
   color: var(--accent);
 }
 
-/* ===== 账号摘要 ===== */
-.account-card :deep(.el-descriptions) {
+/* ===== 账号摘要（页脚带） ===== */
+.account-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-6);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+
+.fact dt {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.fact dd {
+  margin: 0;
   font-size: var(--fs-sm);
+  color: var(--text-1);
 }
 
 .legal {
@@ -754,9 +811,30 @@ onMounted(async () => {
   color: var(--accent);
 }
 
+/* ===== 页脚带 ===== */
+/*
+ * 账号摘要和危险操作并排成一条带。
+ * align-items: stretch 是有意的：两张卡高度不一时，矮的那张补齐，
+ * 带子内部不留空洞。
+ */
+.settings-footer {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  margin-top: var(--sp-2);
+}
+
+.settings-footer .account-card {
+  flex: 1 1 420px;
+}
+
+.settings-footer .danger-card {
+  flex: 0 1 340px;
+}
+
 /* ===== 危险操作 ===== */
 .danger-card {
-  margin-top: var(--sp-4);
   border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
 }
 
