@@ -516,7 +516,39 @@ try {
     }))
   }
 
-  console.log('\n[11] 控制台干净')
+  console.log('\n[11] 从别的页面跳进市集，商品还是看得见')
+  {
+    // 这条锁的是一个真事故：
+    // 逛过首页之后 <html> 上会有 motion-ready，
+    // 而市集的网格在 v-else 里（数据到了才渲染），
+    // 入场观察器如果只在挂载时扫一次就根本不会建起来 ——
+    // 卡片永远停在 opacity:0，**整片商品看不见**。
+    //
+    // 直接整页刷新进 /market 反而不复现（那次 motion-ready 从没被加上），
+    // 所以必须走「同一次会话里 SPA 跳过去」这条路才测得到。
+    await open(pageSeller, '/', '.explore')
+    await pageSeller.waitForTimeout(900)
+    const motionReady = await pageSeller.evaluate(
+      () => document.documentElement.classList.contains('motion-ready')
+    )
+    check('逛过首页后 <html> 上有 motion-ready', motionReady, String(motionReady))
+
+    // SPA 跳转（不是整页刷新 —— 刷新会把 motion-ready 清掉，就复现不出来了）
+    await pageSeller.locator('.nav-menu .el-menu-item', { hasText: '市集' }).click()
+    await pageSeller.waitForURL('**/market')
+    await pageSeller.locator('.card').first().waitFor({ state: 'attached', timeout: 10000 })
+    await pageSeller.waitForTimeout(900)
+
+    const opacity = await pageSeller
+      .locator('.card')
+      .first()
+      .evaluate((el) => getComputedStyle(el.parentElement).opacity)
+    check('商品卡是可见的（不是停在 opacity 0）', Number(opacity) > 0.9, `opacity=${opacity}`)
+    const revealed = await pageSeller.locator('.card-wrap.is-revealed').count()
+    check('卡片拿到了 is-revealed', revealed > 0, `${revealed} 张`)
+  }
+
+  console.log('\n[12] 控制台干净')
   check('零 console error / 零失败请求', errs.length === 0, errs.slice(0, 3).join(' | '))
 } catch (e) {
   console.error('\n脚本异常：', e.message)
