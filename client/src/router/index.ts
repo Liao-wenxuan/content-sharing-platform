@@ -81,6 +81,16 @@ const router = createRouter({
       props: true
     },
     {
+      // 卖家管理自己商品的地方。
+      //
+      // 放在 /market/mine 而不是 /my/products：市集的子页都在 /market 下，
+      // 散到根路径会让 MarketTabs 的高亮判断多一个分支。
+      path: '/market/mine',
+      name: 'my-products',
+      component: () => import('@/views/MyProductsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/market/cart',
       name: 'cart',
       component: () => import('@/views/CartView.vue'),

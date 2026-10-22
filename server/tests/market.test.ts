@@ -187,6 +187,36 @@ describe('商品：分类', () => {
     const res = await request(app).get('/api/products?category=家居&q=锅铲')
     expect(res.body.list.map((p: any) => p.title)).toEqual(['竹制锅铲'])
   })
+
+  /*
+   * 卖家用自己的 id 能看到自己**下架**的商品，别人看不到。
+   *
+   * 这条是「我的商品」页能成立的前提：
+   * 橱窗只显示在售的，所以卖家一旦把商品下架，
+   * 就没有任何一个界面能再找到它 —— 改不了价，也上不了架。
+   */
+  it('卖家看得到自己下架的商品，别人和游客看不到', async () => {
+    const p = await mkProduct(sellerToken, { title: '折叠沥水篮' })
+    const off = await request(app)
+      .post(`/api/products/${p.body.id}/off-shelf`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+    expect(off.status).toBe(200)
+
+    const ids = (r: any) => r.body.list.map((x: any) => x.id)
+
+    const mine = await request(app)
+      .get(`/api/products?sellerId=${sellerId}`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+    expect(ids(mine)).toContain(p.body.id)
+
+    const other = await request(app)
+      .get(`/api/products?sellerId=${sellerId}`)
+      .set('Authorization', `Bearer ${buyerToken}`)
+    expect(ids(other)).not.toContain(p.body.id)
+
+    const guest = await request(app).get(`/api/products?sellerId=${sellerId}`)
+    expect(ids(guest)).not.toContain(p.body.id)
+  })
 })
 
 describe('商品：权限', () => {

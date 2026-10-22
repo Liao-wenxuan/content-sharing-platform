@@ -2,7 +2,7 @@
 /**
  * 市集分区导航
  *
- * 市集有五个页面（橱窗 / 详情 / 购物车 / 订单 / 钱包），
+ * 市集有六个页面（橱窗 / 我的商品 / 详情 / 购物车 / 订单 / 钱包），
  * 但它们在**侧栏只占一项**。
  *
  * 为什么不加进 SideNav：侧栏的定位是「频道级浏览」，
@@ -24,6 +24,7 @@ const { count, load } = useCart()
 
 const tabs = [
   { path: '/market', label: '橱窗' },
+  { path: '/market/mine', label: '我的商品', auth: true },
   { path: '/market/cart', label: '购物车', auth: true },
   { path: '/market/orders', label: '订单', auth: true },
   { path: '/market/wallet', label: '钱包', auth: true }
@@ -41,6 +42,7 @@ const visibleTabs = tabs.filter((t) => !t.auth || auth.isLoggedIn)
  */
 const activeTab = computed(() => {
   const path = route.path
+  if (path.startsWith('/market/mine')) return '/market/mine'
   if (path.startsWith('/market/cart')) return '/market/cart'
   if (path.startsWith('/market/orders')) return '/market/orders'
   if (path.startsWith('/market/wallet')) return '/market/wallet'

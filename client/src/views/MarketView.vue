@@ -12,7 +12,7 @@
  * 筛选的排序也交给服务端的 ORDER BY（带白名单），不在前端排。
  */
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/utils/element'
 import { Plus, Search } from '@element-plus/icons-vue'
 import {
@@ -30,6 +30,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import { useReveal } from '@/composables/useReveal'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 // ===== 列表 =====
@@ -220,7 +221,20 @@ function coverOf(p: Product): string {
 
 const isEmpty = computed(() => !loading.value && !errorMsg.value && products.value.length === 0)
 
-onMounted(load)
+onMounted(async () => {
+  await load()
+  /*
+   * ?publish=1 直接打开发布对话框。
+   *
+   * 「我的商品」页的「发布商品」按钮跳过来靠的就是这个。
+   * 顺手把 query 清掉：不清的话刷新页面会再弹一次对话框，
+   * 而用户刷新通常是因为「刚才那个对话框怎么没了」。
+   */
+  if (route.query.publish === '1') {
+    router.replace({ path: '/market' })
+    openPublish()
+  }
+})
 </script>
 
 <template>
