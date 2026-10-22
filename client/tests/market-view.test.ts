@@ -53,8 +53,12 @@ vi.mock('@/utils/element', () => ({
 
 const push = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, back: vi.fn() }),
-  useRoute: () => ({ fullPath: '/market' })
+  useRouter: () => ({ push, back: vi.fn(), replace: vi.fn() }),
+  // MarketView 现在会读 route.query.publish —— 少了 useRoute 就是
+  // 「route 是 undefined」，报错发生在 onMounted 的异步里，
+  // vitest 报成 unhandled rejection，而不是一条失败的用例。
+  // 症状是「测试全绿，但底下有 15 个 error」。
+  useRoute: () => ({ path: '/market', query: {} })
 }))
 
 function mkProduct(over: Partial<Product> = {}): Product {
