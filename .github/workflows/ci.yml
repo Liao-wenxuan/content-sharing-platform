@@ -110,7 +110,7 @@ jobs:
         run: npm run format:check
         continue-on-error: false
 
-  # ===== 浏览器侧：14 套 e2e =====
+  # ===== 浏览器侧：15 套 e2e =====
   #
   # 不设 needs：故意和上面三个 job 并行。挂上 needs 看着省事（前面红了就不用跑），
   # 但代价是**一次 push 只拿一份信号** —— 单测挂了就看不到 e2e 到底坏没坏，
@@ -118,6 +118,20 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
+    # 纯文档提交不跑这一对浏览器 job：它们要装 Playwright、起 dev server、
+    # 跑 15 套 e2e（约 5 分钟），而 README / 文档的改动碰不到任何运行时行为。
+    #
+    # 用 **paths-ignore** 而不是 paths，是刻意的：
+    # paths 要把每一个源码目录逐个列出来，将来新增一个目录忘了列，
+    # e2e 就会被**静默跳过** —— 那是危险的失败方向（该跑没跑，报告还是绿的）。
+    # paths-ignore 只在**所有**改动都是文档时才跳过，其余一律全跑。
+    #
+    # 上面三个 job（server / client / lint）**永远跑**，不参与这个优化：
+    # 它们便宜，而且它们是底线 —— 类型检查、单测、prettier（含 markdown）。
+    # 纯文档提交也要过 prettier，所以 lint 尤其不能跳。
+    paths-ignore:
+      - '**.md'
+      - 'docs/screenshots/**'
     steps:
       - uses: actions/checkout@v4
 
@@ -165,6 +179,11 @@ jobs:
   a11y:
     name: A11Y (axe-core)
     runs-on: ubuntu-latest
+    # 和 e2e 同一套理由：纯文档提交跳过浏览器侧。
+    # 理由和「为什么用 paths-ignore 而不是 paths」见上面 e2e job 的注释。
+    paths-ignore:
+      - '**.md'
+      - 'docs/screenshots/**'
     steps:
       - uses: actions/checkout@v4
 
