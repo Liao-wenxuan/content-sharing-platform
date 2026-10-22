@@ -7,6 +7,12 @@ on:
     branches: [main]
 
 jobs:
+  # ===== 这个工作流只放「便宜」的那三个 job =====
+  #
+  # 浏览器侧（e2e / a11y，约 5 分钟）在 browser.yml 里，
+  # 因为纯文档提交时它整体跳过，而这三个必须永远跑 ——
+  # prettier 也要检查 markdown，文档提交同样得过格式检查。
+  # 拆分的理由见 browser.yml 顶部的注释。
   # ===== Node 版本必须 >= 22，别改回 20 =====
   # server 依赖 vitest@5（engines: ^22.12.0 || ^24.0.0 || >=26.0.0）
   # 和 better-sqlite3@13（engines: >=22），两边都不支持 Node 20。
@@ -109,111 +115,3 @@ jobs:
       - name: Prettier check
         run: npm run format:check
         continue-on-error: false
-
-  # ===== 浏览器侧：15 套 e2e =====
-  #
-  # 不设 needs：故意和上面三个 job 并行。挂上 needs 看着省事（前面红了就不用跑），
-  # 但代价是**一次 push 只拿一份信号** —— 单测挂了就看不到 e2e 到底坏没坏，
-  # 只能改完再推一次才知道。这个仓库是公开的，Actions 不计费，那就全跑。
-  e2e:
-    name: E2E (Playwright)
-    runs-on: ubuntu-latest
-    # 纯文档提交不跑这一对浏览器 job：它们要装 Playwright、起 dev server、
-    # 跑 15 套 e2e（约 5 分钟），而 README / 文档的改动碰不到任何运行时行为。
-    #
-    # 用 **paths-ignore** 而不是 paths，是刻意的：
-    # paths 要把每一个源码目录逐个列出来，将来新增一个目录忘了列，
-    # e2e 就会被**静默跳过** —— 那是危险的失败方向（该跑没跑，报告还是绿的）。
-    # paths-ignore 只在**所有**改动都是文档时才跳过，其余一律全跑。
-    #
-    # 上面三个 job（server / client / lint）**永远跑**，不参与这个优化：
-    # 它们便宜，而且它们是底线 —— 类型检查、单测、prettier（含 markdown）。
-    # 纯文档提交也要过 prettier，所以 lint 尤其不能跳。
-    paths-ignore:
-      - '**.md'
-      - 'docs/screenshots/**'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            server/package-lock.json
-            client/package-lock.json
-
-      - uses: ./.github/actions/web-env
-
-      - name: Warm up the dev server
-        # vite 的依赖预优化是边跑边发现的：每发现一批新依赖就重新预构建，
-        # 并且**触发一次整页 reload**。一次 e2e 跑下来能砸出七八轮，
-        # 页面被强制刷新 = SPA 状态全丢，断言就开始随机失败。
-        # 本地看不到（依赖早缓存好了），CI 的 dev server 永远是冷的。
-        # 先把所有路由跑一遍把这份成本付掉，见 scripts/warmup-web.mjs。
-        run: node scripts/warmup-web.mjs
-
-      - name: Run 15 e2e suites
-        # 脚本自己会跑完全部 15 套再汇总，而不是第一个失败就停 ——
-        # 停了就只能知道「有东西坏了」，跑完才知道是哪几个。
-        run: node scripts/run-e2e-ci.mjs
-
-      - name: Upload logs
-        # CI 里失败现场最容易丢：日志在滚屏里滚过去就没了。
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-logs
-          path: |
-            .e2e-logs/
-            ${{ runner.temp }}/*.log
-          retention-days: 7
-          # ⚠️ 必须显式开这个：upload-artifact v4 默认 include-hidden-files=false，
-          # 而 `.e2e-logs/` 以点开头会被当成隐藏目录**静默跳过** ——
-          # 上传照样「成功」，但里面只有 $RUNNER_TEMP 里那两个日志，
-          # 真正想留的逐套输出一个都没有。
-          include-hidden-files: true
-
-  # ===== 浏览器侧：无障碍 =====
-  a11y:
-    name: A11Y (axe-core)
-    runs-on: ubuntu-latest
-    # 和 e2e 同一套理由：纯文档提交跳过浏览器侧。
-    # 理由和「为什么用 paths-ignore 而不是 paths」见上面 e2e job 的注释。
-    paths-ignore:
-      - '**.md'
-      - 'docs/screenshots/**'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependity-path: |
-            package-lock.json
-            server/package-lock.json
-            client/package-lock.json
-
-      - uses: ./.github/actions/web-env
-        with:
-          # 无障碍验的是**生产产物** —— 用户拿到的是 dist，不是 dev server。
-          # 顺带快得多：vite dev 每个路由首次访问要现编译。
-          web-mode: preview
-
-      - name: Dark theme
-        run: npm run a11y
-
-      - name: Light theme
-        # 两个主题都要跑：浅色的违规曾经单独出现过 101 处，
-        # 只审深色等于把一半的代码路径没验过。
-        run: npm run a11y -- --light
-
-      - name: Upload logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: a11y-logs
-          path: ${{ runner.temp }}/*.log
-          retention-days: 7
