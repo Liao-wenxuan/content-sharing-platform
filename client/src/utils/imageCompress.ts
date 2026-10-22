@@ -358,10 +358,41 @@ export async function compressImage(
       }
     }
 
+    /*
+     * 阶梯全失败 → 主图退回原图（压不动不能不让用户发）。
+     *
+     * 但**缩略图还能救**：位图已经解码好了，而 480px 的画布比 2000px 的
+     * 容易成功得多（canvas 面积超限、内存紧张时先失败的就是大画布）。
+     * 少一张缩略图的代价是列表里要下一整张 2000px 的主图 ——
+     * 瀑布流每列才 260px，那张图九成以上的像素是下下来又看不见的。
+     *
+     * 所以这里再试一次小画布，而不是跟着主图一起放弃。
+     */
+    const fallbackThumbPlan = planOutputSize(
+      decoded.width,
+      decoded.height,
+      decoded.orientation,
+      thumbMaxEdge
+    )
+    const fallbackNeedThumb =
+      fallbackThumbPlan.needsResize && fallbackThumbPlan.width > 0 && fallbackThumbPlan.height > 0
+    const fallbackThumb = fallbackNeedThumb
+      ? await encodeToCanvas(
+          decoded,
+          fallbackThumbPlan.width,
+          fallbackThumbPlan.height,
+          type,
+          effectiveQuality
+        )
+      : null
+
     return {
       ...passthrough(decoded.orientation),
       width: plan.width,
-      height: plan.height
+      height: plan.height,
+      thumb: fallbackThumb,
+      thumbWidth: fallbackThumb ? fallbackThumbPlan.width : 0,
+      thumbHeight: fallbackThumb ? fallbackThumbPlan.height : 0
     }
   } catch {
     return passthrough()
