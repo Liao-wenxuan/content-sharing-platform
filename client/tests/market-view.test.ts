@@ -21,9 +21,22 @@ import { productsApi, type Product } from '@/api/products'
 import { useAuthStore } from '@/stores/auth'
 import MarketView from '@/views/MarketView.vue'
 
-vi.mock('@/api/products', () => ({
-  productsApi: { list: vi.fn(), create: vi.fn() }
-}))
+/*
+ * 只 mock 接口方法，**保留模块里的常量**。
+ *
+ * 之前这里是 `vi.mock('@/api/products', () => ({ productsApi: {...} }))` ——
+ * 把整个模块换掉了，模块里新增的任何常量都会跟着消失，
+ * 症状是渲染时报一句很难定位的：
+ *   No "MARKET_CATEGORIES" export is defined on the "@/api/products" mock
+ * 用 importOriginal 展开真实的模块，只盖掉要测的方法。
+ */
+vi.mock('@/api/products', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/products')>()
+  return {
+    ...actual,
+    productsApi: { list: vi.fn(), create: vi.fn() }
+  }
+})
 
 vi.mock('@/api/uploads', () => ({ uploadImage: vi.fn() }))
 
@@ -55,6 +68,7 @@ function mkProduct(over: Partial<Product> = {}): Product {
     images: [],
     stock: 5,
     status: 'on_sale',
+    category: '家居',
     createdAt: '2026-01-01T00:00:00.000Z',
     seller: { id: 9, nickname: '拿铁不加糖', avatar: null },
     ...over
@@ -191,6 +205,48 @@ describe('MarketView 列表', () => {
 
     expect(w.find('.empty-stub').exists()).toBe(true)
     expect(w.findAll('.card')).toHaveLength(0)
+  })
+
+  /*
+   * 分类筛选。
+   *
+   * 分类这一列是加上去的 —— seed 一直在算每个商品的分类，
+   * 却从来没把它写进库，所以「按分类逛」从数据到界面全都不存在。
+   * 这里锁住它现在存在。
+   */
+  it('默认不筛分类（category 传 undefined 而不是空串）', async () => {
+    mountView()
+    await flushPromises()
+
+    expect(api.list).toHaveBeenCalledWith(expect.objectContaining({ category: undefined }))
+  })
+
+  it('点分类 tab 会带上分类重新拉列表', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    const tab = w.findAll('.cat-tab').find((t) => t.text() === '穿搭')
+    expect(tab).toBeTruthy()
+    await tab!.trigger('click')
+    await flushPromises()
+
+    expect(api.list).toHaveBeenCalledWith(expect.objectContaining({ category: '穿搭' }))
+  })
+
+  it('卡片上有分类角标', async () => {
+    api.list.mockResolvedValue(listResult([mkProduct({ category: '美食' })]) as any)
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.cover-cat').text()).toBe('美食')
+  })
+
+  it('没有分类的商品不显示角标（空角标比没有更像出了错）', async () => {
+    api.list.mockResolvedValue(listResult([mkProduct({ category: null })]) as any)
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.cover-cat').exists()).toBe(false)
   })
 
   it('接口失败时给错误态和重试', async () => {

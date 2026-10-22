@@ -15,7 +15,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from '@/utils/element'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { productsApi, type Product, type ProductSort } from '@/api/products'
+import {
+  productsApi,
+  MARKET_CATEGORIES,
+  type Product,
+  type ProductSort,
+  type MarketCategory
+} from '@/api/products'
 import { uploadImage } from '@/api/uploads'
 import { yuanToCents, formatYuan } from '@/utils/money'
 import { useAuthStore } from '@/stores/auth'
@@ -40,6 +46,17 @@ const keyword = ref('')
 const sort = ref<ProductSort>('new')
 
 /**
+ * 当前分类。空串 = 全部。
+ *
+ * 为什么分类排在关键词**上面**而不是塞进搜索框：
+ * 分类是精确匹配（服务端 `WHERE category = ?`），
+ * 而搜索是模糊匹配（`LIKE %q%`）。两者语义不同，
+ * 混在一个输入框里的话，用户搜「家」会同时命中「家居」分类和描述里带「家」的商品，
+ * 而这两种结果他想要的大概率不是一回事。
+ */
+const category = ref<MarketCategory | ''>('')
+
+/**
  * 商品网格的错峰入场。
  *
  * 和首页瀑布流不同，这里是**一行 4~5 个卡片的规整网格**，
@@ -61,7 +78,8 @@ async function load() {
       page: 1,
       pageSize,
       q: keyword.value.trim() || undefined,
-      sort: sort.value
+      sort: sort.value,
+      category: category.value || undefined
     })
     products.value = res.list
     total.value = res.pagination.total
@@ -83,7 +101,8 @@ async function loadMore() {
       page: next,
       pageSize,
       q: keyword.value.trim() || undefined,
-      sort: sort.value
+      sort: sort.value,
+      category: category.value || undefined
     })
     // 按 id 去重：翻页期间新发布的商品会把后面的挤走，可能出现重复
     const seen = new Set(products.value.map((p) => p.id))
@@ -101,6 +120,9 @@ async function loadMore() {
 // 换排序条件要重置到第一页 —— 保留第 3 页再换排序，看到的会是完全不相干的一段
 watch(sort, () => load())
 
+// 换分类同理，而且更明显：第 3 页的「美食」和第 1 页的「数码」毫无关系
+watch(category, () => load())
+
 function onSearch() {
   load()
 }
@@ -109,7 +131,14 @@ function onSearch() {
 const dialogVisible = ref(false)
 const submitting = ref(false)
 const formError = ref('')
-const form = ref({ title: '', priceYuan: '', stock: 10, description: '', coverImage: '' })
+const form = ref({
+  title: '',
+  priceYuan: '',
+  stock: 10,
+  description: '',
+  coverImage: '',
+  category: '' as MarketCategory | ''
+})
 const coverUploading = ref(false)
 const coverProgress = ref(0)
 
@@ -118,7 +147,14 @@ function openPublish() {
     router.push({ name: 'login', query: { redirect: '/market' } })
     return
   }
-  form.value = { title: '', priceYuan: '', stock: 10, description: '', coverImage: '' }
+  form.value = {
+    title: '',
+    priceYuan: '',
+    stock: 10,
+    description: '',
+    coverImage: '',
+    category: ''
+  }
   formError.value = ''
   dialogVisible.value = true
 }
@@ -162,7 +198,8 @@ async function submitProduct() {
       stock: Number(f.stock) || 0,
       description: f.description.trim() || undefined,
       coverImage: f.coverImage || null,
-      images: f.coverImage ? [f.coverImage] : []
+      images: f.coverImage ? [f.coverImage] : [],
+      category: f.category || undefined
     })
     dialogVisible.value = false
     ElMessage.success('商品已上架')
@@ -197,6 +234,36 @@ onMounted(load)
       </div>
       <el-button type="primary" :icon="Plus" @click="openPublish">发布商品</el-button>
     </header>
+
+    <!--
+      分类 tab。放��工具条**上面**而不是和排序并排：
+      分类是「逛哪个区」，排序是「这个区里怎么排」，
+      两者的层级不一样，混在一行里会让人以为改一个会连带改另一个。
+    -->
+    <div class="cat-tabs" role="tablist" aria-label="商品分类">
+      <button
+        type="button"
+        class="cat-tab"
+        :class="{ 'is-active': category === '' }"
+        role="tab"
+        :aria-selected="category === ''"
+        @click="category = ''"
+      >
+        全部
+      </button>
+      <button
+        v-for="c in MARKET_CATEGORIES"
+        :key="c"
+        type="button"
+        class="cat-tab"
+        :class="{ 'is-active': category === c }"
+        role="tab"
+        :aria-selected="category === c"
+        @click="category = c"
+      >
+        {{ c }}
+      </button>
+    </div>
 
     <div class="toolbar">
       <el-input
@@ -247,6 +314,12 @@ onMounted(load)
             <div class="cover">
               <img v-if="coverOf(p)" :src="coverOf(p)" :alt="p.title" loading="lazy" />
               <span v-else class="cover-fallback">{{ p.title.slice(0, 1) }}</span>
+              <!--
+                分类角标压在图上，不占正文的位置。
+                没有分类的（老数据）就不显示 ——
+                显示一个空的角标比不显示更像出了错。
+              -->
+              <span v-if="p.category" class="cover-cat">{{ p.category }}</span>
             </div>
 
             <div class="body">
@@ -317,6 +390,14 @@ onMounted(load)
           />
         </el-form-item>
 
+        <el-form-item label="分类（可留空）">
+          <el-radio-group v-model="form.category" size="small">
+            <el-radio-button v-for="c in MARKET_CATEGORIES" :key="c" :value="c">
+              {{ c }}
+            </el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
         <el-form-item label="商品描述（可留空）">
           <el-input
             v-model="form.description"
@@ -377,6 +458,57 @@ onMounted(load)
 
 .search {
   max-width: 300px;
+}
+
+/* ===== 分类 tab ===== */
+/*
+ * 用原生 <button> 而不是 el-tabs：这里要的是「一行可横��的小标签」，
+ * 而 el-tabs 会自带下划线指示器和一套自己的键盘行为，
+ * 在这个位置反而是负担。
+ */
+.cat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.cat-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.cat-tab:hover {
+  color: var(--foreground);
+  border-color: var(--border-strong);
+}
+
+.cat-tab.is-active {
+  /* 强调色只用于状态，不用于显示数据 —— 这里是「当前选中」这个状态 */
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* 分类角标压在封面图左下角 */
+.cover-cat {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  backdrop-filter: blur(2px);
 }
 
 /* ===== 卡片网格 ===== */

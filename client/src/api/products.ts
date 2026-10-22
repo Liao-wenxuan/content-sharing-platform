@@ -11,6 +11,17 @@ import request from './request'
 
 export type ProductStatus = 'on_sale' | 'off_shelf'
 
+/**
+ * 市集分类。
+ *
+ * ⚠️ **服务端有一份一模一样的**（server/src/constants.ts 的 PRODUCT_CATEGORIES）。
+ * 两个 tsconfig 互不包含，这是唯一能跑通的写法 ——
+ * 但改的时候必须两边一起改，否则前端会开始提交服务端不认的分类。
+ */
+export const MARKET_CATEGORIES = ['穿搭', '家居', '美食', '彩妆', '健身', '数码'] as const
+
+export type MarketCategory = (typeof MARKET_CATEGORIES)[number]
+
 export interface Product {
   id: number
   sellerId: number
@@ -22,6 +33,8 @@ export interface Product {
   images: string[]
   stock: number
   status: ProductStatus
+  /** 分类。老数据（迁移前建的）没有这一列，所以是 null 而不是 '' */
+  category: MarketCategory | null
   createdAt: string
   seller: { id: number; nickname: string; avatar: string | null }
 }
@@ -33,6 +46,12 @@ export interface ProductListQuery {
   pageSize?: number
   q?: string
   sort?: ProductSort
+  /**
+   * 按分类筛。空 = 不筛。
+   * 服务端是精确匹配（`WHERE category = ?`），不是模糊 ——
+   * 点「家居」不该把「家居收纳」也捞出来。
+   */
+  category?: MarketCategory
   /**
    * 只看某位卖家的商品。
    * 传自己的 id 时能看到自己下架的，别人只能看在售的。
@@ -60,6 +79,13 @@ export interface CreateProductPayload {
   description?: string
   coverImage?: string | null
   images?: string[]
+  /**
+   * 分类。不传就是「未分类」——
+   * 服务端只校验「传了就必须在白名单里」，不强制必填：
+   * 强制必填的话，发布表单就多一个填错就发不出去的坎，
+   * 而未分类的商品照样能在「全部」里被看到。
+   */
+  category?: MarketCategory
 }
 
 export interface UpdateProductPayload {
