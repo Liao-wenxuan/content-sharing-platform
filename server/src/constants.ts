@@ -47,6 +47,23 @@ export const CART_MAX_QUANTITY = 99
 export const PRODUCT_TITLE_MAX = 60
 export const PRODUCT_DESC_MAX = 1000
 
+/**
+ * 市集分类。
+ *
+ * ⚠️ **客户端有一份一模一样的**（client/src/api/products.ts 的 MARKET_CATEGORIES）。
+ * 这不是疏忽，是两个 tsconfig 互不包含时唯一能跑通的写法 ——
+ * 但改的时候必须两边一起改，改一边的话，另一边会开始接受/拒绝不同的分类。
+ *
+ * 为什么是白名单而不是自由文本：
+ * 分类要能被点（「按分类逛」），能被筛选（`WHERE category = ?`），
+ * 还得能对应到一张卡片上的一个角标。
+ * 自由文本的话，「家居」和「家居收纳」会变成两个分类，
+ * 而用户想的是同一个东西 —— 白名单是刻意的约束，不是省事。
+ */
+export const PRODUCT_CATEGORIES = ['穿搭', '家居', '美食', '彩妆', '健身', '数码'] as const
+
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number]
+
 /** 一次充值上限（分）。设上限是为了不让演示环境出现「一个亿余额」这种脏数据 */
 export const TOPUP_MAX_CENTS = 10_000_000
 export const TOPUP_MIN_CENTS = 100

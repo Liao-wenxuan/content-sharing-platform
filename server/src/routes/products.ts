@@ -3,7 +3,7 @@ import db from '../lib/db'
 import { requireAuth, optionalAuth } from '../middleware/auth'
 import { shopLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
-import { PRODUCT_TITLE_MAX, PRODUCT_DESC_MAX } from '../constants'
+import { PRODUCT_TITLE_MAX, PRODUCT_DESC_MAX, PRODUCT_CATEGORIES } from '../constants'
 
 /**
  * 商品
@@ -60,6 +60,7 @@ function toProduct(row: any) {
     coverImage: row.cover_image,
     images: row.images ? JSON.parse(row.images) : [],
     stock: row.stock,
+    category: row.category ?? null,
     status: row.status,
     createdAt: toISO(row.created_at),
     seller: { id: row.seller_id, nickname: row.seller_nickname, avatar: row.seller_avatar }
@@ -105,6 +106,16 @@ router.get('/', optionalAuth, (req: Request, res: Response) => {
       const like = `%${q.replace(/[\\%_]/g, (m) => '\\' + m)}%`
       conds.push("(p.title LIKE @like ESCAPE '\\' OR p.description LIKE @like ESCAPE '\\')")
       params.like = like
+    }
+
+    // 分类过滤。空串 = 不筛（而不是「筛出分类为空的东西」）。
+    // 分类是自由文本，所以这里不做白名单 —— 但也**不做模糊匹配**：
+    // LIKE '%家%' 会把「家居」和「家居收纳」一起捞出来，
+    // 而用户点的是「家居」这个分类，不是「带家字的分类」。
+    const category = String(req.query.category ?? '').trim()
+    if (category) {
+      conds.push('p.category = @category')
+      params.category = category
     }
 
     // 排序走白名单，绝不把 req.query 直接拼进 ORDER BY
@@ -185,10 +196,25 @@ router.post('/', shopLimiter, requireAuth, (req: Request, res: Response) => {
     const images = parseImages((req.body as any)?.images)
     if (images === null) return res.status(400).json({ message: '图片必须是数组' })
 
+    // 分类走白名单：传了不在列表里的分类就是 400，而不是默默存进去。
+    // 默默存进去的话，库里会多出一个用户在前端根本选不出来的分类，
+    // 那些商品就成了「谁也逛不到」的死数据。
+    const rawCategory = String((req.body as any)?.category ?? '').trim()
+    const category = rawCategory
+      ? (PRODUCT_CATEGORIES as readonly string[]).includes(rawCategory)
+        ? rawCategory
+        : null
+      : null
+    if (rawCategory && !category) {
+      return res.status(400).json({
+        message: `分类只能是：${PRODUCT_CATEGORIES.join(' / ')}`
+      })
+    }
+
     const info = db
       .prepare(
-        `INSERT INTO products (seller_id, title, description, price_cents, cover_image, images, stock)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO products (seller_id, title, description, price_cents, cover_image, images, stock, category)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         userId,
@@ -199,7 +225,8 @@ router.post('/', shopLimiter, requireAuth, (req: Request, res: Response) => {
         price,
         (req.body as any)?.coverImage ?? null,
         images,
-        stock
+        stock,
+        category
       )
 
     const row = db.prepare(`${PUBLIC_SELECT} WHERE p.id = ?`).get(Number(info.lastInsertRowid))

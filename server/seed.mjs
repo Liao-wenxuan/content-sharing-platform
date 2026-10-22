@@ -15,7 +15,7 @@
  */
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
-import { readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
@@ -23,6 +23,28 @@ const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)
 const DB_PATH = process.env.DB_PATH || path('./data.db')
 const UPLOAD_DIR = path('./uploads/')
 const DEMO_DIR = UPLOAD_DIR + 'demo/'
+
+/*
+ * 先把 schema 触发出来，再开库。
+ *
+ * server/src/lib/db.ts 的建表是**懒执行**的 —— initSchema() 在第一次真的
+ * 碰到数据库时才跑。于是磁盘上的 data.db 可能还没有最新的表/列，
+ * 而这个脚本是直接开库写数据的，绕过了那次 initSchema。
+ *
+ * 不做这一步的话，加了一列之后的报错长这样：
+ *   SqliteError: table products has no column named category
+ * 完全看不出「其实是后端还没用新代码跑过」。
+ *
+ * 做法和 scripts/ensure-schema.mjs 一样：打一个必然碰库的公开接口。
+ * 后端连不上就明说，而不是让下面报一句看不懂的 SQL 错误。
+ */
+try {
+  await fetch('http://localhost:3000/api/posts/feed?page=1&pageSize=1')
+} catch {
+  console.log('⚠ 连不上后端（localhost:3000），schema 不会被初始化。')
+  console.log('  如果下面报「no such column」或「no such table」，先起后端再重试：')
+  console.log('    cd server && npm run dev')
+}
 
 const db = new Database(DB_PATH)
 db.pragma('foreign_keys = ON')
@@ -152,7 +174,11 @@ for (const nick of NICKNAMES) {
     continue
   }
   // 随机密码 → 这些账号只能进不能登
-  insertUser.run(`demo_${Buffer.from(nick).toString('hex').slice(0, 12)}@demo.local`, bcrypt.hashSync(Math.random().toString(36) + Date.now(), 10), nick)
+  insertUser.run(
+    `demo_${Buffer.from(nick).toString('hex').slice(0, 12)}@demo.local`,
+    bcrypt.hashSync(Math.random().toString(36) + Date.now(), 10),
+    nick
+  )
   userIds.push(findUser.get(nick).id)
 }
 console.log(`演示用户就绪：${userIds.length} 个`)
@@ -163,12 +189,23 @@ console.log(`演示用户就绪：${userIds.length} 个`)
 // 另外几个人之间也互相关注，好让粉丝数不是清一色的 0。
 // （0 自己不关注任何人，这样「我的关注」和「我的粉丝」是两个不同的数）
 const FOLLOWS = [
-  [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
-  [1, 0], [1, 2], [1, 4],
-  [2, 0], [2, 3],
-  [3, 1], [3, 5],
-  [4, 0], [4, 3],
-  [5, 0], [5, 2], [5, 4]
+  [0, 1],
+  [0, 2],
+  [0, 3],
+  [0, 4],
+  [0, 5],
+  [1, 0],
+  [1, 2],
+  [1, 4],
+  [2, 0],
+  [2, 3],
+  [3, 1],
+  [3, 5],
+  [4, 0],
+  [4, 3],
+  [5, 0],
+  [5, 2],
+  [5, 4]
 ]
 // 先清掉演示用户之间的旧关注，保证重复执行幂等
 db.prepare(
@@ -287,45 +324,136 @@ for (const p of POSTS) {
 // 幂等：先删掉演示用户名下的商品，重复执行不会灌出两批。
 // 外键是 ON DELETE CASCADE，删商品会自动带走购物车行和订单行引用，
 // 但**不能删订单行** —— 订单是账单，历史必须留着。所以这里不碰 orders。
-const PRODUCTS = [
-  { u: 0, t: '手冲咖啡壶 600ml 细口鹅颈', d: '滤网可拆，附赠滤纸 100 张', p: 8900, s: 12, c: '家居' },
-  { u: 1, t: '陶瓷手捏饭碗（两只装）', d: '每个杯子手捏成型，釉色略有差异', p: 6800, s: 8, c: '家居' },
-  { u: 2, t: '亚麻围裙 · 燕麦色', d: '双层亚麻，越洗越软', p: 12900, s: 20, c: '穿搭' },
-  { u: 3, t: '便携咖啡磨豆机', d: '不锈钢刀盘，摇一摇三十秒出粉', p: 26800, s: 5, c: '家居' },
-  { u: 4, t: '手工皂 · 燕麦牛奶（3 块）', d: '无添加，孕期可用', p: 4500, s: 40, c: '家居' },
-  { u: 5, t: '棉麻抱枕套 45×45', d: '隐形拉链，可拆洗', p: 5900, s: 15, c: '家居' },
-  { u: 6, t: '香薰蜡烛 · 雪松', d: '大豆蜡，燃烧 40 小时', p: 7800, s: 3, c: '家居' },
-  { u: 7, t: '手冲滤杯 V60 陶瓷', d: '锥形 60 度角，导流槽 12 道', p: 15800, s: 6, c: '家居' },
-  { u: 8, t: '帆布托特包 · 加厚', d: '16 盎司帆布，装得下 16 寸笔记本', p: 9900, s: 25, c: '穿搭' },
-  { u: 9, t: '玻璃保鲜盒 三件套', d: '耐热玻璃，可进烤箱', p: 11800, s: 10, c: '家居' },
-  { u: 0, t: '折叠沥水篮（已下架）', d: '演示「下架商品别人看不到」', p: 3900, s: 0, c: '家居', off: true }
+/**
+ * 市集图片：真实图在磁盘上，缺了换占位图。
+ *
+ * 占位图按**目录**生成（不是按商品）—— 同一个分类的商品共用一张，
+ * 目录名从图片路径里取，所以这个脚本不需要再抄一份「分类 → 目录」的映射
+ * （抄一份的话，改了抓取脚本那边忘了改这边，图片就全指向不存在的目录）。
+ */
+const MARKET_IMG_DIR = path('./uploads/demo/market/')
+const marketPlaceholderCache = new Map()
+
+function marketPlaceholderSvg(slug) {
+  const hues = { home: 28, fashion: 340, food: 96, beauty: 310, sports: 186, digital: 208 }
+  const h = hues[slug] ?? 28
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="960" height="720" viewBox="0 0 960 720">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0" stop-color="hsl(${h} 32% 26%)"/>` +
+    `<stop offset="1" stop-color="hsl(${(h + 38) % 360} 28% 14%)"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="960" height="720" fill="url(#g)"/>` +
+    `<text x="480" y="368" text-anchor="middle" font-family="sans-serif" ` +
+    `font-size="60" fill="hsl(${h} 30% 78%)">商品配图</text>` +
+    `</svg>`
+  )
+}
+
+function marketImageOrPlaceholder(p) {
+  if (!p) return null
+  const abs = path('./uploads/' + p.replace(/^\/uploads\//, ''))
+  if (existsSync(abs)) return p
+  const dir = p.split('/').slice(-2, -1)[0]
+  if (!marketPlaceholderCache.has(dir)) {
+    const absPh = join(MARKET_IMG_DIR, dir, 'ph.svg')
+    if (!existsSync(absPh)) {
+      mkdirSync(join(MARKET_IMG_DIR, dir), { recursive: true })
+      writeFileSync(absPh, marketPlaceholderSvg(dir), 'utf8')
+    }
+    marketPlaceholderCache.set(dir, `/uploads/demo/market/${dir}/ph.svg`)
+  }
+  return marketPlaceholderCache.get(dir)
+}
+
+/**
+ * 商品数据来自 server/data/market-products.json ——
+ * 那是 scripts/fetch-market-data.mjs 从 dummyjson 的公开演示数据里爬来的
+ * （真实商品图 + 真实价格分布 + 真实库存），中文名和描述是人工校准过的。
+ *
+ * 为什么不把商品直接写死在这里：
+ *   写死的话，商品图只能从**笔记**的配图里凑 ——
+ *   一个写着「五常大米」的商品挂着一张显卡的图，
+ *   **图 ↔ 标题 ↔ 分类**三者对不上，商城一眼就是假数据，比没有图更糟。
+ *
+ * 离线兜底：JSON 不在（比如新 clone 还没跑过抓取脚本）时，
+ * 回落到下面这份手写清单，图用占位 SVG ——
+ * 保证「市集有一批商品可看」这件事在任何环境下都成立。
+ */
+const MARKET_JSON = path('./data/market-products.json')
+
+/** 兜底清单：没有 market-products.json 时用这一份 */
+const FALLBACK_PRODUCTS = [
+  { t: '手冲咖啡壶 600ml 细口鹅颈', d: '滤网可拆，附赠滤纸 100 张', p: 8900, s: 12, c: '家居' },
+  { t: '陶瓷手捏饭碗（两只装）', d: '每个杯子手捏成型，釉色略有差异', p: 6800, s: 8, c: '家居' },
+  { t: '亚麻围裙 · 燕麦色', d: '双层亚麻，越洗越软', p: 12900, s: 20, c: '穿搭' },
+  { t: '便携咖啡磨豆机', d: '不锈钢刀盘，摇一摇三十秒出粉', p: 26800, s: 5, c: '家居' },
+  { t: '手工皂 · 燕麦牛奶（3 块）', d: '无添加，孕期可用', p: 4500, s: 40, c: '家居' },
+  { t: '棉麻抱枕套 45×45', d: '隐形拉链，可拆洗', p: 5900, s: 15, c: '家居' },
+  { t: '香薰蜡烛 · 雪松', d: '大豆蜡，燃烧 40 小时', p: 7800, s: 3, c: '家居' },
+  { t: '手冲滤杯 V60 陶瓷', d: '锥形 60 度角，导流槽 12 道', p: 15800, s: 6, c: '家居' },
+  { t: '帆布托特包 · 加厚', d: '16 盎司帆布，装得下 16 寸笔记本', p: 9900, s: 25, c: '穿搭' },
+  { t: '玻璃保鲜盒 三件套', d: '耐热玻璃，可进烤箱', p: 11800, s: 10, c: '家居' }
 ]
 
-db.prepare('DELETE FROM products WHERE seller_id IN (SELECT id FROM users WHERE nickname IN (?,?,?,?,?,?))')
-  .run(...NICKNAMES)
+/**
+ * 拼出最终要灌的清单。
+ *
+ * 卖家轮流挂到 6 个演示用户名下 —— 这样「我的商品」和「我卖出的订单」
+ * 都有真实数据可看，不是悬空的。
+ */
+let PRODUCTS = []
+if (existsSync(MARKET_JSON)) {
+  const data = JSON.parse(readFileSync(MARKET_JSON, 'utf8'))
+  PRODUCTS = data.products.map((p) => ({
+    t: p.title,
+    d: p.description,
+    p: p.priceCents,
+    s: p.stock,
+    c: p.category,
+    // images 为空但有 coverImage 时用它顶上 ——
+    // 否则那件「已下架演示」会退回到笔记的配图（一张咖啡照），
+    // 而它的标题写的是「折叠沥水篮」。
+    images: p.images?.length ? p.images : p.coverImage ? [p.coverImage] : [],
+    off: p.offShelf === true
+  }))
+  console.log(`市集商品：${PRODUCTS.length} 件（来自 market-products.json，来源 ${data.source}）`)
+} else {
+  PRODUCTS = FALLBACK_PRODUCTS.map((p) => ({ ...p, images: [], off: false }))
+  console.log(
+    `市集商品：${PRODUCTS.length} 件（兜底清单 —— 没找到 market-products.json，` +
+      '跑 npm run seed:market 拉真实数据）'
+  )
+}
+
+db.prepare(
+  'DELETE FROM products WHERE seller_id IN (SELECT id FROM users WHERE nickname IN (?,?,?,?,?,?))'
+).run(...NICKNAMES)
 
 const insertProduct = db.prepare(
-  `INSERT INTO products (seller_id, title, description, price_cents, cover_image, images, stock, status)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  `INSERT INTO products (seller_id, title, description, price_cents, cover_image, images, stock, status, category)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
 for (let i = 0; i < PRODUCTS.length; i++) {
   const it = PRODUCTS[i]
-  const cover = img(`d${(i % 30) + 1}`) || img('d1')
-  const second = img(`d${((i + 5) % 30) + 1}`)
-  const images = JSON.stringify([cover, second].filter(Boolean))
+  // 真实图优先；没有就换占位图；再没有才退回笔记的配图
+  const covers = (it.images || []).map(marketImageOrPlaceholder).filter(Boolean)
+  const cover = covers[0] || img(`d${(i % 30) + 1}`) || null
+  const images = JSON.stringify(covers.length ? covers : [cover].filter(Boolean))
   insertProduct.run(
     // 取模而不是直接索引：NICKNAMES 以后加减用户时，
     // 越界的 undefined 会被 better-sqlite3 绑成 NULL，
     // 报的是一个和「商品写不进去」毫无关系的 NOT NULL 约束错误
-    userIds[it.u % userIds.length],
+    userIds[i % userIds.length],
     it.t,
     it.d,
     it.p,
     cover,
     images,
-    it.s,
-    it.off ? 'off_shelf' : 'on_sale'
+    it.off ? 0 : it.s,
+    it.off ? 'off_shelf' : 'on_sale',
+    it.c || '家居'
   )
 }
 
@@ -357,7 +485,9 @@ console.log(`\n市集：写入 ${PRODUCTS.length} 件商品（含 1 件下架演
 console.log(`钱包：${userIds.length} 个演示账号各注入 ${DEMO_BALANCE / 100} 元余额`)
 
 const total = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c
-const withImg = db.prepare(`SELECT COUNT(*) AS c FROM posts WHERE image_urls IS NOT NULL AND image_urls != '[]'`).get().c
+const withImg = db
+  .prepare(`SELECT COUNT(*) AS c FROM posts WHERE image_urls IS NOT NULL AND image_urls != '[]'`)
+  .get().c
 console.log(`\n写入 ${POSTS.length} 条（其中 ${POSTS.length - noImage} 条带图）`)
 console.log(`库内共 ${total} 条，其中 ${withImg} 条有配图`)
 db.close()

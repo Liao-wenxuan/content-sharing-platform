@@ -133,6 +133,62 @@ describe('商品：金额与校验', () => {
   })
 })
 
+/*
+ * 商品分类。
+ *
+ * 这一列是**加上去**的，不是「本来就有」——
+ * seed 一直在算每个商品的分类，却从来没把它写进库，
+ * 所以「按分类逛」这件事从数据到接口到界面全都不存在。
+ * 这些断言锁住它现在存在，而且锁住「不存在的那部分」。
+ */
+describe('商品：分类', () => {
+  it('发布时带分类，详情里能读回来', async () => {
+    const res = await mkProduct(sellerToken, { category: '家居' })
+    expect(res.status).toBe(201)
+    expect(res.body.category).toBe('家居')
+  })
+
+  it('不传分类就是未分类（不是「分类为空字符串」）', async () => {
+    const res = await mkProduct(sellerToken)
+    expect(res.status).toBe(201)
+    expect(res.body.category).toBeNull()
+  })
+
+  it('白名单外的分类被拒，而不是默默存进去', async () => {
+    // 默默存进去的话，库里会多出一个用户在前端根本选不出来的分类，
+    // 那些商品就成了「谁也逛不到」的死数据
+    const res = await mkProduct(sellerToken, { category: '家居收纳' })
+    expect(res.status).toBe(400)
+  })
+
+  it('列表按分类筛，精确匹配而不是模糊', async () => {
+    await mkProduct(sellerToken, { title: '锅铲', category: '家居' })
+    await mkProduct(sellerToken, { title: '连衣裙', category: '穿搭' })
+
+    const home = await request(app).get('/api/products?category=家居')
+    expect(home.status).toBe(200)
+    expect(home.body.list.map((p: any) => p.title)).toEqual(['锅铲'])
+
+    // 点「家居」不该把「家居收纳」也捞出来
+    const fuzzy = await request(app).get('/api/products?category=家居收纳')
+    expect(fuzzy.body.list.length).toBe(0)
+  })
+
+  it('不传分类就是全部', async () => {
+    await mkProduct(sellerToken, { title: 'A', category: '家居' })
+    await mkProduct(sellerToken, { title: 'B', category: '穿搭' })
+    const all = await request(app).get('/api/products')
+    expect(all.body.list.length).toBe(2)
+  })
+
+  it('分类和搜索词一起用是「且」的关系', async () => {
+    await mkProduct(sellerToken, { title: '竹制锅铲', category: '家居' })
+    await mkProduct(sellerToken, { title: '竹制托盘', category: '美食' })
+    const res = await request(app).get('/api/products?category=家居&q=锅铲')
+    expect(res.body.list.map((p: any) => p.title)).toEqual(['竹制锅铲'])
+  })
+})
+
 describe('商品：权限', () => {
   it('改别人的商品返回 404 而不是 403', async () => {
     const p = await mkProduct(sellerToken)

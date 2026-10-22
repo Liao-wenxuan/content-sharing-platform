@@ -10,6 +10,11 @@ server/data.db
 server/data.db-journal
 server/uploads/
 
+# 生成的市集数据：格式由 scripts/fetch-market-data.mjs 决定，不由 prettier 接管。
+# 让 prettier 改它的话，生成器和仓库里存的就不是同一份排版，
+# 下次跑生成脚本又会被 format:check 判红 —— 来回打架。
+server/data/market-products.json
+
 package-lock.json
 yarn.lock
 

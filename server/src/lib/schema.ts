@@ -381,6 +381,26 @@ export function initSchema(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_products_status ON products(status, created_at DESC)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller_id)`)
 
+  // ===== 商品分类 =====
+  //
+  // 加这一列是因为 seed 一直在**算**分类（每件商品都带一个 c: '家居'），
+  // 却从来没把它写进库 —— 于是「按分类逛」这个功能从数据到接口到界面全都不存在，
+  // 只在种子脚本的内存里存在过。
+  //
+  // 分类是**自由文本**而不是外键表：市集只有 6 个分类，
+  // 建一张 categories 表再 JOIN，换来的只是多一次 JOIN 和一处同步成本。
+  // 真要变成多级分类了再说 —— 那时候这张表也得重做。
+  const productCols = new Set(
+    (db.pragma('table_info(products)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!productCols.has('category')) {
+    db.exec('ALTER TABLE products ADD COLUMN category TEXT')
+    console.log('[DB] Migrated: products.category added')
+  }
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_products_category ON products(category, status, created_at DESC)`
+  )
+
   // ===== 购物车 =====
   // 复合主键 (user_id, product_id)：同一件商品在购物车里**只有一行**，
   // 再加一次是改数量而不是加一行。否则列表里会出现三条一样的商品，
