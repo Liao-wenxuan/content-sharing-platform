@@ -186,4 +186,71 @@ describe('useReveal', () => {
     expect(observed).toHaveLength(0)
     expect(trigger).toBeNull()
   })
+
+  /*
+   * 下面两条是 2026-10-22 补的：市集那一页整片商品看不见，就是这里出的问题。
+   *
+   * 症状：先逛首页（首页的容器常驻，入场正常，<html> 被加上 motion-ready），
+   * 再 SPA 跳到市集 —— 市集的网格在 v-else 里，数据到了才渲染，
+   * 而观察器只在 mount 时扫一次（那时候容器是 null），所以根本不会建起来。
+   * 卡片永远拿不到 is-revealed，就永远停在 opacity:0。
+   *
+   * 直接整页刷新进 /market 反而不复现（那次 motion-ready 从没被加上），
+   * 所以「能打开」证明不了任何事 —— 必须是同一次会话里跳过去。
+   */
+
+  it('容器是之后才出现的，观察器要跟着建起来', async () => {
+    const root = ref<HTMLElement | null>(null)
+    const ready = ref(false)
+
+    const Host = defineComponent({
+      setup() {
+        // 这里的 enabled 是**响应式**的 —— 上一条用例用的是一个普通 let，
+        // 改它不会触发任何重算，所以那条断言和这里并不矛盾。
+        useReveal(root, () => ready.value, 8)
+        return () =>
+          ready.value
+            ? h('div', { ref: root, class: 'grid' }, [h('div', { class: 'sg-reveal' }, '卡片 0')])
+            : h('div', { class: 'loading' }, '加载中')
+      }
+    })
+    mount(Host, { attachTo: document.body })
+    await nextTick()
+    // 容器还不存在，不该观察任何东西
+    expect(observed).toHaveLength(0)
+
+    // 数据到了 -> v-else 换上容器 -> 观察器必须重新扫
+    ready.value = true
+    await nextTick()
+
+    expect(observed).toHaveLength(1)
+  })
+
+  it('追加进来的卡片也会被观察（翻页加载更多）', async () => {
+    const root = ref<HTMLElement | null>(null)
+    const count = ref(2)
+
+    const Host = defineComponent({
+      setup() {
+        useReveal(root, () => true, 8)
+        return () =>
+          h(
+            'div',
+            { ref: root, class: 'grid' },
+            Array.from({ length: count.value }, (_, i) =>
+              h('div', { key: i, class: 'sg-reveal' }, `卡片 ${i}`)
+            )
+          )
+      }
+    })
+    mount(Host, { attachTo: document.body })
+    await nextTick()
+    expect(observed).toHaveLength(2)
+
+    // 翻页追加两张
+    count.value = 4
+    await nextTick()
+
+    expect(observed).toHaveLength(4)
+  })
 })

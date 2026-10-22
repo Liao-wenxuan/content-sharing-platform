@@ -33,7 +33,7 @@
  *    反复播放的入场动画会变成干扰源。
  */
 
-import { onBeforeUnmount, onMounted, toValue, type MaybeRefOrGetter, type Ref } from 'vue'
+import { onBeforeUnmount, toValue, watchEffect, type MaybeRefOrGetter, type Ref } from 'vue'
 
 /**
  * 动效是否可用。
@@ -81,15 +81,20 @@ export function useReveal(
   stepMs = 60
 ): void {
   let observer: IntersectionObserver | null = null
+  let childObserver: MutationObserver | null = null
+  /** 已经交给观察器的元素。避免同一批元素被反复 observe */
+  const watched = new WeakSet<Element>()
 
-  onMounted(() => {
-    const root = containerRef.value
+  function staggerIndex(el: HTMLElement): number {
+    const i = Array.prototype.indexOf.call(el.parentElement?.children ?? [], el)
+    return Math.min(Math.max(i, 0), maxStagger)
+  }
+
+  function ensureObserver(): IntersectionObserver | null {
+    if (observer) return observer
     // IntersectionObserver 在老浏览器上不存在，
     // 而「没有入场动画」是完全可接受的降级 —— 不能因此报错
-    if (!root || !toValue(enabled) || typeof IntersectionObserver === 'undefined') return
-
-    markMotionReady()
-
+    if (typeof IntersectionObserver === 'undefined') return null
     observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -102,16 +107,67 @@ export function useReveal(
       },
       { threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
     )
+    return observer
+  }
 
-    root.querySelectorAll<HTMLElement>(':scope > *').forEach((el) => observer?.observe(el))
+  function observeChildren(root: HTMLElement, ob: IntersectionObserver): void {
+    root.querySelectorAll<HTMLElement>(':scope > *').forEach((el) => {
+      // 已经入场的别再观察 —— 重复观察会让「加载更多」追加的卡片重播动画
+      if (el.classList.contains('is-revealed')) return
+      // 同一批元素可能被扫到多次（watchEffect + MutationObserver），
+      // 观察器只该拿到它一次
+      if (watched.has(el)) return
+      watched.add(el)
+      ob.observe(el)
+    })
+  }
 
-    function staggerIndex(el: HTMLElement): number {
-      const i = Array.prototype.indexOf.call(el.parentElement?.children ?? [], el)
-      return Math.min(Math.max(i, 0), maxStagger)
+  /**
+   * 用 watchEffect 而不是「onMounted 里扫一次」，是因为容器和数据都是**之后**才确定的：
+   *
+   *   - 容器可能在 `v-else` 里，数据到了才渲染出来（挂载那一刻是 null）；
+   *   - `enabled` 也可能是 getter，加载完成前是 false。
+   *
+   * 只扫一次的后果不只是「这个页面的动画没了」：
+   * `motion-ready` 是**别的页面**加到 `<html>` 上的，而它一加上，
+   * `.motion-ready .sg-reveal` 就把卡片锁在 opacity:0 ——
+   * 观察器不存在，就没人给它们加 `is-revealed`，于是整片商品看不见。
+   *
+   * 而且这个 bug 只在「从别的页面跳过来」时出现：
+   * 整页刷新进 /market 的话，motion-ready 从来没被加上，CSS 默认态是「可见」。
+   */
+  const stop = watchEffect(() => {
+    const root = containerRef.value
+    if (!root || !toValue(enabled)) return
+
+    /*
+     * ⚠️ 顺序很重要：**先拿观察器，再锁隐藏态**。
+     *
+     * 没有 IntersectionObserver（老浏览器、测试环境）时，
+     * 一旦加了 motion-ready，`.motion-ready .sg-reveal` 就把内容锁在 opacity:0，
+     * 而没有人会给它加 is-revealed —— 整页白屏，而且控制台干干净净。
+     *
+     * 「没有入场动画」是完全可接受的降级，「白屏」不是。
+     * 所以观察器拿不到的时候，这里必须直接返回，一个字都不改。
+     */
+    const ob = ensureObserver()
+    if (!ob) return
+
+    markMotionReady()
+    observeChildren(root, ob)
+
+    // 之后追加进来的卡片（翻页加载更多）也要能入场
+    if (!childObserver && typeof MutationObserver !== 'undefined') {
+      childObserver = new MutationObserver(() => observeChildren(root, ob))
+      childObserver.observe(root, { childList: true })
     }
   })
 
-  onBeforeUnmount(() => observer?.disconnect())
+  onBeforeUnmount(() => {
+    stop()
+    childObserver?.disconnect()
+    observer?.disconnect()
+  })
 }
 
 /** 元素是否已经入场过。给「翻页后新增的卡片」用，避免重播动画 */
