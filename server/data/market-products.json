@@ -1,0 +1,650 @@
+{
+  "source": "https://dummyjson.com/products",
+  "note": "商品图来自 dummyjson 的公开演示数据，中文名与描述是人工校准的（见 scripts/fetch-market-data.mjs）。",
+  "count": 43,
+  "categories": [
+    "家居",
+    "穿搭",
+    "美食",
+    "彩妆",
+    "健身",
+    "数码"
+  ],
+  "products": [
+    {
+      "sourceId": 48,
+      "sourceCategory": "kitchen-accessories",
+      "sourceUrl": "https://dummyjson.com/products/48",
+      "category": "家居",
+      "title": "竹制锅铲 · 天然木柄",
+      "description": "整块竹子削出来的，铲头不伤涂层，炒菜不刮锅",
+      "priceCents": 5900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p48-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p48-1.webp"
+      ]
+    },
+    {
+      "sourceId": 52,
+      "sourceCategory": "kitchen-accessories",
+      "sourceUrl": "https://dummyjson.com/products/52",
+      "category": "家居",
+      "title": "碳钢炒锅 30cm",
+      "description": "无涂层碳钢，开锅之后越用越顺，配硅胶锅铲",
+      "priceCents": 21900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p52-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p52-1.webp"
+      ]
+    },
+    {
+      "sourceId": 53,
+      "sourceCategory": "kitchen-accessories",
+      "sourceUrl": "https://dummyjson.com/products/53",
+      "category": "家居",
+      "title": "木砧板 · 双面可用",
+      "description": "正面切菜反面切生熟，边缘有把手好拿",
+      "priceCents": 9900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p53-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p53-1.webp"
+      ]
+    },
+    {
+      "sourceId": 65,
+      "sourceCategory": "kitchen-accessories",
+      "sourceUrl": "https://dummyjson.com/products/65",
+      "category": "家居",
+      "title": "不锈钢便当盒 750ml",
+      "description": "带密封圈，能装汤不漏，四个卡扣扣得很死",
+      "priceCents": 9900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p65-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p65-1.webp"
+      ]
+    },
+    {
+      "sourceId": 73,
+      "sourceCategory": "kitchen-accessories",
+      "sourceUrl": "https://dummyjson.com/products/73",
+      "category": "家居",
+      "title": "厨房调料架 · 双层",
+      "description": "免打孔免安装，贴上墙就能用，瓶罐按大小分层",
+      "priceCents": 14900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p73-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p73-1.webp"
+      ]
+    },
+    {
+      "sourceId": 45,
+      "sourceCategory": "home-decoration",
+      "sourceUrl": "https://dummyjson.com/products/45",
+      "category": "家居",
+      "title": "观叶绿植 · 带盆发货",
+      "description": "好养的室内品种，散射光就能长，每周浇一次",
+      "priceCents": 28900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p45-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p45-1.webp",
+        "/uploads/demo/market/home/p45-2.webp",
+        "/uploads/demo/market/home/p45-3.webp"
+      ]
+    },
+    {
+      "sourceId": 47,
+      "sourceCategory": "home-decoration",
+      "sourceUrl": "https://dummyjson.com/products/47",
+      "category": "家居",
+      "title": "陶瓷台灯 · 三档色温",
+      "description": "暖光不刺眼，灯罩可拆，洗起来方便",
+      "priceCents": 35900,
+      "stock": 9,
+      "coverImage": "/uploads/demo/market/home/p47-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p47-1.webp"
+      ]
+    },
+    {
+      "sourceId": 12,
+      "sourceCategory": "furniture",
+      "sourceUrl": "https://dummyjson.com/products/12",
+      "category": "家居",
+      "title": "布艺三人沙发",
+      "description": "可拆洗的棉麻套，坐垫偏软，骨架是实木",
+      "priceCents": 1779900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/home/p12-1.webp",
+      "images": [
+        "/uploads/demo/market/home/p12-1.webp",
+        "/uploads/demo/market/home/p12-2.webp",
+        "/uploads/demo/market/home/p12-3.webp"
+      ]
+    },
+    {
+      "sourceId": 162,
+      "sourceCategory": "tops",
+      "sourceUrl": "https://dummyjson.com/products/162",
+      "category": "穿搭",
+      "title": "蓝色碎花连衣裙",
+      "description": "收腰版型，V 领显锁骨，面料有垂感不贴腿",
+      "priceCents": 21900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p162-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p162-1.webp",
+        "/uploads/demo/market/fashion/p162-2.webp",
+        "/uploads/demo/market/fashion/p162-3.webp"
+      ]
+    },
+    {
+      "sourceId": 166,
+      "sourceCategory": "tops",
+      "sourceUrl": "https://dummyjson.com/products/166",
+      "category": "穿搭",
+      "title": "格纹连衣裙 · 加厚款",
+      "description": "过膝长度，格子配色沉稳，通勤和出门都能穿",
+      "priceCents": 28900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p166-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p166-1.webp",
+        "/uploads/demo/market/fashion/p166-2.webp",
+        "/uploads/demo/market/fashion/p166-3.webp"
+      ]
+    },
+    {
+      "sourceId": 177,
+      "sourceCategory": "womens-dresses",
+      "sourceUrl": "https://dummyjson.com/products/177",
+      "category": "穿搭",
+      "title": "黑色小礼服",
+      "description": "露肩设计，缎面材质，参加活动刚好不夸张",
+      "priceCents": 92900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p177-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p177-1.webp",
+        "/uploads/demo/market/fashion/p177-2.webp",
+        "/uploads/demo/market/fashion/p177-3.webp"
+      ]
+    },
+    {
+      "sourceId": 172,
+      "sourceCategory": "womens-bags",
+      "sourceUrl": "https://dummyjson.com/products/172",
+      "category": "穿搭",
+      "title": "蓝色手提包",
+      "description": "能装 14 寸笔记本，五金件是电镀的，肩带可调",
+      "priceCents": 35900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p172-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p172-1.webp",
+        "/uploads/demo/market/fashion/p172-2.webp",
+        "/uploads/demo/market/fashion/p172-3.webp"
+      ]
+    },
+    {
+      "sourceId": 175,
+      "sourceCategory": "womens-bags",
+      "sourceUrl": "https://dummyjson.com/products/175",
+      "category": "穿搭",
+      "title": "白色双肩包",
+      "description": "防泼水面料，笔记本隔层有缓冲，肩带加厚不勒肩",
+      "priceCents": 28900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p175-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p175-1.webp",
+        "/uploads/demo/market/fashion/p175-2.webp",
+        "/uploads/demo/market/fashion/p175-3.webp"
+      ]
+    },
+    {
+      "sourceId": 90,
+      "sourceCategory": "mens-shoes",
+      "sourceUrl": "https://dummyjson.com/products/90",
+      "category": "穿搭",
+      "title": "复古运动鞋",
+      "description": "鞋底偏硬，适合走路多的场合，尺码偏大半码",
+      "priceCents": 63900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p90-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p90-1.webp",
+        "/uploads/demo/market/fashion/p90-2.webp",
+        "/uploads/demo/market/fashion/p90-3.webp"
+      ]
+    },
+    {
+      "sourceId": 154,
+      "sourceCategory": "sunglasses",
+      "sourceUrl": "https://dummyjson.com/products/154",
+      "category": "穿搭",
+      "title": "黑框太阳镜",
+      "description": "UV400 防护，镜腿有弹性，戴久了鼻梁不疼",
+      "priceCents": 21900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p154-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p154-1.webp",
+        "/uploads/demo/market/fashion/p154-2.webp",
+        "/uploads/demo/market/fashion/p154-3.webp"
+      ]
+    },
+    {
+      "sourceId": 93,
+      "sourceCategory": "mens-watches",
+      "sourceUrl": "https://dummyjson.com/products/93",
+      "category": "穿搭",
+      "title": "真皮表带腕表",
+      "description": "皮带会随佩戴变软，防水溅但不能洗手戴",
+      "priceCents": 63900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/fashion/p93-1.webp",
+      "images": [
+        "/uploads/demo/market/fashion/p93-1.webp",
+        "/uploads/demo/market/fashion/p93-2.webp",
+        "/uploads/demo/market/fashion/p93-3.webp"
+      ]
+    },
+    {
+      "sourceId": 16,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/16",
+      "category": "美食",
+      "title": "红富士苹果 · 5 斤装",
+      "description": "脆甜多汁，个头均匀，坏果包赔",
+      "priceCents": 1900,
+      "stock": 8,
+      "coverImage": "/uploads/demo/market/food/p16-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p16-1.webp"
+      ]
+    },
+    {
+      "sourceId": 17,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/17",
+      "category": "美食",
+      "title": "原切牛排 · 谷饲",
+      "description": "真空冷链发货，煎到三分熟刚好，油花分布均匀",
+      "priceCents": 9900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/food/p17-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p17-1.webp"
+      ]
+    },
+    {
+      "sourceId": 19,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/19",
+      "category": "美食",
+      "title": "冷鲜鸡胸肉 1kg",
+      "description": "低脂高蛋白，解冻后用厨房纸吸干水分再煎",
+      "priceCents": 7900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/food/p19-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p19-1.webp",
+        "/uploads/demo/market/food/p19-2.webp"
+      ]
+    },
+    {
+      "sourceId": 23,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/23",
+      "category": "美食",
+      "title": "土鸡蛋 30 枚",
+      "description": "个头小一点，蛋黄颜色深，煮 8 分钟就全熟",
+      "priceCents": 2900,
+      "stock": 9,
+      "coverImage": "/uploads/demo/market/food/p23-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p23-1.webp"
+      ]
+    },
+    {
+      "sourceId": 27,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/27",
+      "category": "美食",
+      "title": "百花蜜 500g",
+      "description": "自然成熟蜜，结晶是正常的，冲水用温水别用开水",
+      "priceCents": 4900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/food/p27-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p27-1.webp"
+      ]
+    },
+    {
+      "sourceId": 28,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/28",
+      "category": "美食",
+      "title": "手工冰淇淋 4 杯装",
+      "description": "需冷链，到货先放冷冻室两小时再挖",
+      "priceCents": 3900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/food/p28-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p28-1.webp",
+        "/uploads/demo/market/food/p28-2.webp",
+        "/uploads/demo/market/food/p28-3.webp"
+      ]
+    },
+    {
+      "sourceId": 34,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/34",
+      "category": "美食",
+      "title": "挂耳咖啡 · 10 片装",
+      "description": "中深烘，热水冲 30 秒，兑牛奶也好喝",
+      "priceCents": 5900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/food/p34-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p34-1.webp"
+      ]
+    },
+    {
+      "sourceId": 38,
+      "sourceCategory": "groceries",
+      "sourceUrl": "https://dummyjson.com/products/38",
+      "category": "美食",
+      "title": "五常大米 5kg",
+      "description": "真空袋装，开袋有米香，煮饭水米比 1:1.2",
+      "priceCents": 4900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/food/p38-1.webp",
+      "images": [
+        "/uploads/demo/market/food/p38-1.webp"
+      ]
+    },
+    {
+      "sourceId": 1,
+      "sourceCategory": "beauty",
+      "sourceUrl": "https://dummyjson.com/products/1",
+      "category": "彩妆",
+      "title": "纤长卷翘睫毛膏",
+      "description": "防水不晕染，苍蝇腿慎入，需要卸妆水",
+      "priceCents": 7900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/beauty/p1-1.webp",
+      "images": [
+        "/uploads/demo/market/beauty/p1-1.webp"
+      ]
+    },
+    {
+      "sourceId": 2,
+      "sourceCategory": "beauty",
+      "sourceUrl": "https://dummyjson.com/products/2",
+      "category": "彩妆",
+      "title": "十二色眼影盘 · 带镜",
+      "description": "大地色和珠光都有，粉质不飞，中间附小镜子",
+      "priceCents": 14900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/beauty/p2-1.webp",
+      "images": [
+        "/uploads/demo/market/beauty/p2-1.webp"
+      ]
+    },
+    {
+      "sourceId": 4,
+      "sourceCategory": "beauty",
+      "sourceUrl": "https://dummyjson.com/products/4",
+      "category": "彩妆",
+      "title": "正红口红 · 哑光",
+      "description": "不拔干，用之前先涂唇膏，持久度大概 4 小时",
+      "priceCents": 9900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/beauty/p4-1.webp",
+      "images": [
+        "/uploads/demo/market/beauty/p4-1.webp"
+      ]
+    },
+    {
+      "sourceId": 5,
+      "sourceCategory": "beauty",
+      "sourceUrl": "https://dummyjson.com/products/5",
+      "category": "彩妆",
+      "title": "红色指甲油",
+      "description": "两三层颜色才饱和，干透要 5 分钟，附卸甲水",
+      "priceCents": 6900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/beauty/p5-1.webp",
+      "images": [
+        "/uploads/demo/market/beauty/p5-1.webp"
+      ]
+    },
+    {
+      "sourceId": 119,
+      "sourceCategory": "skin-care",
+      "sourceUrl": "https://dummyjson.com/products/119",
+      "category": "彩妆",
+      "title": "滋润沐浴露 500ml",
+      "description": "奶香型，起泡快，冲得干净不留滑腻感",
+      "priceCents": 9900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/beauty/p119-1.webp",
+      "images": [
+        "/uploads/demo/market/beauty/p119-1.webp",
+        "/uploads/demo/market/beauty/p119-2.webp",
+        "/uploads/demo/market/beauty/p119-3.webp"
+      ]
+    },
+    {
+      "sourceId": 8,
+      "sourceCategory": "fragrances",
+      "sourceUrl": "https://dummyjson.com/products/8",
+      "category": "彩妆",
+      "title": "女士香水 50ml",
+      "description": "花香调，留香大概 4 小时，喷手腕而不是衣领",
+      "priceCents": 63900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/beauty/p8-1.webp",
+      "images": [
+        "/uploads/demo/market/beauty/p8-1.webp",
+        "/uploads/demo/market/beauty/p8-2.webp",
+        "/uploads/demo/market/beauty/p8-3.webp"
+      ]
+    },
+    {
+      "sourceId": 140,
+      "sourceCategory": "sports-accessories",
+      "sourceUrl": "https://dummyjson.com/products/140",
+      "category": "健身",
+      "title": "室外篮球 7 号",
+      "description": "耐磨橡胶材质，室外水泥地也不打滑",
+      "priceCents": 10900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/sports/p140-1.webp",
+      "images": [
+        "/uploads/demo/market/sports/p140-1.webp"
+      ]
+    },
+    {
+      "sourceId": 141,
+      "sourceCategory": "sports-accessories",
+      "sourceUrl": "https://dummyjson.com/products/141",
+      "category": "健身",
+      "title": "家用篮球架",
+      "description": "免安装挂式，配一个 7 号球刚好，篮板可调角度",
+      "priceCents": 28900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/sports/p141-1.webp",
+      "images": [
+        "/uploads/demo/market/sports/p141-1.webp"
+      ]
+    },
+    {
+      "sourceId": 146,
+      "sourceCategory": "sports-accessories",
+      "sourceUrl": "https://dummyjson.com/products/146",
+      "category": "健身",
+      "title": "羽毛球 12 筒装",
+      "description": "鹅毛球，飞行稳定，筒装方便收纳",
+      "priceCents": 4900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/sports/p146-1.webp",
+      "images": [
+        "/uploads/demo/market/sports/p146-1.webp"
+      ]
+    },
+    {
+      "sourceId": 151,
+      "sourceCategory": "sports-accessories",
+      "sourceUrl": "https://dummyjson.com/products/151",
+      "category": "健身",
+      "title": "比赛级网球 3 罐",
+      "description": "毛球含胶，出球快，罐装要放在阴凉处",
+      "priceCents": 4900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/sports/p151-1.webp",
+      "images": [
+        "/uploads/demo/market/sports/p151-1.webp"
+      ]
+    },
+    {
+      "sourceId": 152,
+      "sourceCategory": "sports-accessories",
+      "sourceUrl": "https://dummyjson.com/products/152",
+      "category": "健身",
+      "title": "全碳素网球拍",
+      "description": "拍框轻，重心靠上好发力，附拍包和避震器",
+      "priceCents": 35900,
+      "stock": 6,
+      "coverImage": "/uploads/demo/market/sports/p152-1.webp",
+      "images": [
+        "/uploads/demo/market/sports/p152-1.webp"
+      ]
+    },
+    {
+      "sourceId": 148,
+      "sourceCategory": "sports-accessories",
+      "sourceUrl": "https://dummyjson.com/products/148",
+      "category": "健身",
+      "title": "高尔夫球 3 颗装",
+      "description": "三层球结构，飞行距离稳定，认准球号",
+      "priceCents": 7900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/sports/p148-1.webp",
+      "images": [
+        "/uploads/demo/market/sports/p148-1.webp"
+      ]
+    },
+    {
+      "sourceId": 121,
+      "sourceCategory": "smartphones",
+      "sourceUrl": "https://dummyjson.com/products/121",
+      "category": "数码",
+      "title": "二手智能手机 · 95 新",
+      "description": "国行，已root，无拆无修，电池健康 89%",
+      "priceCents": 149900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/digital/p121-1.webp",
+      "images": [
+        "/uploads/demo/market/digital/p121-1.webp",
+        "/uploads/demo/market/digital/p121-2.webp",
+        "/uploads/demo/market/digital/p121-3.webp"
+      ]
+    },
+    {
+      "sourceId": 78,
+      "sourceCategory": "laptops",
+      "sourceUrl": "https://dummyjson.com/products/78",
+      "category": "数码",
+      "title": "笔记本电脑 14 英寸",
+      "description": "i7 处理器 / 16G / 512G，循环次数少，附原装充电器",
+      "priceCents": 1419900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/digital/p78-1.webp",
+      "images": [
+        "/uploads/demo/market/digital/p78-1.webp",
+        "/uploads/demo/market/digital/p78-2.webp",
+        "/uploads/demo/market/digital/p78-3.webp"
+      ]
+    },
+    {
+      "sourceId": 159,
+      "sourceCategory": "tablets",
+      "sourceUrl": "https://dummyjson.com/products/159",
+      "category": "数码",
+      "title": "平板电脑 8.3 英寸",
+      "description": "带手写笔和保护壳，屏幕无划痕",
+      "priceCents": 359900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/digital/p159-1.webp",
+      "images": [
+        "/uploads/demo/market/digital/p159-1.webp",
+        "/uploads/demo/market/digital/p159-2.webp",
+        "/uploads/demo/market/digital/p159-3.webp"
+      ]
+    },
+    {
+      "sourceId": 100,
+      "sourceCategory": "mobile-accessories",
+      "sourceUrl": "https://dummyjson.com/products/100",
+      "category": "数码",
+      "title": "无线降噪耳机",
+      "description": "主动降噪，开盒续航约 5 小时，配件齐全",
+      "priceCents": 92900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/digital/p100-1.webp",
+      "images": [
+        "/uploads/demo/market/digital/p100-1.webp",
+        "/uploads/demo/market/digital/p100-2.webp",
+        "/uploads/demo/market/digital/p100-3.webp"
+      ]
+    },
+    {
+      "sourceId": 106,
+      "sourceCategory": "mobile-accessories",
+      "sourceUrl": "https://dummyjson.com/products/106",
+      "category": "数码",
+      "title": "智能手表 · GPS 版",
+      "description": "能独立离线运动，记录步数和心率，表带是硅胶的",
+      "priceCents": 249900,
+      "stock": 12,
+      "coverImage": "/uploads/demo/market/digital/p106-1.webp",
+      "images": [
+        "/uploads/demo/market/digital/p106-1.webp",
+        "/uploads/demo/market/digital/p106-2.webp",
+        "/uploads/demo/market/digital/p106-3.webp"
+      ]
+    },
+    {
+      "sourceId": 111,
+      "sourceCategory": "mobile-accessories",
+      "sourceUrl": "https://dummyjson.com/products/111",
+      "category": "数码",
+      "title": "手机自拍杆 三脚架",
+      "description": "蓝牙遥控，自带夹子，折叠后能塞进包",
+      "priceCents": 9900,
+      "stock": 11,
+      "coverImage": "/uploads/demo/market/digital/p111-1.webp",
+      "images": [
+        "/uploads/demo/market/digital/p111-1.webp"
+      ]
+    },
+    {
+      "category": "家居",
+      "title": "折叠沥水篮（已下架演示）",
+      "description": "演示「下架商品别人看不到，卖家自己还看得见」",
+      "priceCents": 3900,
+      "stock": 0,
+      "offShelf": true,
+      "coverImage": "/uploads/demo/market/home/ph.svg",
+      "images": []
+    }
+  ]
+}
