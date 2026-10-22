@@ -675,16 +675,33 @@ push 之后没有任何东西验证过用户真正会走的那些路径。
 
 五个 job，**故意不设 `needs`**：
 
-| Job                | 内容                                                      |
-| ------------------ | --------------------------------------------------------- |
-| `Server (Node 24)` | tsc + vitest（449 用例）                                  |
-| `Client (Node 24)` | vue-tsc + vitest 覆盖率（441 用例）+ build + **体积预算** |
-| `Lint (root)`      | eslint + **CSS 检查** + prettier                          |
-| `E2E (Playwright)` | 15 套顺序跑，跑完再汇总                                   |
-| `A11Y (axe-core)`  | 深色 + 浅色各扫一遍（37 个页面状态）                      |
+| Job                | 内容                                                      | 纯文档提交时 |
+| ------------------ | --------------------------------------------------------- | ------------ |
+| `Server (Node 24)` | tsc + vitest（449 用例）                                  | ✅ 照跑      |
+| `Client (Node 24)` | vue-tsc + vitest 覆盖率（441 用例）+ build + **体积预算** | ✅ 照跑      |
+| `Lint (root)`      | eslint + **CSS 检查** + prettier                          | ✅ 照跑      |
+| `E2E (Playwright)` | 15 套顺序跑，跑完再汇总                                   | ⏭ 跳过       |
+| `A11Y (axe-core)`  | 深色 + 浅色各扫一遍（39 个页面状态）                      | ⏭ 跳过       |
 
 不挂 `needs` 是因为挂上去看着省事，代价是**一次 push 只拿一份信号**：
 单测挂了看不到 e2e 坏没坏，只能改完再推一次才知道。公开仓库 Actions 不计费，那就全跑。
+
+**但贵的那两个 job 有一条例外：纯文档提交跳过。**
+浏览器侧要装 Playwright、起 dev server、跑 15 套 e2e，约 5 分钟，
+而 README 和文档的改动碰不到任何运行时行为。
+
+用 `paths-ignore` 而不是 `paths`，是刻意的：
+
+- `paths` 要把每一个源码目录逐个列出来，将来新增一个目录忘了列，
+  e2e 就会被**静默跳过** —— 那是危险的失败方向（该跑没跑，报告还是绿的）。
+- `paths-ignore` 只在**所有**改动都是文档时才跳过，其余一律全跑。
+
+上面三个 job 永远跑，不参与这个优化：它们便宜，而且是底线 ——
+类型检查、单测、prettier（**prettier 也检查 markdown**，所以纯文档提交同样要过格式检查）。
+
+> 代价要说清楚：docs-only 的 push 拿不到 e2e / a11y 信号。
+> 这个仓库里 e2e 断言的是页面行为，文档改动碰不到它，所以这个代价值得；
+> 换个断言文档的项目，这条就不成立了。
 
 > **判据：断言依赖被选中的数据时，选择器必须保证待审元素真的会出现。**
 > 「扫不到」不等于「没问题」，「碰巧有数据」也不等于「测过了」。
@@ -969,7 +986,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 449 例）/ `client`（vue-tsc + vitest 441 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest 449 例）/ `client`（vue-tsc + vitest 441 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）用 **`paths-ignore`** 让纯文档提交跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。上面三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22）                                                                                                    |
 | **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：441 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 60%），跌破直接让 CI 红 |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -1054,7 +1071,8 @@ axe 把「正在变暗的白字」当成了最终颜色。
 ---
 
 **验证基线**：前端 441 条单测（29 文件）/ 后端 449 条（22 文件）/ 15 套 Playwright e2e /
-lint 0 error / 前端覆盖率 lines 73.24%（门槛 60%）/ CI 五个 job 全绿。
+lint 0 error / 前端覆盖率 lines 73.24%（门槛 60%）/ CI 五个 job 全绿
+（纯文档提交时 e2e / a11y 这两个浏览器侧 job 会跳过，另外三个照跑）。
 
 ## 📚 文档
 
