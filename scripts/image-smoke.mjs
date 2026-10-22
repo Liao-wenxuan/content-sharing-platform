@@ -352,7 +352,16 @@ console.log('\n[5] 压缩后的图能真的发出去')
   const thumbUrls = latest?.imageThumbs ?? []
   const fullUrls = latest?.imageUrls ?? []
   const distinct = thumbUrls.filter((t, i) => t !== fullUrls[i]).length
-  check('三张大图都生成了独立缩略图', distinct === 3, `不同 ${distinct}/3`)
+  // 失败时要说清「是哪一张退回了主图」——
+  // 只说「不同 2/3」的话，还得自己回去猜是哪张、为什么。
+  const fellBack = thumbUrls
+    .map((t, i) => (t === fullUrls[i] ? i + 1 : 0))
+    .filter((i) => i > 0)
+  check(
+    '三张大图都生成了独立缩略图',
+    distinct === 3,
+    `不同 ${distinct}/3${fellBack.length ? `  退回主图的是第 ${fellBack.join('、')} 张` : ''}`
+  )
 
   if (fullUrls.length) {
     let checked = 0
