@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Root-level tooling: lint, format, git hooks. Client + server each have their own package.json for runtime deps.",
   "scripts": {
-    "lint": "eslint . --ext .ts,.vue && node scripts/check-css.mjs",
+    "lint": "eslint . --ext .ts,.vue && node scripts/check-css.mjs && node scripts/check-workflow-schema.mjs",
     "lint:fix": "eslint . --ext .ts,.vue --fix",
     "format": "prettier --write \"**/*.{ts,vue,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,vue,json,md,css}\"",
