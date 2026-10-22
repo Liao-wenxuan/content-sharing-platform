@@ -4,7 +4,7 @@
  *
  * 与上一版的差别：
  * - 去掉「发现」大标题 + 副标题：首页直接以频道栏起头，把纵向空间让给瀑布流
- * - 去掉第二层分类胶囊：合并成一层频道栏（居中 + 红色短下划线，对齐小红书）
+ * - 去掉第二层分类胶囊：合并成一层频道栏（居中 + 强调色短下划线）
  * - 内容列从 1080px 放宽到 1560px，栅格 4 列 → 6 列
  * - 卡片改成「图优先」：封面图（圆角、无边框）+ 两行标题 + 作者/点赞行
  * - 无图笔记也保留等高占位块，栅格不再参差不齐
@@ -216,7 +216,7 @@ watch(isFollowFeed, () => loadFeed(true))
 
 <template>
   <div class="explore">
-    <!-- 频道栏：居中 + 红色短下划线。关注流不显示（订阅流按时间排，不按话题筛） -->
+    <!-- 频道栏：居中 + 强调色短下划线。关注流不显示（订阅流按时间排，不按话题筛） -->
     <el-tabs v-if="!isFollowFeed" v-model="homeTabs.category" class="channel-tabs">
       <el-tab-pane v-for="ch in channels" :key="ch.key" :label="ch.label" :name="ch.key" />
     </el-tabs>
@@ -339,7 +339,7 @@ watch(isFollowFeed, () => loadFeed(true))
   font-weight: 600;
 }
 
-/* 官方整宽下划线换成小红书式的居中短红条 */
+/* 官方整宽下划线换成居中短条，颜色走 --el-color-primary（即强调色） */
 .channel-tabs :deep(.el-tabs__active-bar) {
   display: none;
 }

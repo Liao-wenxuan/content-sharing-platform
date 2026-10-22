@@ -101,7 +101,10 @@ export const postsApi = {
   //   page      分页
   //   pageSize  每页条数
   //   channel   频道过滤：discover(发现) / follow(关注) / ya(雅安) / etc.
-  //   category  分类过滤：recommend / video / hot / live / drama / exp
+  //   category  内容频道过滤：recommend / outfit / food / ... （对应库里的 topic_tag）
+  //             取值不在这里抄 —— 客户端看 CHANNELS（api/settings.ts），
+  //             服务端看 CATEGORY_LABEL（server/src/constants.ts）。
+  //             抄一份的话，改了那边忘了这边，接口就静默查不到那个频道。
   getFeed(
     params: {
       page?: number
