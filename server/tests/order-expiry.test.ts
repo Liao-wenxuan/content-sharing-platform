@@ -163,4 +163,52 @@ describe('待付款订单超时', () => {
     expect(statusOf(oid)).toBe('cancelled')
     expect(stockOf(pid)).toBe(10)
   })
+
+  /*
+   * 下面这条是「两个触发点撞上同一笔订单」的防线。
+   *
+   * 生产里 cancelExpiredOrders 有两个调用点：一个每分钟的定时器，
+   * 一个是读商品列表时顺手扫一次。两者可能同时处理同一笔订单 ——
+   * 带上的 `status = 'pending'` 就是为了让只有一个能改成功，另一个
+   * changes === 0 直接跳过，库存也就不会被退两次。
+   *
+   * 单进程里这个函数是同步的，插不进别的东西 —— 所以这里用 SQLite
+   * 触发器造出同样的状态：处理上一笔的时候，把下一笔改成已取消。
+   * 这正是「另一个触发点先跑完」的样子。
+   *
+   * 判据不是「取消了几笔」，是**库存只退了一次**。
+   */
+  it('两个触发点撞上同一笔订单时，库存只退一次', async () => {
+    const pid = await mkProduct()
+    const oid1 = await mkOrder(pid)
+    const oid2 = await mkOrder(pid)
+    const stockBefore = stockOf(pid)
+    expect(stockBefore).toBe(8)
+
+    db.exec(`
+      CREATE TRIGGER race BEFORE UPDATE ON orders
+      WHEN OLD.id IN (${oid1}, ${oid2})
+      BEGIN
+        UPDATE orders SET status = 'cancelled'
+         WHERE id IN (${oid1}, ${oid2}) AND status = 'pending' AND id <> OLD.id;
+      END;
+    `)
+
+    try {
+      const later = new Date(Date.now() + 31 * 60_000)
+      // 我们自己只取消了一笔 —— 另一笔是「另一个触发点」取消的
+      expect(cancelExpiredOrders(later)).toBe(1)
+
+      const qtyOf = (oid: number) =>
+        (db.prepare('SELECT quantity FROM order_items WHERE order_id = ?').get(oid) as any)
+          .quantity as number
+      const restored = stockOf(pid) - stockBefore
+
+      // 退了一份，不是两份
+      expect([qtyOf(oid1), qtyOf(oid2)]).toContain(restored)
+      expect(restored).not.toBe(qtyOf(oid1) + qtyOf(oid2))
+    } finally {
+      db.exec('DROP TRIGGER IF EXISTS race')
+    }
+  })
 })
