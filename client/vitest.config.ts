@@ -29,12 +29,15 @@ export default defineConfig({
       // main.ts / 样式 / 类型声明进覆盖率只会把数字做低，没有任何信息量。
       include: ['src/utils/**', 'src/composables/**', 'src/components/**'],
       reporter: ['text-summary', 'json-summary', 'html'],
-      // 门槛是「回归线」不是「目标线」：跌破说明新代码没被测到，该补测试了
+      // 门槛是「回归线」不是「目标线」：跌破说明新代码没被测到，该补测试了。
+      // 数字取实测值（86.27 / 78.11 / 83.33 / 87.59）下方约 2~3 个点。
+      // 之前这里是 60 —— 那是在覆盖率只有 71% 时定的，
+      // 门槛离实测值太远，等于「掉一大截才发现」。
       thresholds: {
-        statements: 60,
-        branches: 60,
-        functions: 60,
-        lines: 60
+        statements: 84,
+        branches: 75,
+        functions: 81,
+        lines: 85
       }
     }
   }
