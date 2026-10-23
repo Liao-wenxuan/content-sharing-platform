@@ -16,7 +16,6 @@ import type { Express } from 'express'
 let app: Express
 let sellerToken: string
 let buyerToken: string
-let buyerId: number
 
 beforeAll(async () => {
   ;({ app } = createTestApp())
@@ -30,7 +29,6 @@ beforeAll(async () => {
   sellerToken = s.token
   const b = await mk('exp_buyer@test.com', '买家')
   buyerToken = b.token
-  buyerId = b.id
 })
 
 afterAll(() => {
