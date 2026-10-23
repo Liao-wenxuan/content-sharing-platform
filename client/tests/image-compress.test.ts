@@ -170,13 +170,14 @@ beforeEach(() => {
     world.objectUrlRevoked++
   }
 
-  HTMLCanvasElement.prototype.getContext = function () {
+  HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
     world.attempts.push({ type: '', quality: undefined, width: this.width, height: this.height })
     if (world.ctxNullAbove > 0 && this.width > world.ctxNullAbove) return null
     return makeCtx()
   } as any
 
   HTMLCanvasElement.prototype.toBlob = function (
+    this: HTMLCanvasElement,
     cb: BlobCallback,
     type?: string,
     quality?: number
