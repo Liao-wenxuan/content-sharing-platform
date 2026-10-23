@@ -16,12 +16,10 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Compass, EditPen, Shop, User, Setting, Star, Collection } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { useToastStore } from '@/stores/toast'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
-const toast = useToastStore()
 
 interface NavItem {
   path: string
@@ -82,13 +80,16 @@ const activeMenu = computed(() => {
   return path
 })
 
+/**
+ * 侧栏底部只有一个入口：未登录时是「登录 / 注册」。
+ *
+ * ⚠️ 这里原来还有一条 logout 分支（auth.logout() + toast + 跳回首页），
+ * 但模板里从来没有任何地方调用它 —— 退出登录在顶栏的账号菜单
+ * （TopBar.vue）和设置页（SettingsView.vue）里各有一处。
+ * 一个永远走不到的分支比没有更糟：它让人以为侧栏管退出登录，
+ * 读代码的人还得去模板里找一遍才能确认它不生效。已删。
+ */
 function handleCommand(command: string) {
-  if (command === 'logout') {
-    auth.logout()
-    toast.show('已退出登录', 'success')
-    if (route.meta.requiresAuth) router.push('/')
-    return
-  }
   if (command === 'login') {
     router.push({ name: 'login', query: { redirect: route.fullPath } })
   }
