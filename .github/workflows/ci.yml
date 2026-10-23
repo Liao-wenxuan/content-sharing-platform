@@ -45,8 +45,12 @@ jobs:
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests with coverage
+        # 跑覆盖率而不是裸 `npm test`：vitest.config.mts 里配了 thresholds，
+        # 跌破门槛会直接让这一步失败，等于把「覆盖率」变成 CI 门禁而不只是一个报告。
+        # 统计范围显式写成 src/**/*.ts —— 让 vitest 报「被 import 过的文件」
+        # 的话，少 import 一个文件它就从报告里消失，数字只会越来越好看。
+        run: npm run test:coverage
 
   # ===== 前端类型检查 + 编译 =====
   client:
