@@ -18,6 +18,12 @@ import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import SideNav from '@/components/SideNav.vue'
 
+/*
+ * 一个文件里出现多个组件在测试里是常态（这里是四个 Element Plus 的替身），
+ * 所以关掉这条规则。use-reveal.test.ts 里也是这么处理的。
+ */
+/* eslint-disable vue/one-component-per-file */
+
 const mocks = vi.hoisted(() => ({
   route: {
     path: '/',

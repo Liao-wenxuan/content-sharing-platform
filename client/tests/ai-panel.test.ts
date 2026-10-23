@@ -18,6 +18,12 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h, ref, nextTick } from 'vue'
 import AiPanel from '@/components/AiPanel.vue'
 
+/*
+ * 一个文件里出现多个组件在测试里是常态（这里是三个 Element Plus 的替身），
+ * 所以关掉这条规则。use-reveal.test.ts 里也是这么处理的。
+ */
+/* eslint-disable vue/one-component-per-file */
+
 const mocks = vi.hoisted(() => ({
   fetchAiSuggest: vi.fn()
 }))
