@@ -1,0 +1,118 @@
+{
+  "capturedAt": "2026-10-24T04:54:52.222Z",
+  "clientSrcHash": "2c548b9889ee4bfc24efaff545bcf94415a8bbc90bdf99a7704282494d07dfa2",
+  "shots": [
+    {
+      "file": "01-home.jpeg",
+      "bytes": 374957
+    },
+    {
+      "file": "02-search.jpeg",
+      "bytes": 241589
+    },
+    {
+      "file": "03-detail.jpeg",
+      "bytes": 154441
+    },
+    {
+      "file": "04-login.png",
+      "bytes": 21872
+    },
+    {
+      "file": "06-home-logged-in.jpeg",
+      "bytes": 377836
+    },
+    {
+      "file": "07-publish.png",
+      "bytes": 72169
+    },
+    {
+      "file": "08-profile.jpeg",
+      "bytes": 211827
+    },
+    {
+      "file": "09-messages.png",
+      "bytes": 83669
+    },
+    {
+      "file": "10-settings.png",
+      "bytes": 80308
+    },
+    {
+      "file": "12-search-suggest.jpeg",
+      "bytes": 374632
+    },
+    {
+      "file": "13-favorites.jpeg",
+      "bytes": 110823
+    },
+    {
+      "file": "14-topic.jpeg",
+      "bytes": 273468
+    },
+    {
+      "file": "15-follows.jpeg",
+      "bytes": 66526
+    },
+    {
+      "file": "16-detail-comments.jpeg",
+      "bytes": 167602
+    },
+    {
+      "file": "21-market-shop.png",
+      "bytes": 256408
+    },
+    {
+      "file": "22-market-product.png",
+      "bytes": 55244
+    },
+    {
+      "file": "23-market-cart.png",
+      "bytes": 66834
+    },
+    {
+      "file": "24-market-orders.png",
+      "bytes": 90815
+    },
+    {
+      "file": "25-market-wallet.png",
+      "bytes": 81344
+    },
+    {
+      "file": "26-feed-recommend.jpeg",
+      "bytes": 374303
+    },
+    {
+      "file": "27-interest.jpeg",
+      "bytes": 105772
+    },
+    {
+      "file": "28-image-compress.png",
+      "bytes": 88048
+    },
+    {
+      "file": "29-reveal-stagger.png",
+      "bytes": 194783
+    },
+    {
+      "file": "30-reveal-done.png",
+      "bytes": 198198
+    },
+    {
+      "file": "31-reveal-reduced.png",
+      "bytes": 198019
+    },
+    {
+      "file": "32-settings.png",
+      "bytes": 78386
+    },
+    {
+      "file": "33-settings-panel.png",
+      "bytes": 88502
+    },
+    {
+      "file": "34-market-mine.png",
+      "bytes": 73900
+    }
+  ]
+}
