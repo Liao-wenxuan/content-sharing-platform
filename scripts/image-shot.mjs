@@ -8,7 +8,6 @@
  * 用法：node scripts/image-shot.mjs
  */
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { ensureShotUser, authPayload, SHOTS_DIR } from './lib/shot-user.mjs'
 

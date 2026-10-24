@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, writeFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 
 const DIR = new URL('../server/uploads/demo/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')

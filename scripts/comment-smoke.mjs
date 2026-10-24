@@ -10,7 +10,6 @@
  * 路人那个用来验证「看不到置顶按钮」。
  */
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'

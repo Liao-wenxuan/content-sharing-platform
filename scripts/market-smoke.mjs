@@ -17,7 +17,6 @@
  * 前面所有断言都会绿，只有这一条会红。
  */
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'

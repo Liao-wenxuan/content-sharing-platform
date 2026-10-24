@@ -15,11 +15,10 @@
  */
 import { chromium } from 'playwright'
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { getJwtSecret } from './lib/secret.mjs'
-import { pixelDiff, judgeDiff } from './lib/pixel-diff.mjs'
+import { pixelDiff } from './lib/pixel-diff.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')

@@ -16,7 +16,6 @@
  */
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
-import path from 'node:path'
 import { ensureShotUser, authPayload } from './lib/shot-user.mjs'
 
 const PHASE = process.argv[2] || 'after'

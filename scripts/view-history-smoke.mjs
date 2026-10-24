@@ -14,7 +14,6 @@
  * 之前删掉的「钱包」按钮不能再出现 —— 那是这轮一起清掉的假入口。
  */
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'

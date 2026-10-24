@@ -16,7 +16,6 @@
  * - 零 console error / 零失败请求
  */
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import path from 'node:path'

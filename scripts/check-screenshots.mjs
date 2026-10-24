@@ -21,7 +21,7 @@
  * 接在 `npm run lint` 里，和工作流 schema 校验一个性质：
  * **改完先在本地验，再推**。
  */
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { clientSrcHash, SHOTS_DIR } from './lib/shot-user.mjs'

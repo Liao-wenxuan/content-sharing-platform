@@ -18,7 +18,6 @@
  */
 import { chromium } from 'playwright'
 import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { getJwtSecret } from './lib/secret.mjs'

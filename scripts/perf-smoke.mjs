@@ -25,7 +25,6 @@ import { chromium } from 'playwright'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import { spawn, spawnSync } from 'node:child_process'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')

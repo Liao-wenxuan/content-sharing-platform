@@ -14,8 +14,7 @@
  * 用法：npm run screenshot
  */
 import { execFileSync } from 'node:child_process'
-import { writeFileSync, readdirSync, statSync, readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { writeFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SHOTS_DIR, clientSrcHash } from './lib/shot-user.mjs'
