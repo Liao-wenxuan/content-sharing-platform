@@ -22,7 +22,8 @@
 import { chromium } from 'playwright'
 import { mkdirSync, rmSync } from 'node:fs'
 import path from 'node:path'
-import { ensureShotUser, authPayload, SHOTS_DIR } from './lib/shot-user.mjs'
+import { ensureShotUser, authPayload } from './lib/shot-user.mjs'
+import { SHOTS_DIR } from './lib/shot-common.mjs'
 import { pixelDiff, judgeDiff } from './lib/pixel-diff.mjs'
 
 const BASE = 'http://localhost:5173'

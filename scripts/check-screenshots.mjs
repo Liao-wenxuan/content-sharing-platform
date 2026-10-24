@@ -24,7 +24,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { clientSrcHash, SHOTS_DIR } from './lib/shot-user.mjs'
+import { clientSrcHash, SHOTS_DIR } from './lib/shot-common.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const README = path.join(ROOT, 'README.md')

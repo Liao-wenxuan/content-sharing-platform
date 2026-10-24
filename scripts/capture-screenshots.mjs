@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { SHOTS_DIR, clientSrcHash } from './lib/shot-user.mjs'
+import { SHOTS_DIR, clientSrcHash } from './lib/shot-common.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 

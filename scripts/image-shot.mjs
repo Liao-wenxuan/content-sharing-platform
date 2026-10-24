@@ -9,7 +9,8 @@
  */
 import { chromium } from 'playwright'
 import path from 'node:path'
-import { ensureShotUser, authPayload, SHOTS_DIR } from './lib/shot-user.mjs'
+import { ensureShotUser, authPayload } from './lib/shot-user.mjs'
+import { SHOTS_DIR } from './lib/shot-common.mjs'
 
 const BASE = 'http://localhost:5173'
 

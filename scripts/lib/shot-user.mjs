@@ -12,28 +12,20 @@
  * 现在统一成：自己建一个 `@test.local` 的临时账号，跑完由
  * `node server/cleanup-test-data.mjs --yes` 删掉。
  * 跟 `image-shot.mjs` 原来的做法一致。
+ *
+ * ⚠️ 这个文件**依赖服务端的原生模块**（better-sqlite3）。
+ * 需要「路径 / 哈希」而不想装原生模块的地方（比如 CI 的 lint job），
+ * 从 `shot-common.mjs` 拿，别从这里拿。
  */
 import { createRequire } from 'node:module'
-import { fileURLToPath } from 'node:url'
-import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
+import { getJwtSecret } from './secret.mjs'
+import { ROOT, dbPath } from './shot-common.mjs'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const serverRequire = createRequire(path.join(ROOT, 'server', 'package.json'))
 const Database = serverRequire('better-sqlite3')
 const bcrypt = serverRequire('bcryptjs')
 const jwt = serverRequire('jsonwebtoken')
-const { getJwtSecret } = await import('./secret.mjs')
-
-/** 截图统一输出目录 —— 以前 `shots/` 和 `docs/screenshots/` 两个地方各存一半，
- *  README 引用的是后者，于是另外几个脚本拍完还得**手工复制**过去。
- *  手工复制的那几张后来就再也没更新过。 */
-export const SHOTS_DIR = path.join(ROOT, 'docs', 'screenshots')
-
-export function dbPath() {
-  return process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')
-}
 
 /**
  * 建一个（或复用）临时截图账号，签一个本地 JWT。
@@ -67,47 +59,3 @@ export function authPayload(user) {
     { id: user.userId, nickname: user.nickname, avatar: null, cover: null }
   ]
 }
-
-/**
- * 「界面长什么样」的可比较哈希。
- *
- * 覆盖：前端全部源码 + 前端入口 html + 后端源码 + 后端的演示数据。
- * 后端也在里面，是因为配图里出现的是**真实数据**（市集那 43 件商品、笔记列表）——
- * 只改后端的种子或商品逻辑，图就会和界面对不上。
- *
- * 为什么用内容哈希而不是 commit sha：
- * 改了 UI 顺手重拍，这两件事**经常在同一个 commit 里**。
- * 用 commit 边界判断会误报（拍图那个 commit 自己就"晚于"拍摄点），
- * 而内容哈希和提交顺序无关 —— 拍完再提交，hash 也不变。
- */
-export function clientSrcHash(root) {
-  const h = createHash('sha256')
-  const roots = [
-    path.join(root, 'client', 'src'),
-    path.join(root, 'server', 'src'),
-    path.join(root, 'server', 'data')
-  ]
-  const singles = [path.join(root, 'client', 'index.html')]
-
-  /** @type {string[]} 相对路径 */
-  const list = []
-  const walk = (dir) => {
-    if (!existsSync(dir)) return
-    for (const name of readdirSync(dir)) {
-      const full = path.join(dir, name)
-      const st = statSync(full)
-      if (st.isDirectory()) walk(full)
-      else if (st.isFile()) list.push(path.relative(root, full).replace(/\\/g, '/'))
-    }
-  }
-  for (const r of roots) walk(r)
-  for (const s of singles) if (existsSync(s)) list.push(path.relative(root, s).replace(/\\/g, '/'))
-
-  list.sort()
-  for (const rel of list) {
-    h.update(rel)
-    h.update(readFileSync(path.join(root, rel)))
-  }
-  return h.digest('hex')
-}
-
