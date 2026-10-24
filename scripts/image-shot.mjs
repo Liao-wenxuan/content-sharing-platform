@@ -9,37 +9,16 @@
  */
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { createRequire } from 'node:module'
 import path from 'node:path'
-import { getJwtSecret } from './lib/secret.mjs'
+import { ensureShotUser, authPayload, SHOTS_DIR } from './lib/shot-user.mjs'
 
 const BASE = 'http://localhost:5173'
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-
-const serverRequire = createRequire(path.join(ROOT, 'server', 'package.json'))
-const Database = serverRequire('better-sqlite3')
-const bcrypt = serverRequire('bcryptjs')
-const jwt = serverRequire('jsonwebtoken')
 
 const EMAIL = 'shot_test@test.local'
-const PASSWORD = 'Shot12345'
 const NICK = '截图号'
 
-const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
-let row = db.prepare('SELECT id FROM users WHERE email = ?').get(EMAIL)
-if (!row) {
-  const info = db
-    .prepare('INSERT INTO users (email, password_hash, nickname) VALUES (?, ?, ?)')
-    .run(EMAIL, bcrypt.hashSync(PASSWORD, 10), NICK)
-  row = { id: Number(info.lastInsertRowid) }
-}
-const userId = Number(row.id)
-db.close()
-
-const secret =
-  getJwtSecret(ROOT)
-const token = jwt.sign({ userId, email: EMAIL }, secret)
+// 账号由共享助手建（自己建、自己删），不再在本文件里重复一遍建号逻辑
+const user = ensureShotUser(EMAIL, NICK)
 
 // 视口放宽、缩放调小：拖拽框本身很高，不这样截到的是空的框而不是压缩结果
 const browser = await chromium.launch()
@@ -49,7 +28,7 @@ const page = await browser.newPage({
 })
 await page.addInitScript(
   ([t, u]) => localStorage.setItem('auth', JSON.stringify({ user: u, token: t })),
-  [token, { id: userId, nickname: NICK, avatar: null, cover: null }]
+  authPayload(user)
 )
 
 // 在真浏览器里画一张大噪点 JPEG（纯色会被 JPEG 自己压到极小）
@@ -108,7 +87,7 @@ try {
       els.map((el) => el.textContent?.replace(/\s+/g, ' ').trim().slice(0, 90))
     )
   console.log(`超时。界面实际状态：${JSON.stringify(state, null, 2)}`)
-  await page.screenshot({ path: 'shots/_debug-image.png' })
+  await page.screenshot({ path: path.join(SHOTS_DIR, '_debug-image.png') })
   throw e
 }
 
@@ -118,8 +97,8 @@ try {
 // 结果第一张图刚好被顶到视口边缘，下半部分还是空的
 await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
 await page.waitForTimeout(400)
-await page.screenshot({ path: 'shots/28-image-compress.png' })
-console.log('已保存 shots/28-image-compress.png')
+await page.screenshot({ path: path.join(SHOTS_DIR, '28-image-compress.png') })
+console.log('已保存 docs/screenshots/28-image-compress.png')
 
 await browser.close()
 console.log('收尾：node server/cleanup-test-data.mjs --yes   # 删掉 ' + EMAIL)

@@ -15,11 +15,9 @@
  *   node scripts/design-shot.mjs after     # 换配色后
  */
 import { chromium } from 'playwright'
-import { createRequire } from 'node:module'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { mkdirSync } from 'node:fs'
 import path from 'node:path'
-import { getJwtSecret } from './lib/secret.mjs'
+import { ensureShotUser, authPayload } from './lib/shot-user.mjs'
 
 const PHASE = process.argv[2] || 'after'
 if (!['before', 'after'].includes(PHASE)) {
@@ -29,19 +27,12 @@ if (!['before', 'after'].includes(PHASE)) {
 
 const BASE = 'http://localhost:5173'
 const OUT = 'shots/design'
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const serverRequire = createRequire(path.join(ROOT, 'server', 'package.json'))
-const Database = serverRequire('better-sqlite3')
-const jwt = serverRequire('jsonwebtoken')
+mkdirSync(OUT, { recursive: true })
 
-const EMAIL = process.env.DESIGN_USER_EMAIL || '1044696157@qq.com'
-const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
-const user = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(EMAIL)
-db.close()
-if (!user) throw new Error(`库里没有 ${EMAIL}`)
-const secret =
-  getJwtSecret(ROOT)
-const token = jwt.sign({ userId: user.id, email: EMAIL }, secret)
+// 以前这里硬编码了本人的真实邮箱，而且账号不存在就直接抛错 ——
+// 换个机器 clone 下来这个脚本根本跑不了，而且个人邮箱进了公开仓库。
+// 现在自己建一个临时账号（跟其他截图脚本同一套）。
+const user = ensureShotUser('design_shot@test.local', '配色基线号')
 
 const browser = await chromium.launch()
 
@@ -59,7 +50,7 @@ for (const [name, route, ready] of PAGES) {
   const page = await ctx.newPage()
   await page.addInitScript(
     ([t, u]) => localStorage.setItem('auth', JSON.stringify({ user: u, token: t })),
-    [token, { id: user.id, nickname: user.nickname, avatar: null, cover: null }]
+    authPayload(user)
   )
   try {
     if (name === 'detail') {
