@@ -42,6 +42,12 @@ export function dbPath() {
  * 改了 UI 顺手重拍，这两件事**经常在同一个 commit 里**。
  * 用 commit 边界判断会误报（拍图那个 commit 自己就"晚于"拍摄点），
  * 而内容哈希和提交顺序无关 —— 拍完再提交，hash 也不变。
+ *
+ * ⚠️ **必须归一化行尾**：
+ * 仓库里存的是 LF，Windows 的工作区是 CRLF（git 的 autocrlf），
+ * Linux runner 检出的是 LF —— 按原始字节哈希的话，
+ * 同一份代码在本地和 CI 上算出两个值，检查永远是红的。
+ * 这个坑是 CI 第一次跑就报「配图已过期」时才发现的。
  */
 export function clientSrcHash(root = ROOT) {
   const h = createHash('sha256')
@@ -69,7 +75,8 @@ export function clientSrcHash(root = ROOT) {
   list.sort()
   for (const rel of list) {
     h.update(rel)
-    h.update(readFileSync(path.join(root, rel)))
+    // CRLF → LF，再哈希
+    h.update(readFileSync(path.join(root, rel), 'utf8').replace(/\r\n/g, '\n'))
   }
   return h.digest('hex')
 }
