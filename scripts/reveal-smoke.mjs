@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { getJwtSecret } from './lib/secret.mjs'
+import { pixelDiff, judgeDiff } from './lib/pixel-diff.mjs'
 
 const BASE = 'http://localhost:5173'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -217,6 +218,162 @@ console.log('\n[4] 白屏防线：没有 IntersectionObserver 时内容依然可
     cols.map((o) => o.toFixed(2)).join(' ')
   )
   check('降级路径没有产生报错', errs.length === 0, errs.slice(0, 2).join(' | '))
+}
+
+console.log('\n[5] 降低动效之后的终态，和正常完成态一致')
+{
+  /*
+   * 这条守的是：「降级」只能省掉**过程**，不能改变**结果**。
+   *
+   * 判据分两层：
+   *
+   * 1. **DOM 不变量**（硬门禁）：settled 之后每张卡的 opacity 必须是 1、
+   *    transform 必须是 none、位置和尺寸必须和另一种模式一致。
+   *    这层是精确的，不受浏览器光栅化影响。
+   *
+   *    它抓到过一个真问题：正常路径的终点写的是 `transform: translateY(0)`，
+   *    视觉上和 `none` 等价，但会**留一个合成层** —— 层里的图被重采样、
+   *    文字从次像素抗锯齿退化成灰度抗锯齿。
+   *    改成 `none` 之后合成层被释放，图也回到正常光栅路径。
+   *
+   * 2. **逐像素比对**（参考量，不是门禁）：同一个页面在两种模式下拍两张，
+   *    逐像素比。剩下的差异是**光栅化细节** —— 正常模式下元素在动画期间
+   *    带过 transform，图在合成层里被光栅化过一次，那个结果被缓存下来，
+   *    于是和「从来没合成过」的降级模式有微小的采样差。
+   *    实测 4% 的像素有差异，但最大通道差只有 97/765（≈13% 单通道），
+   *    肉眼不可见 —— 所以拿它当门禁会 flaky，拿它当证据才有意义。
+   *
+   * 为什么第一层才是门禁：**门禁不能 flaky**。
+   * 一个在干净浏览器里差 0.015%、在跑过别的页面之后差 3.98% 的阈值，
+   * 等于没有阈值。
+   */
+  const shoot = async (reducedMotion) => {
+    const ctx = await browser.newContext({
+      viewport: { width: 1600, height: 1000 },
+      reducedMotion
+    })
+    const page = await ctx.newPage()
+    await page.addInitScript(
+      ([t, u]) => localStorage.setItem('auth', JSON.stringify({ user: u, token: t })),
+      [user.token, { id: user.id, nickname: user.nickname, avatar: null, cover: null }]
+    )
+    await page.goto(`${BASE}/market`, { waitUntil: 'domcontentloaded' })
+    await page.locator('.grid .card').first().waitFor({ state: 'attached', timeout: 20000 })
+
+    // 先滚到底把每一行都触发一遍，再滚回顶部 ——
+    // 不这么做的话，两张图比的不是「降级效果」，而是「哪些卡片碰巧在视口里」：
+    // 正常模式下视口底部那一行还没入场（停在 opacity:0），
+    // 降级模式下它们从一开始就是可见的。差的是这个，不是降级本身。
+    await page.evaluate(async () => {
+      const step = window.innerHeight * 0.8
+      for (let y = 0; y < document.body.scrollHeight; y += step) {
+        window.scrollTo(0, y)
+        await new Promise((r) => setTimeout(r, 120))
+      }
+    })
+    /*
+     * 「settled」= **计算样式到位**，不是「class 加上了」。
+     *
+     * 等 class 是不够的：`is-revealed` 一加上就开始过渡，
+     * 而过渡有 delay（最多 360ms）**加**时长。
+     * 早先这里等的是「全部有 is-revealed」，结果截图拍到的是**动画中途** ——
+     * 于是「正常 vs 降级」的像素差高达 3.98%，
+     * 看起来像渲染差异，其实是 10 张卡还没淡完。
+     *
+     * 正确的等法：opacity 已经是 1，transform 已经是 none。
+     */
+    await page
+      .waitForFunction(
+        () => {
+          const els = Array.from(document.querySelectorAll('.sg-reveal'))
+          if (!els.length) return false
+          return els.every((e) => {
+            const cs = getComputedStyle(e)
+            return Number(cs.opacity) === 1 && cs.transform === 'none'
+          })
+        },
+        { timeout: 20000 }
+      )
+      .catch(() => console.log('    （有卡片没过渡完，继续 —— 这本身就是要看的现象）'))
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.waitForTimeout(600)
+
+    const state = await page.evaluate(() => {
+      const els = Array.from(document.querySelectorAll('.sg-reveal'))
+      return {
+        count: els.length,
+        revealed: els.filter((e) => e.classList.contains('is-revealed')).length,
+        opacities: els.map((e) => Number(getComputedStyle(e).opacity)),
+        transforms: [...new Set(els.map((e) => getComputedStyle(e).transform))],
+        rects: els.map((e) => {
+          const r = e.getBoundingClientRect()
+          return [r.x, r.y, r.width, r.height]
+        }),
+        motionReady: document.documentElement.classList.contains('motion-ready')
+      }
+    })
+    const buf = await page.screenshot()
+    await ctx.close()
+    return { state, buf }
+  }
+
+  const normal = await shoot('no-preference')
+  const baseline = await shoot('no-preference')
+  const reduced = await shoot('reduce')
+
+  // ===== 第一层：DOM 不变量（门禁）=====
+  check(
+    '**settled 之后每张卡的 transform 都是 none**（不是 translateY(0)）',
+    normal.state.transforms.length === 1 && normal.state.transforms[0] === 'none',
+    normal.state.transforms.join(' | ')
+  )
+  check(
+    '**settled 之后每张卡都完全可见**',
+    normal.state.opacities.length > 0 && normal.state.opacities.every((o) => o === 1),
+    `${normal.state.opacities.filter((o) => o !== 1).length} 张不是 1`
+  )
+  check('降级模式没有加 motion-ready（内容从头就可见）', reduced.state.motionReady === false)
+  check(
+    '**降级模式每张卡也都完全可见**',
+    reduced.state.opacities.length > 0 && reduced.state.opacities.every((o) => o === 1),
+    `${reduced.state.opacities.filter((o) => o !== 1).length} 张不是 1`
+  )
+  check(
+    '两种模式的卡片数量一致',
+    normal.state.count === reduced.state.count && normal.state.count > 0,
+    `${normal.state.count} vs ${reduced.state.count}`
+  )
+  // 位置允许 0.5px 的渲染抖动（分数宽度的网格会累积出亚像素误差）
+  const maxShift = Math.max(
+    ...normal.state.rects.map((r, i) => {
+      const s = reduced.state.rects[i] ?? [0, 0, 0, 0]
+      return Math.max(...r.map((v, k) => Math.abs(v - (s[k] ?? 0))))
+    })
+  )
+  check(
+    '**两种模式下每张卡的位置和尺寸一致**（没有错位）',
+    maxShift <= 0.5,
+    `最大偏差 ${maxShift.toFixed(3)}px`
+  )
+
+  // ===== 第二层：逐像素（参考量）=====
+  const diffPage = await browser.newPage()
+  const noise = await pixelDiff(diffPage, normal.buf, baseline.buf)
+  const diff = await pixelDiff(diffPage, normal.buf, reduced.buf)
+  await diffPage.close()
+
+  const pct = (d) => (d.totalPixels ? (d.diffPixels / d.totalPixels) * 100 : 0)
+  console.log(
+    `    噪声基准（同参数连拍）：${noise.diffPixels} 像素（${pct(noise).toFixed(4)}%）`
+  )
+  console.log(
+    `    降级 vs 正常：${diff.diffPixels} 像素（${pct(diff).toFixed(4)}%），最大通道差 ${diff.maxDelta}`
+  )
+  check(
+    '像素差在「光栅化细节」量级（不是残留）',
+    diff.maxDelta <= 120,
+    `最大通道差 ${diff.maxDelta}（残留的话会到几百上千）`
+  )
 }
 
 await browser.close()
