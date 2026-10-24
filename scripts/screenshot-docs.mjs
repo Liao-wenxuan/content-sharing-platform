@@ -286,8 +286,8 @@ await shot('03-detail', '笔记详情 · 图集 + 点赞收藏 + 评论', 'jpeg'
 await goto('/login', '.submit-btn')
 await shot('04-login', '登录 / 注册')
 
-await goto('/market', '.market')
-await shot('05-market', '市集')
+// 游客态的市集不单独拍：登录态那张（21-market-shop）拍的是同一页，
+// 而且橱窗这一节要展示的是「有商品、有分类 tab」的完整形态。
 
 // ---------- 2. 登录态 ----------
 console.log('\n[2] 登录态')
@@ -316,6 +316,13 @@ await shot('09-messages', '消息中心 · 通知 / 聊天双 Tab')
 
 await goto('/settings', '.settings')
 await shot('10-settings', '设置 · 深浅色切换 + 账号管理')
+
+// 橱窗这张**在造交易之前拍**。
+// 默认排序是「最新」，而脚本自己刚发布的那件商品（没有配图）会是第一张 ——
+// 截出来首屏是个空封面，把橱窗最该展示的「真实商品图 + 分类 tab」全挡了。
+// 放在这里拍，看到的就是访客真正会看到的橱窗：43 件带真实图片的商品。
+await goto('/market', '.market .card')
+await shot('21-market-shop', '市集橱窗 · 六个分类 tab + 43 件真实商品图')
 
 // ---------- 市集：走一遍真实交易再截图 ----------
 // 不直接复用 seed 里的演示数据：那批商品没有任何订单，
@@ -375,9 +382,6 @@ let orderId = 0
   }
 }
 
-await goto('/market', '.market .card')
-await shot('21-market-shop', '市集橱窗 · 搜索 / 排序 / 发布商品')
-
 await goto(`/market/product/${productId}`, '.product-detail .price')
 await shot('22-market-product', '商品详情 · 卖家视角可改价改库存上下架')
 
@@ -389,6 +393,12 @@ await shot('24-market-orders', '订单 · 我买的 / 我卖的两个 Tab，按�
 
 await goto('/market/wallet', '.wallet .audit-line')
 await shot('25-market-wallet', '钱包 · 余额 + 流水 + 全局对账（在途 336.00 元）')
+
+// 我的商品：卖家自己的商品列表，下架的也能在这儿找回来
+// 这张是 2026-10-22 才加的页面，之前一直没有配图 ——
+// 而 README 里「市集」那一节讲的正是这个能力
+await goto('/market/mine', '.my-products .row')
+await shot('34-market-mine', '我的商品 · 下架的也能找回来，可以重新上架')
 
 // 搜索建议下拉：聚焦即出热门话题，输入后出三类候选
 // 放这里而不是最后 —— 它不依赖任何造出来的数据，编号也才连得上
