@@ -20,7 +20,11 @@ import {
   Warning,
   ArrowDown,
   RefreshRight,
-  Loading
+  Loading,
+  Top,
+  Bottom,
+  Bell,
+  MuteNotification
 } from '@element-plus/icons-vue'
 import { useChat } from '@/composables/useChat'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -55,6 +59,8 @@ const {
   loadMoreHistory,
   sendText,
   retryMessage,
+  recall,
+  updateSettings,
   notifyTyping,
   startWithPeer
 } = useChat()
@@ -175,6 +181,29 @@ function isFailed(m: { id: number }) {
   return m.id < -1 && failedLocalIds.value.has(m.id)
 }
 
+/**
+ * 撤回时限：2 分钟，和服务端一致。
+ *
+ * 两边都要有这道判断：服务端用来**拒绝**（数据可信），
+ * 前端用来**不显示按钮**（不该给用户一个点了会失败的入口）。
+ * 两边不一致的话，用户会看到「撤回」按钮，点了却提示「超过 2 分钟不能撤回」。
+ */
+const RECALL_WINDOW_MS = 2 * 60 * 1000
+
+/** 这条消息现在还能不能撤回 */
+function canRecall(m: {
+  id: number
+  senderId: number
+  recalledAt?: string | null
+  createdAt: string
+}): boolean {
+  // 负数 id = 还没收到 ack，撤回不了（服务端那边可能都还没这条）
+  if (m.id < 0) return false
+  if (m.senderId !== auth.user?.id) return false
+  if (m.recalledAt) return false
+  return Date.now() - new Date(m.createdAt).getTime() <= RECALL_WINDOW_MS
+}
+
 /** 消息数变化时的滚动决策：贴底就跟随，不贴底就记账 */
 watch(
   () => activeMessages.value.length,
@@ -280,7 +309,7 @@ watch(activeId, () => {
           >
             <el-badge
               :value="conv.unreadCount"
-              :hidden="conv.unreadCount === 0"
+              :hidden="conv.unreadCount === 0 || conv.muted"
               class="avatar-badge"
             >
               <el-avatar :size="40" :src="conv.peer.avatar || undefined">
@@ -291,16 +320,51 @@ watch(activeId, () => {
 
             <div class="conv-main">
               <div class="conv-top">
-                <span class="peer-name">{{ conv.peer.nickname }}</span>
+                <span class="peer-name">
+                  <!-- 置顶的会话标一下：不然用户不知道它为什么排在最前 -->
+                  <el-icon v-if="conv.pinned" class="pin-mark"><component :is="Top" /></el-icon>
+                  <!-- 免打扰也是常驻标记（只藏红点不藏状态，用户会以为没收到消息） -->
+                  <el-icon v-if="conv.muted" class="mute-mark">
+                    <component :is="MuteNotification" />
+                  </el-icon>
+                  {{ conv.peer.nickname }}
+                </span>
                 <span v-if="conv.lastMessage" class="conv-time">
                   {{ formatTime(conv.lastMessage.createdAt) }}
                 </span>
               </div>
               <p class="conv-last">
-                {{ conv.lastMessage?.content || '开始聊天吧' }}
+                <!-- 最后一条被撤回了的话，内容是空的 —— 显示成「消息已撤回」 -->
+                {{ conv.lastMessage ? conv.lastMessage.content || '消息已撤回' : '开始聊天吧' }}
               </p>
             </div>
           </button>
+
+          <!--
+            会话操作：置顶 / 免打扰。
+            放在 <li> 里和 <button> 平级，不塞进按钮内部 ——
+            按钮套按钮是无效 HTML，键盘用户也会撞上两个可聚焦元素。
+          -->
+          <div class="conv-actions">
+            <button
+              type="button"
+              class="conv-action"
+              :title="conv.pinned ? '取消置顶' : '置顶'"
+              :aria-label="conv.pinned ? '取消置顶' : '置顶'"
+              @click="updateSettings(conv.id, { pinned: !conv.pinned })"
+            >
+              <el-icon><component :is="conv.pinned ? Bottom : Top" /></el-icon>
+            </button>
+            <button
+              type="button"
+              class="conv-action"
+              :title="conv.muted ? '取消免打扰' : '免打扰'"
+              :aria-label="conv.muted ? '取消免打扰' : '免打扰'"
+              @click="updateSettings(conv.id, { muted: !conv.muted })"
+            >
+              <el-icon><component :is="conv.muted ? Bell : MuteNotification" /></el-icon>
+            </button>
+          </div>
         </li>
       </ul>
     </aside>
@@ -368,10 +432,36 @@ watch(activeId, () => {
               </el-avatar>
               <span v-else class="msg-avatar-slot" />
 
-              <div class="bubble" :class="{ failed: isFailed(item.message) }">
-                <p class="bubble-text">{{ item.message.content }}</p>
-                <span class="bubble-meta">{{ formatClock(item.message.createdAt) }}</span>
+              <div
+                class="bubble"
+                :class="{ failed: isFailed(item.message), recalled: !!item.message.recalledAt }"
+              >
+                <!-- 撤回后的气泡只留一句提示，不留原文 -->
+                <p v-if="item.message.recalledAt" class="bubble-recalled">
+                  {{
+                    item.message.senderId === auth.user?.id
+                      ? '你撤回了一条消息'
+                      : '对方撤回了一条消息'
+                  }}
+                </p>
+                <template v-else>
+                  <p class="bubble-text">{{ item.message.content }}</p>
+                  <span class="bubble-meta">{{ formatClock(item.message.createdAt) }}</span>
+                </template>
               </div>
+
+              <!--
+                撤回入口：只有自己发的、2 分钟内的才给。
+                给一个点了会失败的入口，比不给更糟。
+              -->
+              <button
+                v-if="canRecall(item.message)"
+                type="button"
+                class="recall-btn"
+                @click="recall(item.message)"
+              >
+                撤回
+              </button>
 
               <!-- 只有自己发的消息才带状态 -->
               <span v-if="item.message.senderId === auth.user?.id" class="read-flag">
@@ -638,6 +728,68 @@ watch(activeId, () => {
  */
 .conv-item-wrap {
   list-style: none;
+  /* 操作按钮是 absolute 定位，锚在这一项上 */
+  position: relative;
+}
+
+/*
+ * 会话操作按钮：hover / 键盘聚焦时才出现。
+ *
+ * 常驻的话一屏七八个会话全是图标，列表就没法看了 ——
+ * 但「免打扰」的状态标记是常驻的（只有操作按钮藏起来），
+ * 因为「只藏红点不藏状态」会让人以为消息没送到。
+ */
+.conv-actions {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--background);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out-expo);
+}
+
+.conv-item-wrap:hover .conv-actions,
+.conv-item-wrap:focus-within .conv-actions {
+  opacity: 1;
+}
+
+.conv-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.conv-action:hover {
+  background: var(--muted);
+  color: var(--accent);
+}
+
+.conv-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pin-mark,
+.mute-mark {
+  margin-right: 3px;
+  color: var(--muted-foreground);
+  vertical-align: -2px;
 }
 
 .conv-item-wrap.active {
@@ -958,6 +1110,44 @@ watch(activeId, () => {
   margin-top: 3px;
   font-size: var(--fs-2xs);
   opacity: 0.65;
+}
+
+/* 撤回入口：只有自己发的、2 分钟内的消息才有 */
+.recall-btn {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo);
+}
+
+.recall-btn:hover {
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.recall-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 撤回后的气泡：虚线 + 斜体，像一句「这里曾经有过东西」的占位 */
+.bubble.recalled {
+  border-style: dashed;
+}
+
+.bubble-recalled {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-style: italic;
+  color: var(--muted-foreground);
 }
 
 .read-flag {
