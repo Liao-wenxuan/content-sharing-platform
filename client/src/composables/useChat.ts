@@ -69,11 +69,23 @@ function isPeerOnline(conv: Conversation | null): boolean {
   return conv ? onlineUserIds.value.includes(conv.peer.id) : false
 }
 
+/**
+ * 追加一条消息。
+ *
+ * ⚠️ 这里**必须创建新数组**，不能就地 push。
+ *
+ * 就地 push 的后果：`messagesByConv.value[convId]` 还是同一个引用，
+ * computed `activeMessages` 不会重新求值，
+ * 于是 `watch(activeMessages, ...)` **一次都不触发** ——
+ * 对方发来的消息不会自动滚到底（自己发的走 ack 路径，创建了新数组，所以会滚）。
+ *
+ * 症状是「新消息在下面，用户看不见」，而控制台干干净净 ——
+ * 属于最难查的那一类。
+ */
 function pushMessage(convId: number, message: ChatMessage) {
-  const list = messagesByConv.value[convId] ?? (messagesByConv.value[convId] = [])
+  const list = messagesByConv.value[convId] ?? []
   if (list.some((m) => m.id === message.id)) return
-  list.push(message)
-  messagesByConv.value[convId] = list
+  messagesByConv.value[convId] = [...list, message]
 }
 
 /** 收到服务端消息：可能是 ack（带 tempId），也可能是别的设备同步过来的 */

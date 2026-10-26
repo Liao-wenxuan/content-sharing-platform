@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick, watch } from 'vue'
 import { FakeWebSocket } from './helpers/fake-socket'
 
 /**
@@ -474,5 +475,45 @@ describe('空状态推荐', () => {
     await chat.loadConversations()
     await expect(chat.loadSuggestions()).resolves.toBeUndefined()
     expect(chat.suggestions.value).toEqual([])
+  })
+})
+
+/*
+ * 下面这组是 2026-10-26 补的：一组「消息流变了，但没人收到通知」的回归。
+ *
+ * 起因是一个探针的发现：对方发来的消息进了列表，
+ * 但 `watch(activeMessages, ...)` **一次都没触发** ——
+ * 因为 pushMessage 是就地 push，数组引用没变，computed 不重新求值。
+ *
+ * 症状：新消息在下面，用户看不见；而自己发的消息会滚（ack 路径创建了新数组）。
+ * 一个**只对一半消息生效**的自动滚动，比没有还难查。
+ */
+describe('消息流变化要能被观察到', () => {
+  it('对方发来的消息会让 activeMessages 重新求值', async () => {
+    await bootOnline()
+    await openConv()
+
+    let fired = 0
+    watch(chat.activeMessages, () => fired++)
+
+    FakeWebSocket.latest.emitFrame({
+      type: 'message',
+      payload: {
+        message: {
+          id: 701,
+          conversationId: CONV.id,
+          senderId: PEER.id,
+          receiverId: ME.id,
+          content: '在吗',
+          createdAt: '2026-10-26T00:00:00.000Z',
+          readAt: null
+        }
+      }
+    })
+    await nextTick()
+
+    expect(chat.activeMessages.value).toHaveLength(1)
+    // 少了这一条，视图上的自动滚动就是死的
+    expect(fired).toBe(1)
   })
 })
