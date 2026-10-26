@@ -1,6 +1,11 @@
 import db from './db'
-import { toISO } from './time'
-import { MESSAGE_MAX_LENGTH, MESSAGE_PAGE_MAX, MESSAGE_PAGE_DEFAULT } from '../constants'
+import { toISO, toSqliteDateTime } from './time'
+import {
+  MESSAGE_MAX_LENGTH,
+  MESSAGE_PAGE_MAX,
+  MESSAGE_PAGE_DEFAULT,
+  MESSAGE_RECALL_WINDOW_MS
+} from '../constants'
 import type { WsConversation, WsMessage } from '../ws/protocol'
 
 /**
@@ -53,6 +58,13 @@ export function assertMember(conversationId: number, userId: number): Conversati
   return row
 }
 
+/**
+ * 会话列表的查询。
+ *
+ * 左连 conversation_settings 拿**我**对这个会话的设置（置顶 / 免打扰）。
+ * 用 LEFT JOIN 而不是 INNER：没有设置行 = 用默认值（不置顶、不免打扰），
+ * 而 INNER JOIN 会把「没设置过」的会话整个漏掉。
+ */
 const CONVERSATION_SELECT = `
   SELECT
     c.id, c.last_message_id, c.last_message_at, c.created_at,
@@ -61,10 +73,14 @@ const CONVERSATION_SELECT = `
     (SELECT COUNT(*) FROM messages m
       WHERE m.conversation_id = c.id
         AND m.receiver_id = @me
-        AND m.read_at IS NULL) AS unread_count
+        AND m.read_at IS NULL) AS unread_count,
+    COALESCE(cs.pinned, 0) AS pinned,
+    COALESCE(cs.muted, 0) AS muted
   FROM conversations c
   JOIN users peer ON peer.id = CASE WHEN c.user_a_id = @me THEN c.user_b_id ELSE c.user_a_id END
   LEFT JOIN messages lm ON lm.id = c.last_message_id
+  LEFT JOIN conversation_settings cs
+    ON cs.conversation_id = c.id AND cs.user_id = @me
   WHERE c.user_a_id = @me OR c.user_b_id = @me
 `
 
@@ -79,6 +95,8 @@ interface ListRow {
   last_content: string | null
   last_sender_id: number | null
   unread_count: number
+  pinned: number
+  muted: number
 }
 
 function toConversationJson(row: ListRow): WsConversation {
@@ -96,6 +114,8 @@ function toConversationJson(row: ListRow): WsConversation {
         }
       : null,
     unreadCount: row.unread_count,
+    pinned: row.pinned === 1,
+    muted: row.muted === 1,
     createdAt: toISO(row.created_at)
   }
 }
@@ -103,7 +123,11 @@ function toConversationJson(row: ListRow): WsConversation {
 /** 会话列表：按最后一条消息时间倒序，新建的空会话排最后但仍显示 */
 export function listConversationsFor(userId: number): WsConversation[] {
   const rows = db
-    .prepare(`${CONVERSATION_SELECT} ORDER BY COALESCE(c.last_message_at, c.created_at) DESC`)
+    .prepare(
+      `${CONVERSATION_SELECT}
+       ORDER BY COALESCE(cs.pinned, 0) DESC,
+                COALESCE(c.last_message_at, c.created_at) DESC`
+    )
     .all({ me: userId }) as ListRow[]
   return rows.map(toConversationJson)
 }
@@ -123,7 +147,9 @@ export function toMessageJson(r: any): WsMessage {
     receiverId: r.receiver_id,
     content: r.content,
     createdAt: toISO(r.created_at),
-    readAt: r.read_at ? toISO(r.read_at) : null
+    readAt: r.read_at ? toISO(r.read_at) : null,
+    // 非 null = 这条被撤回过。内容已经被清空，前端据此显示「XX 撤回了一条消息」
+    recalledAt: r.recalled_at ? toISO(r.recalled_at) : null
   }
 }
 
@@ -142,7 +168,8 @@ export function listMessages(
   // 先取 limit+1 条：多出来那条只用来判断还有没有下一页，不返回给前端
   const rows = db
     .prepare(
-      `SELECT id, conversation_id, sender_id, receiver_id, content, created_at, read_at
+      `SELECT id, conversation_id, sender_id, receiver_id, content, created_at, read_at,
+              recalled_at
        FROM messages
        WHERE conversation_id = ?
          AND (? IS NULL OR id < ?)
@@ -170,7 +197,8 @@ export function listMessages(
 export function listUnreadMessages(userId: number, limit = 50): WsMessage[] {
   const rows = db
     .prepare(
-      `SELECT id, conversation_id, sender_id, receiver_id, content, created_at, read_at
+      `SELECT id, conversation_id, sender_id, receiver_id, content, created_at, read_at,
+              recalled_at
        FROM messages
        WHERE receiver_id = ? AND read_at IS NULL
        ORDER BY id DESC
@@ -206,7 +234,9 @@ export function insertMessage(
     receiverId,
     content,
     createdAt: new Date().toISOString(),
-    readAt: null
+    readAt: null,
+    // 刚发的消息不可能是撤回状态
+    recalledAt: null
   }
 }
 
@@ -231,4 +261,98 @@ export function validateMessageContent(
     return { ok: false, reason: 'message_too_long' }
   }
   return { ok: true, value: content.trim() }
+}
+
+// ===== 消息撤回 =====
+
+export type RecallFailure =
+  'not_found' | 'not_in_conversation' | 'not_sender' | 'already_recalled' | 'too_late'
+
+export type RecallResult = { ok: true; message: WsMessage } | { ok: false; reason: RecallFailure }
+
+/**
+ * 撤回一条消息。
+ *
+ * 四条规则，少一条都不行：
+ * 1. 消息存在、属于这个会话
+ * 2. **只能撤回自己发的** —— 替对方撤回，等于单方面删除对方说过的话
+ * 3. 没被撤回过（重复撤回是幂等的，但接口要如实告诉调用方）
+ * 4. 发出后 **2 分钟内**（MESSAGE_RECALL_WINDOW_MS）
+ *
+ * 内容是真的被清空的，不是只打个标记：
+ * 撤回的意义是「我不想让这条内容继续存在」，
+ * 只标记不清内容的话，它照样能被历史接口拉出来 —— 那就白撤了。
+ * 前端根据 `recalledAt` 显示「XX 撤回了一条消息」。
+ *
+ * @param now 判定「现在」用的时间点，做成参数是为了能测
+ */
+export function recallMessage(
+  conversationId: number,
+  messageId: number,
+  userId: number,
+  now: Date = new Date()
+): RecallResult {
+  const row = db.prepare(`SELECT * FROM messages WHERE id = ?`).get(messageId) as any
+  if (!row) return { ok: false, reason: 'not_found' }
+  if (row.conversation_id !== conversationId) return { ok: false, reason: 'not_in_conversation' }
+  if (row.sender_id !== userId) return { ok: false, reason: 'not_sender' }
+  if (row.recalled_at) return { ok: false, reason: 'already_recalled' }
+
+  // 发出时间用 toISO 解析：库里存的是 UTC 但没时区后缀，
+  // 直接 new Date(str) 会被按本地时区解析，UTC+8 下差 8 小时，
+  // 8 小时的误差会让「2 分钟内」这个判断整个失真。
+  const sentAt = new Date(toISO(row.created_at)).getTime()
+  if (now.getTime() - sentAt > MESSAGE_RECALL_WINDOW_MS) {
+    return { ok: false, reason: 'too_late' }
+  }
+
+  const stamp = toSqliteDateTime(now)
+  db.prepare(`UPDATE messages SET content = '', recalled_at = ? WHERE id = ?`).run(stamp, messageId)
+
+  return {
+    ok: true,
+    message: toMessageJson({ ...row, content: '', recalled_at: stamp })
+  }
+}
+
+// ===== 会话设置：置顶 / 免打扰 =====
+
+export interface ConversationSettings {
+  pinned: boolean
+  muted: boolean
+}
+
+/**
+ * 设置**我**对这个会话的偏好。
+ *
+ * 置顶和免打扰都是「每个人的设置」而不是「会话的属性」——
+ * 同一个人可以对 A 置顶、对 B 免打扰，对方一个都没设也是常事。
+ * 所以按 (conversation_id, user_id) 存，见 schema 里的 conversation_settings。
+ *
+ * 只传要改的那一个，另一个保持原值。
+ */
+export function setConversationSettings(
+  conversationId: number,
+  userId: number,
+  patch: { pinned?: boolean; muted?: boolean }
+): ConversationSettings {
+  const row = db
+    .prepare(
+      `SELECT pinned, muted FROM conversation_settings WHERE conversation_id = ? AND user_id = ?`
+    )
+    .get(conversationId, userId) as { pinned: number; muted: number } | undefined
+
+  const pinned = patch.pinned ?? row?.pinned === 1
+  const muted = patch.muted ?? row?.muted === 1
+
+  db.prepare(
+    `INSERT INTO conversation_settings (conversation_id, user_id, pinned, muted, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(conversation_id, user_id) DO UPDATE SET
+       pinned = excluded.pinned,
+       muted = excluded.muted,
+       updated_at = CURRENT_TIMESTAMP`
+  ).run(conversationId, userId, pinned ? 1 : 0, muted ? 1 : 0)
+
+  return { pinned, muted }
 }

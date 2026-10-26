@@ -18,6 +18,8 @@ export interface WsMessage {
   content: string
   createdAt: string
   readAt: string | null
+  /** 非 null = 这条被撤回过。内容已被清空，前端据此显示「XX 撤回了一条消息」 */
+  recalledAt: string | null
 }
 
 export interface WsConversationPeer {
@@ -36,6 +38,10 @@ export interface WsConversation {
     createdAt: string
   } | null
   unreadCount: number
+  /** 我把这个会话置顶了（每个人独立） */
+  pinned: boolean
+  /** 我把这个会话设成免打扰了（每个人独立） */
+  muted: boolean
   createdAt: string
 }
 
@@ -71,6 +77,24 @@ export type ServerMessage =
   | { type: 'message'; payload: { message: WsMessage; tempId?: string } }
   /** 对方已读 */
   | { type: 'read_receipt'; payload: { conversationId: number; readerId: number; readAt: string } }
+  /**
+   * 有消息被撤回了。
+   *
+   * 撤回是**HTTP 写 + WS 推**（和通知一个套路）：
+   * 撤回是低频操作，不需要走 WS 的请求通道，
+   * 但撤回这件事必须让**双方**都知道 —— 一方撤回了，另一方也得把气泡换成提示。
+   *
+   * recalledBy 用来区分「你撤回了一条消息」和「对方撤回了一条消息」。
+   */
+  | {
+      type: 'message_recalled'
+      payload: {
+        conversationId: number
+        messageId: number
+        recalledAt: string
+        recalledBy: number
+      }
+    }
   | { type: 'typing'; payload: { conversationId: number; userId: number } }
   /**
    * 有新通知（点赞 / 收藏 / 关注 / 评论 / @）。
