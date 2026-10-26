@@ -138,6 +138,20 @@ function applyIncoming(message: ChatMessage, tempId?: string) {
   }
 }
 
+/**
+ * 把一条消息标记成「已撤回」。
+ *
+ * 内容清空 + 记下撤回时间。视图看到 recalledAt 有值就显示提示文案。
+ */
+function applyRecalled(convId: number, messageId: number, recalledAt: string) {
+  const list = messagesByConv.value[convId] ?? []
+  const idx = list.findIndex((m) => m.id === messageId)
+  if (idx === -1) return
+  const next = [...list]
+  next[idx] = { ...next[idx], content: '', recalledAt }
+  messagesByConv.value[convId] = next
+}
+
 function upsertConversation(conv: Conversation) {
   const idx = conversations.value.findIndex((c) => c.id === conv.id)
   if (idx === -1) {
@@ -257,7 +271,9 @@ function sendText(text: string) {
     receiverId: conv.peer.id,
     content,
     createdAt: new Date().toISOString(),
-    readAt: null
+    readAt: null,
+    // 刚发的消息不可能是撤回状态
+    recalledAt: null
   }
   pushMessage(conv.id, optimistic)
   tempIdToLocalId.set(tempId, optimistic.id)
@@ -284,6 +300,47 @@ function sendText(text: string) {
     // 没连上：标红提示，让用户知道这条没发出去
     failedLocalIds.value.add(optimistic.id)
     toast.show('当前离线，消息未发送', 'error')
+  }
+}
+
+/**
+ * 撤回一条消息。
+ *
+ * 服务端会清空内容并广播给双方，所以本地拿到结果后直接替换那条。
+ * 失败时把服务端给的原因显示出来（「只能撤回自己发的消息」比
+ * 「撤回失败」有用得多 —— 用户能据此知道下一步该做什么）。
+ */
+async function recall(m: ChatMessage) {
+  if (!activeId.value) return
+  try {
+    const { message } = await conversationsApi.recall(activeId.value, m.id)
+    // 用 **m.id**（用户点的那个）去定位本地那条，不用服务端回传的 id ——
+    // 本地那条可能还是乐观消息（负数 id，ack 还没回来），
+    // 而服务端回的 id 和本地那行对不上时就定位不到了。
+    applyRecalled(activeId.value, m.id, message.recalledAt ?? new Date().toISOString())
+  } catch (err: any) {
+    const reason = err?.response?.data?.message
+    toast.show(reason || '撤回失败', 'error')
+  }
+}
+
+/**
+ * 改置顶 / 免打扰。
+ *
+ * 这两个是**服务端**的状态（per user），不是本地偏好 ——
+ * 换一台设备登录，设置还在。
+ */
+async function updateSettings(convId: number, patch: { pinned?: boolean; muted?: boolean }) {
+  const conv = conversations.value.find((c) => c.id === convId)
+  if (!conv) return
+  try {
+    const s = await conversationsApi.setSettings(convId, patch)
+    conv.pinned = s.pinned
+    conv.muted = s.muted
+    // 置顶会改变列表顺序，重新拉一次让顺序和「置顶的排最前」一致
+    if (patch.pinned !== undefined) await loadConversations()
+  } catch {
+    toast.show('修改失败', 'error')
   }
 }
 
@@ -352,6 +409,19 @@ const unsubscribers = [
     )
   }),
 
+  /**
+   * 有消息被撤回了。
+   *
+   * 服务端把内容清空后广播给**双方**，所以两边的气泡都要换成提示。
+   * 这里只改内容 —— 撤回者是谁，由视图根据 senderId 判断文案。
+   */
+  onWsMessage(
+    'message_recalled',
+    (p: { conversationId: number; messageId: number; recalledAt: string; recalledBy: number }) => {
+      applyRecalled(p.conversationId, p.messageId, p.recalledAt)
+    }
+  ),
+
   onWsMessage('typing', (p: { conversationId: number; userId: number }) => {
     if (p.conversationId !== activeId.value || p.userId === auth.user?.id) return
     peerTyping.value = true
@@ -403,6 +473,8 @@ export function useChat() {
     startWithPeer,
     sendText,
     retryMessage,
+    recall,
+    updateSettings,
     notifyTyping
   }
 }
