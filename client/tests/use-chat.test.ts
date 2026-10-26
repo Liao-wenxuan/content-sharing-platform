@@ -517,3 +517,81 @@ describe('消息流变化要能被观察到', () => {
     expect(fired).toBe(1)
   })
 })
+
+describe('未读分界线', () => {
+  it('打开有未读的会话时，记下第一条未读消息的位置', async () => {
+    vi.mocked(api.messages).mockResolvedValue({
+      list: [
+        {
+          id: 1,
+          conversationId: CONV.id,
+          senderId: PEER.id,
+          receiverId: ME.id,
+          content: '旧的',
+          createdAt: '',
+          readAt: 'x'
+        },
+        {
+          id: 2,
+          conversationId: CONV.id,
+          senderId: PEER.id,
+          receiverId: ME.id,
+          content: '新的',
+          createdAt: '',
+          readAt: null
+        }
+      ],
+      pagination: { hasMore: false, nextBefore: null }
+    })
+    vi.mocked(api.list).mockResolvedValue({
+      list: [{ ...structuredClone(CONV), unreadCount: 1 }] as never
+    })
+
+    await bootOnline()
+    await openConv()
+
+    // 2 条消息里最后 1 条是未读 → 分界线在下标 1 之前
+    expect(chat.unreadStartIndex.value).toBe(1)
+  })
+
+  it('没有未读时不画分界线', async () => {
+    await bootOnline()
+    await openConv()
+    expect(chat.unreadStartIndex.value).toBeNull()
+  })
+})
+
+describe('失败重发', () => {
+  it('重发时旧的那条先被移除，再按原内容发出去', async () => {
+    await bootOnline()
+    await openConv()
+
+    // 造一条失败的消息：负数 id + 在失败集合里
+    chat.sendText('发不出去的那条')
+    const failed = chat.activeMessages.value.find((m) => m.id < -1)
+    expect(failed).toBeDefined()
+
+    // 模拟服务端拒绝
+    FakeWebSocket.latest.emitFrame({
+      type: 'error',
+      payload: { code: 'bad_payload', message: '服务端处理失败', tempId: tempIds()[0] }
+    })
+    await nextTick()
+    expect(chat.failedLocalIds.value.has(failed!.id)).toBe(true)
+
+    const before = FakeWebSocket.latest
+      .sentFrames<{ type: string; payload: { content?: string } }>()
+      .filter((f) => f.type === 'send_message').length
+
+    chat.retryMessage(failed!)
+
+    // 旧的那条没了
+    expect(chat.activeMessages.value.some((m) => m.id === failed!.id)).toBe(false)
+    // 新的发出去了，内容一样
+    const after = FakeWebSocket.latest
+      .sentFrames<{ type: string; payload: { content?: string } }>()
+      .filter((f) => f.type === 'send_message')
+    expect(after).toHaveLength(before + 1)
+    expect(after[after.length - 1].payload.content).toBe(failed!.content)
+  })
+})

@@ -8,6 +8,7 @@ import {
 import { useWebSocket, onWsMessage } from '@/composables/useWebSocket'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { unreadStartIndexOf } from '@/utils/chatTimeline'
 
 /**
  * 聊天逻辑层
@@ -43,6 +44,16 @@ const peerTyping = ref(false)
  */
 const failedLocalIds = ref<Set<number>>(new Set())
 const connectionLabel = ref('')
+/**
+ * 当前会话的未读分界线：列表里**第一条未读消息**的下标。
+ *
+ * 为什么单独记：会话列表里只存了未读**条数**，
+ * 而「以下为新消息」那条线要画在具体位置上 ——
+ * 进入会话时按条数算出来，之后 markRead 把未读清零了，位置就找不回来了。
+ *
+ * null = 本次进入没有未读，不画分界线。
+ */
+const unreadStartIndex = ref<number | null>(null)
 
 const auth = useAuthStore()
 const toast = useToastStore()
@@ -166,6 +177,9 @@ async function loadSuggestions() {
 async function openConversation(convId: number) {
   activeId.value = convId
   peerTyping.value = false
+  // 未读数要在 markRead 之前取 —— markRead 之后就没了
+  const conv = conversations.value.find((c) => c.id === convId)
+  const unread = conv?.unreadCount ?? 0
 
   if (!messagesByConv.value[convId]) {
     loadingMessages.value = true
@@ -180,6 +194,10 @@ async function openConversation(convId: number) {
       loadingMessages.value = false
     }
   }
+
+  // 分界线画在第一条未读消息之前。
+  // 未读比一屏还多时（下标 0），画出来的意思是「下面这些全是新的」。
+  unreadStartIndex.value = unreadStartIndexOf(activeMessages.value, unread)
 
   await markRead(convId)
 }
@@ -279,6 +297,24 @@ function notifyTyping() {
   sendWs({ type: 'typing', payload: { conversationId: activeId.value } })
 }
 
+/**
+ * 重发一条失败的消息。
+ *
+ * 失败的那条（负数 id）先从列表里拿掉，再按原内容重发 ——
+ * 留着旧的再发新的，列表里会出现两条一模一样的消息。
+ */
+function retryMessage(m: ChatMessage) {
+  const list = messagesByConv.value[m.conversationId] ?? []
+  const idx = list.findIndex((x) => x.id === m.id)
+  if (idx !== -1) {
+    const next = [...list]
+    next.splice(idx, 1)
+    messagesByConv.value[m.conversationId] = next
+  }
+  failedLocalIds.value.delete(m.id)
+  sendText(m.content)
+}
+
 // ===== WS 订阅 =====
 
 let typingTimer: ReturnType<typeof setTimeout> | null = null
@@ -357,6 +393,7 @@ export function useChat() {
     wsState,
     connected,
     isPeerOnline,
+    unreadStartIndex,
     // 动作
     loadConversations,
     loadSuggestions,
@@ -365,6 +402,7 @@ export function useChat() {
     markRead,
     startWithPeer,
     sendText,
+    retryMessage,
     notifyTyping
   }
 }

@@ -6,25 +6,33 @@
  * 所有状态和副作用在 useChat 里，这里只渲染 + 转发交互。
  *
  * 视觉沿用项目的 Flat + Outline 语言：纯色底、1px 描边、红色只用在强调位。
+ *
+ * 滚动语义照抖音那套：**新消息只在用户本来就贴在底部时才自动跟随**；
+ * 用户往上翻历史时不打断，右下角出现「N 条新消息」让他自己决定要不要回去。
  */
 import { ref, watch, nextTick, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Connection, Clock, Promotion, CircleCheck, Warning } from '@element-plus/icons-vue'
+import {
+  Connection,
+  Clock,
+  Promotion,
+  CircleCheck,
+  Warning,
+  ArrowDown,
+  RefreshRight,
+  Loading
+} from '@element-plus/icons-vue'
 import { useChat } from '@/composables/useChat'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useAuthStore } from '@/stores/auth'
 import { useRelativeTime } from '@/composables/useRelativeTime'
+import { buildTimeline } from '@/utils/chatTimeline'
 
 const route = useRoute()
 const auth = useAuthStore()
 const { formatTime } = useRelativeTime()
 const { latency } = useWebSocket()
 
-/** 气泡上的时间戳：只要时分，不要日期 */
-function formatClock(input: string | number | Date): string {
-  const d = new Date(input)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
 const {
   conversations,
   suggestions,
@@ -40,17 +48,33 @@ const {
   wsState,
   connected,
   isPeerOnline,
+  unreadStartIndex,
   loadConversations,
   loadSuggestions,
   openConversation,
   loadMoreHistory,
   sendText,
+  retryMessage,
   notifyTyping,
   startWithPeer
 } = useChat()
 
 const draft = ref('')
 const listEl = ref<HTMLElement | null>(null)
+
+/**
+ * 视图当前是不是贴在底部。
+ *
+ * 这是抖音那套滚动语义的开关：**新消息进来时，只有用户本来就贴在底部才自动跟过去**。
+ * 用户正在往上翻历史时强行把他拽回底部，等于把「我在找某条旧消息」这个动作作废 ——
+ * 而这恰恰是他翻历史的原因。
+ */
+const atBottom = ref(true)
+/** 离开底部之后攒下的新消息条数：用来在右下角提示「N 条新消息」 */
+const pendingNew = ref(0)
+
+/** 离底部多远算「还在底部」：80px 足够覆盖一行的呼吸区，也不至于让人稍微滚一下就失去跟随 */
+const BOTTOM_THRESHOLD = 80
 
 const CONNECTION_TEXT: Record<string, string> = {
   idle: '未连接',
@@ -63,12 +87,75 @@ const CONNECTION_TEXT: Record<string, string> = {
 const connectionText = computed(() => CONNECTION_TEXT[wsState.value] ?? wsState.value)
 const latencyText = computed(() => (latency.value === null ? '' : `${latency.value}ms`))
 
-/** 消息流滚到底部；新消息进来时自动跟随 */
+/** 消息流排成时间线（时间分隔线 / 未读分界线 / 连续消息分组） */
+const timeline = computed(() =>
+  buildTimeline(activeMessages.value, { unreadStartIndex: unreadStartIndex.value })
+)
+
+/** 气泡上的时间戳：只要时分，不要日期 */
+function formatClock(input: string | number | Date): string {
+  const d = new Date(input)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** 时间分隔线上的文字：今天只显示时分，更早的带上日期 */
+function formatDividerTime(input: string): string {
+  const d = new Date(input)
+  const now = new Date()
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  if (sameDay) return hm
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`
+}
+
+/** 某人的头像：自己的用自己的，对方的用当前会话的 peer */
+function avatarOf(senderId: number): string | null {
+  if (senderId === auth.user?.id) return auth.user?.avatar ?? null
+  return activeConversation.value?.peer.avatar ?? null
+}
+
+/** 头像里的占位字：昵称第一个字 */
+function avatarTextOf(senderId: number): string {
+  if (senderId === auth.user?.id) return auth.user?.nickname.slice(0, 1) ?? '我'
+  return activeConversation.value?.peer.nickname.slice(0, 1) ?? '?'
+}
+
+/** 消息流滚到底部 */
 async function scrollToBottom(smooth = true) {
   await nextTick()
   const el = listEl.value
   if (!el) return
   el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+}
+
+/** 滚动事件：更新「在不在底部」 */
+function onScroll() {
+  const el = listEl.value
+  if (!el) return
+  const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+  atBottom.value = distance <= BOTTOM_THRESHOLD
+  if (atBottom.value) pendingNew.value = 0
+}
+
+/** 点「N 条新消息」：回到底部 */
+async function jumpToBottom() {
+  pendingNew.value = 0
+  atBottom.value = true
+  await scrollToBottom()
+}
+
+/** 往上翻更早的历史：加载完要保持视口不跳 */
+async function loadOlder() {
+  const el = listEl.value
+  const beforeHeight = el?.scrollHeight ?? 0
+  const beforeTop = el?.scrollTop ?? 0
+  await loadMoreHistory()
+  await nextTick()
+  // 新消息插在**前面**，视口会整体上移 —— 补回这段差，用户的视口就停在原来那条消息上
+  if (el) el.scrollTop = beforeTop + (el.scrollHeight - beforeHeight)
 }
 
 function submit() {
@@ -88,6 +175,20 @@ function isFailed(m: { id: number }) {
   return m.id < -1 && failedLocalIds.value.has(m.id)
 }
 
+/** 消息数变化时的滚动决策：贴底就跟随，不贴底就记账 */
+watch(
+  () => activeMessages.value.length,
+  (len, oldLen) => {
+    if (len === oldLen) return
+    if (atBottom.value) {
+      void scrollToBottom()
+    } else {
+      // 用户在翻历史 —— 不打断，只记个数
+      pendingNew.value += len - oldLen
+    }
+  }
+)
+
 onMounted(async () => {
   await loadConversations()
 
@@ -105,7 +206,6 @@ onMounted(async () => {
   }
 })
 
-watch(activeMessages, () => void scrollToBottom(), { deep: false })
 watch(activeId, () => {
   void loadConversations()
   void scrollToBottom(false)
@@ -220,14 +320,14 @@ watch(activeId, () => {
           </div>
         </header>
 
-        <div ref="listEl" class="msg-list">
+        <div ref="listEl" class="msg-list" @scroll.passive="onScroll">
           <div class="history-top">
             <el-button
               v-if="hasMoreHistory"
               link
               size="small"
               :loading="loadingMessages"
-              @click="loadMoreHistory"
+              @click="loadOlder"
             >
               <el-icon><component :is="Clock" /></el-icon> 加载更早的消息
             </el-button>
@@ -235,30 +335,80 @@ watch(activeId, () => {
 
           <div v-if="loadingMessages && !activeMessages.length" class="list-hint">加载中…</div>
 
-          <div
-            v-for="m in activeMessages"
-            :key="m.id"
-            class="msg-row"
-            :class="m.senderId === auth.user?.id ? 'mine' : 'theirs'"
-          >
-            <div class="bubble" :class="{ failed: isFailed(m) }">
-              <p class="bubble-text">{{ m.content }}</p>
-              <span class="bubble-meta">{{ formatClock(m.createdAt) }}</span>
+          <template v-for="item in timeline" :key="item.key">
+            <!-- 时间分隔线：两条消息隔太久才画一条 -->
+            <div v-if="item.kind === 'time'" class="time-divider">
+              {{ formatDividerTime(item.at) }}
             </div>
-            <span v-if="m.senderId === auth.user?.id && m.id > -1" class="read-flag">
-              <el-icon><component :is="m.readAt ? CircleCheck : Promotion" /></el-icon>
-              {{ m.readAt ? '已读' : '已送达' }}
-            </span>
-            <span v-else-if="m.senderId === auth.user?.id" class="read-flag pending">
-              {{ isFailed(m) ? '发送失败' : '发送中…' }}
-            </span>
-          </div>
+
+            <!-- 未读分界线：进会话时把「新消息」和历史隔开 -->
+            <div v-else-if="item.kind === 'unread'" class="unread-divider">
+              <span class="unread-line" />
+              <span class="unread-text">以下为新消息</span>
+              <span class="unread-line" />
+            </div>
+
+            <!-- 消息气泡 -->
+            <div
+              v-else
+              class="msg-row"
+              :class="[
+                item.message.senderId === auth.user?.id ? 'mine' : 'theirs',
+                { grouped: item.grouped }
+              ]"
+            >
+              <!-- 同一个人连续发的消息只画一次头像，位置用占位对齐 -->
+              <el-avatar
+                v-if="!item.grouped"
+                :size="30"
+                class="msg-avatar"
+                :src="avatarOf(item.message.senderId) || undefined"
+              >
+                {{ avatarTextOf(item.message.senderId) }}
+              </el-avatar>
+              <span v-else class="msg-avatar-slot" />
+
+              <div class="bubble" :class="{ failed: isFailed(item.message) }">
+                <p class="bubble-text">{{ item.message.content }}</p>
+                <span class="bubble-meta">{{ formatClock(item.message.createdAt) }}</span>
+              </div>
+
+              <!-- 只有自己发的消息才带状态 -->
+              <span v-if="item.message.senderId === auth.user?.id" class="read-flag">
+                <template v-if="isFailed(item.message)">
+                  <button type="button" class="retry-btn" @click="retryMessage(item.message)">
+                    <el-icon><component :is="RefreshRight" /></el-icon>
+                    重发
+                  </button>
+                </template>
+                <template v-else-if="item.message.id < -1">
+                  <el-icon class="is-loading"><component :is="Loading" /></el-icon>
+                </template>
+                <template v-else>
+                  <el-icon
+                    ><component :is="item.message.readAt ? CircleCheck : Promotion"
+                  /></el-icon>
+                  {{ item.message.readAt ? '已读' : '已送达' }}
+                </template>
+              </span>
+            </div>
+          </template>
 
           <div v-if="peerTyping" class="typing-row">
             <el-icon class="is-loading"><component :is="Connection" /></el-icon>
             {{ activeConversation.peer.nickname }} 正在输入…
           </div>
         </div>
+
+        <!--
+          回到底部：用户往上翻历史时，新消息攒在这里**不打断他**。
+          强行把人拽回底部等于作废「我在找某条旧消息」这个动作 ——
+          而这恰恰是他翻历史的原因。
+        -->
+        <button v-if="pendingNew > 0" type="button" class="jump-bottom" @click="jumpToBottom">
+          <el-icon><component :is="ArrowDown" /></el-icon>
+          {{ pendingNew }} 条新消息
+        </button>
 
         <footer class="composer">
           <el-input
@@ -578,6 +728,8 @@ watch(activeId, () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* 「N 条新消息」按钮是 absolute 定位，锚在这个面板上 */
+  position: relative;
   /* 比列表略亮一点点就够分层。之前用 --muted 在 1920 宽下是一整块
      1000px 的深灰，和左侧黑底割裂成两块颜色；现在靠 1px 描边 + 微弱色差分层。 */
   background: color-mix(in srgb, var(--muted) 45%, var(--background));
@@ -644,6 +796,129 @@ watch(activeId, () => {
   align-items: flex-end;
   gap: 8px;
   margin-bottom: 14px;
+}
+
+/*
+ * 连续消息（同一发言人、间隔够近）收紧间距。
+ * 头像只在组首画，后面用等宽占位对齐 —— 气泡边缘才不会一高一低。
+ */
+.msg-row.grouped {
+  margin-bottom: 4px;
+}
+
+.msg-avatar {
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+/* 占位：宽度等于头像（30px），保证组内气泡左边线对齐 */
+.msg-avatar-slot {
+  width: 30px;
+  flex-shrink: 0;
+}
+
+/* 时间分隔线：抖音那套 —— 隔太久才标一次时间 */
+.time-divider {
+  align-self: center;
+  margin: 6px 0 14px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--background);
+  font-size: var(--fs-2xs);
+  color: var(--muted-foreground);
+}
+
+/*
+ * 未读分界线：「以下为新消息」。
+ * 两边各一段细线 + 中间一句话 —— 比一条实心横线轻，
+ * 不会让人以为这里是一堵墙。
+ */
+.unread-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 16px;
+  font-size: var(--fs-2xs);
+  color: var(--muted-foreground);
+}
+
+.unread-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.unread-text {
+  flex-shrink: 0;
+}
+
+/* 失败消息的「重发」：不是装饰，是个能点的按钮 */
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fs-2xs);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo);
+}
+
+.retry-btn:hover,
+.retry-btn:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.retry-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/*
+ * 「N 条新消息」按钮：贴在消息流右下角。
+ *
+ * 位置用 absolute 而不是 fixed —— 消息流是右侧面板里的一个滚动容器，
+ * fixed 会跑到整个视口去（跑到侧栏上面去了）。
+ */
+.jump-bottom {
+  position: absolute;
+  right: 24px;
+  bottom: 84px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 22%);
+  transition:
+    border-color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+
+.jump-bottom:hover,
+.jump-bottom:focus-visible {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.jump-bottom:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .msg-row.mine {
