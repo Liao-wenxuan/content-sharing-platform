@@ -324,9 +324,14 @@ try {
   check('免打扰后有静音标记', true)
 
   // ===== 8.3 往上翻历史时不被新消息打断 =====
-  // 先灌够消息把列表撑出滚动条（否则 scrollTop 根本动不了）
-  for (let i = 0; i < 24; i++) {
-    await pageA.locator('.composer textarea').fill(`灌水 ${i} ${TAG}`)
+  // 先灌够消息把列表撑出滚动条（否则 scrollTop 根本动不了）。
+  //
+  // 用 **8 条长消息**而不是 24 条短的：撑出滚动条靠的是**总高度**，
+  // 长消息每条占 4 行，8 条就够了 —— 而每条消息都是一次 WS 往返，
+  // 24 条在 CI 的慢机器上要多花好几分钟。
+  const filler = '灌水'.repeat(60)
+  for (let i = 0; i < 8; i++) {
+    await pageA.locator('.composer textarea').fill(`${filler} ${i} ${TAG}`)
     await pageA.locator('.composer textarea').press('Enter')
   }
   await pageA.waitForTimeout(600)
