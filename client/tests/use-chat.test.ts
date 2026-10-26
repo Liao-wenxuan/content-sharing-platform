@@ -32,7 +32,9 @@ vi.mock('@/api/conversations', () => ({
     create: vi.fn(),
     messages: vi.fn(),
     markRead: vi.fn(),
-    unreadCount: vi.fn()
+    unreadCount: vi.fn(),
+    recall: vi.fn(),
+    setSettings: vi.fn()
   }
 }))
 
@@ -43,7 +45,10 @@ const CONV = {
   id: 3,
   peer: PEER,
   unreadCount: 0,
-  lastMessage: null as unknown
+  lastMessage: null as unknown,
+  // 每个用户对每个会话的设置（服务端 conversation_settings 表）
+  pinned: false,
+  muted: false
 }
 
 type Api = (typeof import('@/api/conversations'))['conversationsApi']
@@ -81,6 +86,24 @@ beforeEach(async () => {
     pagination: { hasMore: false, nextBefore: null }
   })
   vi.mocked(api.markRead).mockResolvedValue({ updated: 0 })
+  vi.mocked(api.recall).mockResolvedValue({
+    message: {
+      id: 0,
+      conversationId: CONV.id,
+      senderId: ME.id,
+      receiverId: PEER.id,
+      content: '',
+      createdAt: '2026-10-26T00:00:00.000Z',
+      readAt: null,
+      recalledAt: '2026-10-26T00:00:00.000Z'
+    }
+  })
+  // 回显请求，而不是返回固定值 ——
+  // 固定值的话，「改置顶」和「改免打扰」两条用例拿到的都是同一个假结果
+  vi.mocked(api.setSettings).mockImplementation(async (_id, patch) => ({
+    pinned: patch.pinned ?? false,
+    muted: patch.muted ?? false
+  }))
 
   toast = (await import('@/stores/toast')).useToastStore()
   toastCalls = []
@@ -110,7 +133,8 @@ function ack(tempId: string, realId: number, content: string) {
         receiverId: PEER.id,
         content,
         createdAt: '2026-10-03T00:00:00.000Z',
-        readAt: null
+        readAt: null,
+        recalledAt: null
       }
     }
   })
@@ -281,7 +305,8 @@ describe('已读回执', () => {
           receiverId: ME.id,
           content: '对方发的',
           createdAt: '',
-          readAt: null
+          readAt: null,
+          recalledAt: null
         }
       }
     })
@@ -358,7 +383,8 @@ describe('未读与会话状态', () => {
           receiverId: ME.id,
           content: '看着呢',
           createdAt: '',
-          readAt: null
+          readAt: null,
+          recalledAt: null
         }
       }
     })
@@ -382,7 +408,8 @@ describe('未读与会话状态', () => {
           receiverId: ME.id,
           content: '没在看',
           createdAt: '',
-          readAt: null
+          readAt: null,
+          recalledAt: null
         }
       }
     })
@@ -414,7 +441,8 @@ describe('历史消息游标分页', () => {
             receiverId: ME.id,
             content: '新',
             createdAt: '',
-            readAt: null
+            readAt: null,
+            recalledAt: null
           }
         ],
         pagination: { hasMore: true, nextBefore: 2 }
@@ -428,7 +456,8 @@ describe('历史消息游标分页', () => {
             receiverId: PEER.id,
             content: '更早',
             createdAt: '',
-            readAt: null
+            readAt: null,
+            recalledAt: null
           }
         ],
         pagination: { hasMore: false, nextBefore: null }
@@ -506,7 +535,8 @@ describe('消息流变化要能被观察到', () => {
           receiverId: ME.id,
           content: '在吗',
           createdAt: '2026-10-26T00:00:00.000Z',
-          readAt: null
+          readAt: null,
+          recalledAt: null
         }
       }
     })
@@ -515,6 +545,134 @@ describe('消息流变化要能被观察到', () => {
     expect(chat.activeMessages.value).toHaveLength(1)
     // 少了这一条，视图上的自动滚动就是死的
     expect(fired).toBe(1)
+  })
+})
+
+/*
+ * 撤回是「HTTP 写 + WS 推」：服务端清空内容后广播给**双方**。
+ * 所以两边都要把气泡换成提示 —— 只处理撤回方那一端是不够的。
+ */
+describe('消息撤回', () => {
+  /** 让对方发来一条消息 */
+  function peerMessage(id: number, content: string) {
+    FakeWebSocket.latest.emitFrame({
+      type: 'message',
+      payload: {
+        message: {
+          id,
+          conversationId: CONV.id,
+          senderId: PEER.id,
+          receiverId: ME.id,
+          content,
+          createdAt: '2026-10-26T00:00:00.000Z',
+          readAt: null,
+          recalledAt: null
+        }
+      }
+    })
+  }
+
+  it('对方撤回消息时，本地那条也跟着变成「已撤回」', async () => {
+    await bootOnline()
+    await openConv()
+    peerMessage(801, '说错话了')
+    await nextTick()
+    expect(chat.activeMessages.value[0].content).toBe('说错话了')
+
+    FakeWebSocket.latest.emitFrame({
+      type: 'message_recalled',
+      payload: {
+        conversationId: CONV.id,
+        messageId: 801,
+        recalledAt: '2026-10-26T01:00:00.000Z',
+        recalledBy: PEER.id
+      }
+    })
+    await nextTick()
+
+    expect(chat.activeMessages.value[0].content).toBe('')
+    expect(chat.activeMessages.value[0].recalledAt).toBe('2026-10-26T01:00:00.000Z')
+  })
+
+  it('撤回自己发的消息：调接口 + 本地替换成撤回态', async () => {
+    await bootOnline()
+    await openConv()
+    chat.sendText('我要撤回这句')
+    // 先等 ack：撤回是服务端行为，本地那条得先有真实 id
+    ack(tempIds()[0], 901, '我要撤回这句')
+    await nextTick()
+    const mine = chat.activeMessages.value[0]
+    expect(mine.id).toBe(901)
+
+    vi.mocked(api.recall).mockResolvedValue({
+      message: { ...mine, content: '', recalledAt: '2026-10-26T01:00:00.000Z' }
+    })
+    await chat.recall(mine)
+
+    expect(vi.mocked(api.recall)).toHaveBeenCalledWith(CONV.id, 901)
+    expect(chat.activeMessages.value[0].content).toBe('')
+    expect(chat.activeMessages.value[0].recalledAt).toBe('2026-10-26T01:00:00.000Z')
+  })
+
+  it('撤回失败时显示服务端给的原因（比「撤回失败」有用）', async () => {
+    await bootOnline()
+    await openConv()
+    chat.sendText('要撤回的')
+    ack(tempIds()[0], 902, '要撤回的')
+    await nextTick()
+    const mine = chat.activeMessages.value[0]
+
+    vi.mocked(api.recall).mockRejectedValue({
+      response: { data: { message: '只能撤回自己发的消息' } }
+    })
+    await chat.recall(mine)
+
+    expect(toastCalls).toContain('只能撤回自己发的消息')
+  })
+})
+
+describe('会话设置：置顶 / 免打扰', () => {
+  it('改置顶会调接口，并把设置写回本地会话', async () => {
+    await bootOnline()
+    await openConv()
+
+    await chat.updateSettings(CONV.id, { pinned: true })
+
+    expect(vi.mocked(api.setSettings)).toHaveBeenCalledWith(CONV.id, { pinned: true })
+    expect(chat.activeConversation.value?.pinned).toBe(true)
+  })
+
+  it('置顶会改变列表顺序，所以要重新拉一次', async () => {
+    await bootOnline()
+    await openConv()
+    const before = vi.mocked(api.list).mock.calls.length
+
+    await chat.updateSettings(CONV.id, { pinned: true })
+
+    // 不重拉的话，顺序还是服务端的旧顺序 —— 置顶看起来没生效
+    expect(vi.mocked(api.list).mock.calls.length).toBeGreaterThan(before)
+  })
+
+  it('改免打扰不用重拉列表（顺序没变）', async () => {
+    await bootOnline()
+    await openConv()
+    const before = vi.mocked(api.list).mock.calls.length
+
+    await chat.updateSettings(CONV.id, { muted: true })
+
+    expect(vi.mocked(api.setSettings)).toHaveBeenCalledWith(CONV.id, { muted: true })
+    expect(chat.activeConversation.value?.muted).toBe(true)
+    expect(vi.mocked(api.list).mock.calls.length).toBe(before)
+  })
+
+  it('改设置失败要告诉用户，不能默默失败', async () => {
+    await bootOnline()
+    await openConv()
+    vi.mocked(api.setSettings).mockRejectedValue(new Error('boom'))
+
+    await chat.updateSettings(CONV.id, { pinned: true })
+
+    expect(toastCalls).toContain('修改失败')
   })
 })
 
@@ -529,7 +687,8 @@ describe('未读分界线', () => {
           receiverId: ME.id,
           content: '旧的',
           createdAt: '',
-          readAt: 'x'
+          readAt: 'x',
+          recalledAt: null
         },
         {
           id: 2,
@@ -538,7 +697,8 @@ describe('未读分界线', () => {
           receiverId: ME.id,
           content: '新的',
           createdAt: '',
-          readAt: null
+          readAt: null,
+          recalledAt: null
         }
       ],
       pagination: { hasMore: false, nextBefore: null }
