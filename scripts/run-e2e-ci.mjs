@@ -19,6 +19,16 @@
  *     表现为「用户不存在」的 404。
  *   - 套件**依赖 seed 出来的数据**（搜索建议下拉要读热门话题），
  *     空库下 .suggest-panel 根本不渲染，第一套就超时。
+ *
+ * ⚠️ **e2e 的时间不是花在这些套件上的。**
+ * 2026-10-26 实测（CI 日志）：job 从 09:43:34 开始，
+ * 但**第一套真正开跑是 10:00:50** —— 前面 17 分钟全在
+ * checkout / npm ci / build / seed 上。
+ * 而 15 套加起来（最慢的 chat 套 9s）本身只要 5 分钟。
+ *
+ * 所以想缩短 CI 时间的话，去看 **setup 那 17 分钟**（依赖装了几次、
+ * build 跑了几遍），不是去砍套件 —— 砍套件省不了多少，
+ * 还会让「每套都留档」这个设计失效。
  */
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs'
