@@ -270,6 +270,46 @@ export function initSchema(db: Database.Database): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_unread ON messages(receiver_id, read_at)`)
 
+  // ===== 消息撤回 =====
+  //
+  // 撤回不是删行，是**标记**：删了就没法证明「这条曾经发过」，
+  // 而对端需要知道「对方撤回了某条消息」才能把气泡换成提示。
+  //
+  // 内容本身是真的被清空的（见 lib/chat.ts 的 recallMessage）：
+  // 撤回的意义就是「我不想让这条内容继续存在」，
+  // 只标记不清内容的话，它照样能被历史接口拉出来 —— 撤回就白撤了。
+  const msgCols = new Set(
+    (db.pragma('table_info(messages)') as { name: string }[]).map((c) => c.name)
+  )
+  if (!msgCols.has('recalled_at')) {
+    db.exec('ALTER TABLE messages ADD COLUMN recalled_at DATETIME')
+    console.log('[DB] Migrated: messages.recalled_at added')
+  }
+
+  // ===== 会话设置：置顶 / 免打扰 =====
+  //
+  // 为什么单独一张表，而不是加在 conversations 上：
+  // conversations 一行代表**两个人之间**的会话，而「置顶 / 免打扰」是
+  // **我**对这个会话的设置 —— 同一个人对 A 置顶，对 B 免打扰，
+  // 对方可能一个都没设。放在 conversations 上就没法表达「每个人的设置不同」。
+  //
+  // 主键 (conversation_id, user_id) 就是这个意思：每个用户对每个会话一行。
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversation_settings (
+      conversation_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      muted INTEGER NOT NULL DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (conversation_id, user_id),
+      FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `)
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_conversation_settings_user ON conversation_settings(user_id)`
+  )
+
   // ===== 通知（点赞 / 收藏 / 关注 / 评论 / @）=====
   // 它是 likes / favorites / follows / comments 四张表的**派生数据**：
   // 写通知的地方和写业务表的地方在同一个事务里，不做定时聚合。

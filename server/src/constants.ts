@@ -10,6 +10,17 @@ export const MESSAGE_MAX_LENGTH = 500
 /** 单页历史消息条数上限：翻页再往上就没必要了，避免一次拉爆内存 */
 export const MESSAGE_PAGE_MAX = 50
 export const MESSAGE_PAGE_DEFAULT = 30
+/**
+ * 撤回时限：发出后多久内可以撤回（毫秒）。
+ *
+ * 取 2 分钟 —— 和微信 / 抖音一致。
+ * 为什么要有时限：撤回的真实需求是「发错人了 / 说错了话」，
+ * 那种情况几乎都发生在刚发出去的几秒内。
+ * 没有时限的话，一条几个月前的消息也能被撤回，
+ * 那它就不是「撤回」而是「删除历史」了 —— 而删除自己的历史消息
+ * 恰恰是对方最不能接受的事。
+ */
+export const MESSAGE_RECALL_WINDOW_MS = 2 * 60 * 1000
 
 // 上传图片限制（与 multer 配置一致）
 export const UPLOAD_MAX_FILES = 9
