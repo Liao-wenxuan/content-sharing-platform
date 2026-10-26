@@ -253,6 +253,43 @@ describe('发消息', () => {
     expect(onPhone.payload.tempId).toBeUndefined()
   })
 
+  it('撤回消息：双方都收到 message_recalled', async () => {
+    const alice = openAs('alice')
+    const bob = openAs('bob')
+    clients.push(alice, bob)
+    await Promise.all([alice.waitFor('ready'), bob.waitFor('ready')])
+
+    // 先造一条 A 发的消息
+    alice.send({
+      type: 'send_message',
+      payload: { receiverId: accounts.bob.id, content: '说错话了' }
+    })
+    const got = await bob.waitFor('message')
+    const messageId = got.payload.message.id
+
+    // 走 HTTP 撤回（撤回是 HTTP 写 + WS 推，见 routes/conversations.ts）
+    const conv = db
+      .prepare(`SELECT id FROM conversations WHERE user_a_id = ? OR user_b_id = ? LIMIT 1`)
+      .get(accounts.alice.id, accounts.bob.id) as { id: number }
+    const res = await fetch(
+      `http://127.0.0.1:${port}/api/conversations/${conv.id}/messages/${messageId}/recall`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accounts.alice.token}` }
+      }
+    )
+    expect(res.status).toBe(200)
+
+    // **双方**都要知道：撤回的人要把气泡换成提示，
+    // 被撤回的人也得看到「对方撤回了一条消息」
+    const onBob = await bob.waitFor('message_recalled')
+    expect(onBob.payload.messageId).toBe(messageId)
+    expect(onBob.payload.recalledBy).toBe(accounts.alice.id)
+
+    const onAlice = await alice.waitFor('message_recalled')
+    expect(onAlice.payload.messageId).toBe(messageId)
+  })
+
   it('带 tempId 时原样回传（乐观消息替换用）', async () => {
     const alice = openAs('alice')
     clients.push(alice)
