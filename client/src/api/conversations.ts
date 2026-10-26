@@ -56,6 +56,34 @@ export const conversationsApi = {
     return request.post<{ updated: number }>(`/conversations/${conversationId}/read`)
   },
 
+  /**
+   * 撤回一条消息。
+   *
+   * 服务端会把内容**真的清空**并广播给双方，所以本地收到结果后
+   * 直接用返回的那条替换就行。
+   */
+  recall(conversationId: number, messageId: number): Promise<{ message: ChatMessage }> {
+    return request.post<{ message: ChatMessage }>(
+      `/conversations/${conversationId}/messages/${messageId}/recall`
+    )
+  },
+
+  /**
+   * 改置顶 / 免打扰。
+   *
+   * 这是**我**对这个会话的设置（服务端按 user 存），
+   * 所以对方那边不受影响 —— 这也是它必须走接口而不是本地状态的原因。
+   */
+  setSettings(
+    conversationId: number,
+    patch: { pinned?: boolean; muted?: boolean }
+  ): Promise<{ pinned: boolean; muted: boolean }> {
+    return request.patch<{ pinned: boolean; muted: boolean }>(
+      `/conversations/${conversationId}/settings`,
+      patch
+    )
+  },
+
   /** 总未读数（顶栏铃铛红点） */
   unreadCount(): Promise<{ total: number }> {
     return request.get<{ total: number }>('/conversations/unread-count')
