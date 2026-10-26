@@ -87,7 +87,7 @@ async function api(path, opts = {}) {
  * 所以直接写库 + 用同一个 JWT_SECRET 本地签 token，和后端签出来的是同一种。
  */
 function ensureUser(email, nickname) {
-  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
+  const db = new Database(process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'))
   let row = db.prepare(`SELECT id, email FROM users WHERE email = ?`).get(email)
   if (!row) {
     const hash = bcrypt.hashSync(PASSWORD, 10)
@@ -269,8 +269,110 @@ try {
   await pageA2.locator('.conn-state.open').waitFor({ state: 'visible', timeout: 10_000 })
   check('连接状态恢复为「已连接」', true)
 
-  // ---------- 8. 收尾 ----------
-  console.log('\n[8] 截图')
+  // ---------- 8. 抖音式的那几件事 ----------
+  console.log('\n[8] 撤回 / 置顶 / 往上翻不打断')
+
+  // ===== 8.1 撤回 =====
+  const recallText = '这条要撤回 ' + TAG
+  await pageA.locator('.composer textarea').fill(recallText)
+  await pageA.locator('.composer .el-button').click()
+  await pageA.locator('.bubble-text', { hasText: recallText }).waitFor({ timeout: 8000 })
+
+  // 撤回入口只给「自己发的、2 分钟内的」消息。
+  //
+  // ⚠️ 必须定位到**刚发的那一条**：一屏里每条自己发的消息都有一个撤回按钮，
+  // 用 .first() 选中的是最早那条 —— 撤回了个不相干的，断言还「看起来对」。
+  const myRow = pageA.locator('.msg-row', { hasText: recallText }).last()
+  await myRow.hover()
+  const recallBtn = myRow.locator('.recall-btn')
+  const hasRecall = (await recallBtn.count()) > 0
+  check('自己发的消息有「撤回」入口', hasRecall)
+
+  if (hasRecall) {
+    await recallBtn.click()
+    // 撤回后气泡换成提示，**原文不留**
+    await pageA
+      .locator('.bubble-recalled', { hasText: '你撤回了一条消息' })
+      .waitFor({ timeout: 8000 })
+    check('撤回后自己这端变成「你撤回了一条消息」', true)
+    check(
+      '撤回后原文真的没了',
+      (await pageA.locator('.bubble-text', { hasText: recallText }).count()) === 0
+    )
+
+    // 对方那端也要知道：服务端把内容清空后广播给了**双方**
+    await pageB
+      .locator('.bubble-recalled', { hasText: '对方撤回了一条消息' })
+      .waitFor({ timeout: 8000 })
+    check('对方那端也变成「对方撤回了一条消息」', true)
+  }
+
+  // ===== 8.2 置顶 / 免打扰 =====
+  const convWrap = pageA.locator('.conv-item-wrap').first()
+  await convWrap.hover()
+  const actionBtns = convWrap.locator('.conv-action')
+  check('会话项上有置顶 / 免打扰两个操作', (await actionBtns.count()) === 2)
+
+  await actionBtns.first().click()
+  await pageA.locator('.pin-mark').first().waitFor({ timeout: 8000 })
+  check('置顶后有图钉标记', true)
+
+  // 免打扰：红点不再显示，但状态标记还在
+  await convWrap.hover()
+  await convWrap.locator('.conv-action').nth(1).click()
+  await pageA.locator('.mute-mark').first().waitFor({ timeout: 8000 })
+  check('免打扰后有静音标记', true)
+
+  // ===== 8.3 往上翻历史时不被新消息打断 =====
+  // 先灌够消息把列表撑出滚动条（否则 scrollTop 根本动不了）
+  for (let i = 0; i < 24; i++) {
+    await pageA.locator('.composer textarea').fill(`灌水 ${i} ${TAG}`)
+    await pageA.locator('.composer textarea').press('Enter')
+  }
+  await pageA.waitForTimeout(600)
+
+  const overflow = await pageA
+    .locator('.msg-list')
+    .evaluate((el) => el.scrollHeight > el.clientHeight + 20)
+  check('消息列表撑出了滚动条（否则这条断言没意义）', overflow)
+
+  if (overflow) {
+    // 滚到顶部 = 用户在翻历史
+    await pageA.locator('.msg-list').evaluate((el) => {
+      el.scrollTop = 0
+    })
+    await pageA.waitForTimeout(400)
+
+    // 这时候对方发来一条
+    await pageB.locator('.composer textarea').fill('翻历史时来的消息 ' + TAG)
+    await pageB.locator('.composer .el-button').click()
+    await pageA
+      .locator('.bubble-text', { hasText: '翻历史时来的消息 ' + TAG })
+      .waitFor({ timeout: 8000 })
+    await pageA.waitForTimeout(400)
+
+    // 用户正在翻历史 —— 强行把他拽回底部等于作废这个动作
+    const stillUp = await pageA
+      .locator('.msg-list')
+      .evaluate((el) => el.scrollTop < el.scrollHeight - el.clientHeight - 20)
+    check('往上翻历史时不会被新消息拽回底部', stillUp)
+
+    const jump = pageA.locator('.jump-bottom')
+    check('右下角出现「N 条新消息」', (await jump.count()) > 0)
+    if ((await jump.count()) > 0) {
+      check(
+        '提示里有条数',
+        (await jump.innerText()).includes('条新消息'),
+        (await jump.innerText()).trim()
+      )
+      await jump.click()
+      await pageA.waitForTimeout(700)
+      check('点「回到底部」后按钮消失', (await pageA.locator('.jump-bottom').count()) === 0)
+    }
+  }
+
+  // ---------- 9. 收尾 ----------
+  console.log('\n[9] 截图')
   await pageA
     .locator('.bubble-text', { hasText: '断网期间发的消息 ' + TAG })
     .waitFor({ timeout: 5000 })
@@ -285,7 +387,6 @@ try {
 console.log('\n──────── 结果 ────────')
 // 鉴权那条会故意产生一个 4xx，属预期
 const real = errors.filter((e) => !/HTTP 401|websocket|WebSocket|ws:\/\//i.test(e))
-
 
 const clean = reportErrors(real)
 console.log(fails === 0 ? '  断言：全部通过' : `  断言：${fails} 项失败`)
