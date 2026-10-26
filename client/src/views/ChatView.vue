@@ -1112,9 +1112,16 @@ watch(activeId, () => {
   opacity: 0.65;
 }
 
-/* 撤回入口：只有自己发的、2 分钟内的消息才有 */
+/*
+ * 撤回入口：只有自己发的、2 分钟内的消息才有。
+ *
+ * 默认**藏起来**，hover 这一行（或键盘聚焦到它）才出现 ——
+ * 一屏几十条消息都挂一个「撤回」按钮的话，列表没法看了。
+ * focus-within 那条是给键盘用户的：Tab 过去它就显形。
+ */
 .recall-btn {
   flex-shrink: 0;
+  opacity: 0;
   padding: 1px 6px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -1126,6 +1133,11 @@ watch(activeId, () => {
   transition:
     border-color var(--dur-fast) var(--ease-out-expo),
     color var(--dur-fast) var(--ease-out-expo);
+}
+
+.msg-row:hover .recall-btn,
+.msg-row:focus-within .recall-btn {
+  opacity: 1;
 }
 
 .recall-btn:hover {
