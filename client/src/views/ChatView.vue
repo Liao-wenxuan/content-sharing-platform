@@ -40,6 +40,7 @@ const { latency } = useWebSocket()
 const {
   conversations,
   suggestions,
+  followingTotal,
   activeId,
   activeConversation,
   activeMessages,
@@ -250,7 +251,7 @@ watch(activeId, () => {
   <div v-if="!conversations.length && !loadingList" class="chat-discover">
     <div class="discover-head">
       <h2>找人聊聊</h2>
-      <p>点一个人就能开始对话，不用先去个人主页找</p>
+      <p>点一个你关注的人就能开始对话，不用先去个人主页找</p>
     </div>
 
     <ul v-if="suggestions.length" class="discover-grid">
@@ -266,7 +267,19 @@ watch(activeId, () => {
       </li>
     </ul>
 
-    <p v-else class="discover-empty">还没有其他人注册</p>
+    <!--
+      两种「空」要分开说：
+      - 一个关注都没关注 → 告诉他下一步该干什么（去关注）
+      - 关注的人都聊过了 → 告诉他这不是故障（去个人主页找新的人）
+      只给「还没有其他人注册」的话，第二种情况会显得像功能坏了。
+    -->
+    <p v-else class="discover-empty">
+      {{
+        followingTotal > 0
+          ? '你关注的人都已经聊过了，去个人主页看看新的吧'
+          : '先关注几个人，就能开始聊天了'
+      }}
+    </p>
   </div>
 
   <div v-else class="chat">
