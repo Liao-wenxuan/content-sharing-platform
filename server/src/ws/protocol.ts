@@ -116,5 +116,7 @@ export const WS_ERROR = {
   MESSAGE_TOO_LONG: 'message_too_long',
   NOT_A_MEMBER: 'not_a_member',
   USER_NOT_FOUND: 'user_not_found',
+  /** 私信准入门槛：没关注对方就想发起私聊 */
+  NEED_FOLLOW: 'need_follow',
   INTERNAL: 'internal'
 } as const

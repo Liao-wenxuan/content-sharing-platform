@@ -8,6 +8,7 @@ import { setHub } from './instance'
 import { WS_ERROR, type ClientMessage, type ServerMessage } from './protocol'
 import {
   assertMember,
+  canStartChat,
   getOrCreateConversation,
   insertMessage,
   listConversationsFor,
@@ -219,6 +220,22 @@ export function attachWebSocketServer(httpServer: HttpServer): WsServerHandle {
           }
           convId = conversationId as number
         } else {
+          // 没给 conversationId → 按 receiverId 现建会话。
+          //
+          // 这里**必须**走和 HTTP 同一个门槛判断（canStartChat），
+          // 否则门槛形同虚设：客户端只要不发 conversationId，
+          // 就能绕过「先关注才能私聊」直接搭话。
+          if (!canStartChat(userId, receiverId)) {
+            sendTo(socket, {
+              type: 'error',
+              payload: {
+                code: WS_ERROR.NEED_FOLLOW,
+                message: '需要先关注对方才能发消息',
+                tempId
+              }
+            })
+            return
+          }
           convId = getOrCreateConversation(userId, receiverId).id
         }
 
