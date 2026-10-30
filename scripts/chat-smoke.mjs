@@ -46,13 +46,23 @@ const WS_PATH = 'ws://localhost:3000/ws'
  */
 const EMAIL_A = 'chat_a@test.local'
 const EMAIL_B = 'chat_b@test.local'
+const EMAIL_C = 'chat_c@test.local'
 const PASSWORD = 'Chat12345'
 const NICK_A = '甲方'
 const NICK_B = '乙方'
+const NICK_C = '丙方'
 /** 每轮消息的唯一标记：固定邮箱意味着会话会复用，历史消息会堆着，断言必须能精确定位到本轮 */
 const TAG = Date.now().toString(36)
 
 const errors = []
+/**
+ * 「故意触发的 403」从第几条开始。
+ *
+ * [10] 会故意撞一次门槛拒绝（服务端 403），那是**预期**的失败，
+ * 不能算异常。但也不能笼统地把所有 403 都放过 ——
+ * 按下标划区间，只排除那之后新增的 403，别处真出 403 照样要红。
+ */
+let expected403From = 0
 let fails = 0
 function check(label, ok, detail = '') {
   if (!ok) fails++
@@ -161,6 +171,10 @@ try {
 
   const userA = ensureUser(EMAIL_A, NICK_A)
   const userB = ensureUser(EMAIL_B, NICK_B)
+  // 第三个账号只用来测「从没聊过、也没关注过」这一种状态 ——
+  // A 和 B 早就聊过了，服务端对已有会话是豁免的，不会触发门槛。
+  // ensureUser 会把这个账号的会话 / 消息 / 关注关系清干净，保证是干净起点。
+  const userC = ensureUser(EMAIL_C, NICK_C)
   await attachAuth(pageA, userA, NICK_A)
   check('两个账号就绪', !!userA.id && !!userB.id, `A=${userA.id} B=${userB.id}`)
 
@@ -438,6 +452,35 @@ try {
     .catch(() => {})
   await pageA.screenshot({ path: 'shots/chat-main.png' })
   check('主界面截图已保存', true)
+
+  // ---------- 10. 个人主页发消息：没关注过 → 确认 → 关注 → 直接进会话 ----------
+  console.log('\n[10] 个人主页 → 发消息')
+  // 记下当前条数：接下来这段会故意撞一次 403（门槛拒绝），不算异常
+  expected403From = errors.length
+  // 用第三个账号 C：A 和 B 早就聊过了（服务端对已有会话豁免），
+  // 只有「完全没聊过、也没关注过」这一种状态才会被门槛拦下来。
+  await pageA.goto(`${BASE}/profile/${userC.id}`, { waitUntil: 'networkidle' })
+  await pageA.waitForTimeout(600)
+
+  const chatBtn = pageA.locator('.nickname-row .el-button', { hasText: '发消息' })
+  check('个人主页有「发消息」入口', (await chatBtn.count()) > 0)
+  // 按钮不能是禁用态：禁用按钮点了没反应，用户既不知道为什么被挡，
+  // 也不知道该点旁边的「关注」才能解开
+  check('按钮不是禁用状态', !(await chatBtn.first().isDisabled()))
+
+  await chatBtn.first().click()
+  const box = pageA.locator('.el-message-box')
+  await box.waitFor({ state: 'visible', timeout: 5000 })
+  check('弹出了「需要先关注」的确认框', (await box.innerText()).includes('关注'))
+
+  await pageA.locator('.el-message-box__btns .el-button--primary').click()
+  await pageA.waitForTimeout(1500)
+
+  check('跳到了消息页', pageA.url().includes('/messages'), pageA.url())
+  check('带上了对方 id', pageA.url().includes(`peer=${userC.id}`), pageA.url())
+  await pageA.locator('.chat').waitFor({ state: 'visible', timeout: 10000 })
+  check('聊天面板打开了', true)
+  check('会话列表里有对方', (await pageA.locator('.conv-item').count()) > 0)
 } finally {
   await browser.close()
 }
@@ -445,7 +488,12 @@ try {
 // ---------- 汇总 ----------
 console.log('\n──────── 结果 ────────')
 // 鉴权那条会故意产生一个 4xx，属预期
-const real = errors.filter((e) => !/HTTP 401|websocket|WebSocket|ws:\/\//i.test(e))
+const real = errors.filter((e, i) => {
+  if (/HTTP 401|websocket|WebSocket|ws:\/\//i.test(e)) return false
+  // 门槛拒绝是故意撞的：只放过这段区间里新增的 403
+  if (i >= expected403From && /\b403\b/.test(e)) return false
+  return true
+})
 
 const clean = reportErrors(real)
 console.log(fails === 0 ? '  断言：全部通过' : `  断言：${fails} 项失败`)

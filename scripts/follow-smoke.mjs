@@ -110,7 +110,10 @@ console.log('\n[1] 未登录：关注按钮给提示而不是静默失败')
   await anon.waitForTimeout(600)
   const bodyText = await anon.locator('body').innerText()
   check('点击后提示登录', bodyText.includes('登录后才能关注'))
-  check('提示后按钮状态没变', (await btn.innerText()).trim() === '关注')
+  // 提示完要把他送去登录页：只丢一句话的话，游客站在别人的主页前无路可走。
+  // （原来那条「按钮状态没变」已经没法验了 —— 页面跳走，元素被卸载）
+  check('并且跳到了登录页', anon.url().includes('/login'), anon.url())
+  check('登录页带了 redirect，登录完能回来', anon.url().includes('redirect='), anon.url())
   await anon.screenshot({ path: 'shots/follow-anon.png' })
   await anon.close()
 }
