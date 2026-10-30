@@ -318,4 +318,24 @@ describe('MessagesView 从个人主页发消息进来', () => {
 
     expect(w.find('.chat-stub').exists()).toBe(false)
   })
+
+  it('带 ?tab=notifications 时落在通知 Tab', async () => {
+    // 聊天空状态里的「看看谁值得关注」就是靠这个跳到推荐关注那一片的 ——
+    // 没有它的话，那个按钮点了等于没点
+    route.query = { tab: 'notifications' }
+
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.chat-stub').exists()).toBe(false)
+  })
+
+  it('带 ?tab=chat 时落在聊天 Tab', async () => {
+    route.query = { tab: 'chat' }
+
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.chat-stub').exists()).toBe(true)
+  })
 })

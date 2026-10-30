@@ -547,6 +547,74 @@ describe('私信门槛的拒绝提示', () => {
 })
 
 /*
+ * 加载失败要能重试。
+ *
+ * 只有 toast 的话，界面那边是一片空白 —— 用户既不知道发生了什么，
+ * 也不知道自己能做什么。所以 composable 得把「失败了」记下来，
+ * 界面才知道该给一个重试按钮。
+ */
+describe('加载失败', () => {
+  it('会话列表拉失败：记下错误，界面才有东西可以给「重试」', async () => {
+    vi.mocked(api.list).mockRejectedValue(new Error('boom'))
+
+    await chat.loadConversations()
+
+    expect(chat.listError.value).toBe(true)
+    expect(chat.loadingList.value).toBe(false)
+  })
+
+  it('会话列表拉回来了：错误状态要清掉', async () => {
+    vi.mocked(api.list).mockRejectedValueOnce(new Error('boom'))
+    await chat.loadConversations()
+    expect(chat.listError.value).toBe(true)
+
+    await chat.loadConversations()
+    expect(chat.listError.value).toBe(false)
+  })
+
+  it('消息拉失败：一条都不能标已读', async () => {
+    // 关键在这条：**消息都没看到，凭什么算已读**。
+    // 标了的话未读清零，等用户点重试把消息拉回来，
+    // 「以下为新消息」那条分界线已经找不回来了。
+    vi.mocked(api.messages).mockRejectedValue(new Error('boom'))
+
+    await chat.openConversation(CONV.id)
+
+    expect(chat.messagesError.value).toBe(true)
+    expect(api.markRead).not.toHaveBeenCalled()
+  })
+
+  it('WS 连着的时候也不能发 read 帧', async () => {
+    // 上一条测的是 REST 兜底那条路；这条测 WS 那条路 ——
+    // 两条路都不能在消息没加载出来时就标已读
+    await bootOnline()
+    vi.mocked(api.messages).mockRejectedValue(new Error('boom'))
+
+    await chat.openConversation(CONV.id)
+
+    const readFrames = FakeWebSocket.latest
+      .sentFrames<{ type: string }>()
+      .filter((f) => f.type === 'read')
+    expect(readFrames).toHaveLength(0)
+  })
+
+  it('重试成功：消息回来了，错误状态清掉，这时才标已读', async () => {
+    vi.mocked(api.messages).mockRejectedValueOnce(new Error('boom'))
+    await chat.openConversation(CONV.id)
+    expect(chat.messagesError.value).toBe(true)
+
+    vi.mocked(api.messages).mockResolvedValue({
+      list: [],
+      pagination: { hasMore: false, nextBefore: null }
+    })
+    await chat.openConversation(CONV.id)
+
+    expect(chat.messagesError.value).toBe(false)
+    expect(api.markRead).toHaveBeenCalled()
+  })
+})
+
+/*
  * 下面这组是 2026-10-26 补的：一组「消息流变了，但没人收到通知」的回归。
  *
  * 起因是一个探针的发现：对方发来的消息进了列表，
