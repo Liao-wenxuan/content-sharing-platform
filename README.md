@@ -280,7 +280,7 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，36 文件 537 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，37 文件 554 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components，语句 87%）
 cd server && npm test        # 后端单测（vitest + supertest，26 文件 508 条）
 cd server && npm run test:coverage   # 同上 + 覆盖率报告（src 全部，语句 78%）
@@ -383,7 +383,7 @@ content-sharing-platform/
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
 │  │  ├─ router/                 # Vue Router 配置（20 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，36 文件 537 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，37 文件 554 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
 │  │  ├─ ai-chat-view.test.ts    # AI 对话页：来源先于答案 / 流式是追加不是替换 / 三类来源 tab
 │  │  ├─ image.test.ts           # 图片纯函数（41 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
@@ -667,10 +667,10 @@ main.ts → App.vue → TopBar.vue → element-plus/es/components/avatar
 > 别急着相信「没有这类问题」。这次两处都是这样 ——
 > 一处是 CSS 检查器从没执行过，一处是字节归因只给数字不给来源。
 
-## 🚦 回归防线：把 452 个断言搬进 CI
+## 🚦 回归防线：把 460 个断言搬进 CI
 
 上一轮结束时，CI 里只有三个 job：后端测试、前端单测、lint。
-**15 套 e2e（452 个断言点）只能在本地跑** —— 也就是说，
+**15 套 e2e（460 个断言点）只能在本地跑** —— 也就是说，
 push 之后没有任何东西验证过用户真正会走的那些路径。
 
 这不是理论风险。我在这个项目里**被它咬过一次**：三个断言红了很久没人知道，
@@ -1054,6 +1054,49 @@ computed 不重新求值，watch 自然也不触发。
 只推「我关注了、还没聊过」的人。
 推荐一个我根本不能私聊的人，点头像只会撞一堵墙。
 
+### 门槛也要带出口：被拦下的人得能继续
+
+加门槛就多出两种「被挡下来」的场合：
+个人主页上还没关注就点「发消息」，和聊天时服务端拒绝建会话。
+
+**第一种最容易做成死路** —— 把「发消息」按钮禁用掉。
+按钮变灰了，用户点不动，也不知道为什么被挡，
+更不知道该去点旁边的「关注」才能解开 —— 交互就断在这里。
+
+所以按钮**始终可点**，点了之后：
+先问服务端能不能聊（已经聊过的人直接放行，不该多问一句）→
+被拒了才弹确认 → 关注 → **直接进会话**，
+而不是把人扔回列表让他自己再找一次「发消息」。
+
+> 顺带修掉一个隐患：客户端原本自己判断「没关注就不能聊」，
+> 那是把服务端的规则又抄了一遍 —— 而「已经聊过就豁免」这条会被漏掉，
+> 明明能聊的人也会被要求「先关注」才肯放行。
+> 现在是**先问服务端**，规则只有一份。
+
+**第二种也不能只弹一句 toast**。所以整条链路上
+「告诉用户该做什么」都配了「下一步的入口」：
+
+| 场景                   | 原来                     | 现在                                       |
+| ---------------------- | ------------------------ | ------------------------------------------ |
+| 游客点关注 / 收藏      | 只弹「登录后才能关注」   | 提示 + 跳登录页（带 redirect，登录完回来） |
+| 会话列表加载失败       | 只弹 toast，界面一片空白 | 空态里给「重试」                           |
+| 消息加载失败           | 同上                     | 同上                                       |
+| 聊天空状态（没关注人） | 一句文案                 | 加「看看谁值得关注」按钮                   |
+
+登录提示抽成了 `client/src/utils/login-hint.ts` ——
+同一个模式散在三处的时候，首页做对了、另外三处只提示，
+这种「同一件事两种做法」必然漂移，最后是差的那几处最容易被当成惯例。
+
+还有一条更隐蔽的：**消息没加载出来时不能标已读**。
+标了的话未读清零，等用户点「重试」把消息拉回来，
+「以下为新消息」那条分界线已经找不回来了。
+
+#### 怎么找出来这类问题
+
+不是靠感觉，是把界面里所有「告诉用户该做什么」的地方列一遍，
+逐条问一句：**这句话说完，用户下一步能干什么？**
+答不上来的就是死路 —— 提示本身不是动作。
+
 ## ♿ 可访问性：先量，再改
 
 首屏优化收尾之后，接了一轮 WCAG 2.1 A/AA。结论同样来自实测，不是凭印象：
@@ -1241,9 +1284,9 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest **覆盖率** 508 例）/ `client`（vue-tsc + vitest 覆盖率 537 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier + **README 配图过期检查**）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）单独放在 `browser.yml`，用 **`paths-ignore`** 让纯文档提交整体跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。`ci.yml` 里的三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。**过滤必须放在工作流级而不是 job 级** —— `paths-ignore` 不是 job 的合法键，写上去整个工作流会被判为非法，而本地 YAML 解析器完全无感；现在 `npm run lint` 里有一道对着 GitHub 官方 schema 的校验，`scripts/check-workflow-schema.mjs`。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22） |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest **覆盖率** 508 例）/ `client`（vue-tsc + vitest 覆盖率 554 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier + **README 配图过期检查**）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）单独放在 `browser.yml`，用 **`paths-ignore`** 让纯文档提交整体跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。`ci.yml` 里的三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。**过滤必须放在工作流级而不是 job 级** —— `paths-ignore` 不是 job 的合法键，写上去整个工作流会被判为非法，而本地 YAML 解析器完全无感；现在 `npm run lint` 里有一道对着 GitHub 官方 schema 的校验，`scripts/check-workflow-schema.mjs`。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22） |
 | **入场动画把整页变成白板**               | 市集那一页商品整片看不见。原因不在市集，在 `useReveal`：它只在 `onMounted` 扫一次容器，而市集的网格在 `v-else` 里（数据到了才渲染），那一刻容器是 null，观察器根本没建起来 —— 而 `motion-ready` 已经被别的页面加到 `<html>` 上了，`.motion-ready .sg-reveal` 就把没入场的卡片锁在 opacity:0。**直接整页刷新进 /market 反而不复现**（那次 `motion-ready` 从没被加上，CSS 默认态是可见），所以「能打开」证明不了任何事，本地每次检查又都是全新加载 —— 于是它躲过了很久。现在观察器跟着容器和数据走（`watchEffect` + `MutationObserver`），e2e 里也加了一条：**逛过首页再 SPA 跳进市集，量第一张卡的 opacity 是不是 1**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：537 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 84/75/81/85），跌破直接让 CI 红                                                                                                                                                                                                             |
+| **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：554 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 84/75/81/85），跌破直接让 CI 红                                                                                                                                                                                                             |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **端到端冒烟**                           | Playwright 跑完整登录态链路：注册临时账号 → UI 登录 → 六项侧栏导航 → 发笔记 → 点赞 → 评论 → 编辑资料 → 主题切换 → 退出登录，55 断言且同时断言"零 console error + 零失败请求"；收尾自动清理测试数据，不污染演示库                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -1326,8 +1369,8 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 ---
 
-**验证基线**：前端 537 条单测（36 文件）/ 后端 508 条（26 文件）/ 15 套 Playwright e2e（452 个断言点）/
-lint 0 error / 覆盖率：后端 statements 78.08%（门槛 75）、前端 statements 86.91%（门槛 84）/
+**验证基线**：前端 554 条单测（37 文件）/ 后端 508 条（26 文件）/ 15 套 Playwright e2e（460 个断言点）/
+lint 0 error / 覆盖率：后端 statements 78.08%（门槛 75）、前端 statements 87.29%（门槛 84）/
 CI 两个工作流五个 job 全绿
 （纯文档提交时 `browser.yml` 整体跳过，另外三个 job 照跑）。
 
