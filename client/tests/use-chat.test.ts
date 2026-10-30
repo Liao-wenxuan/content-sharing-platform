@@ -486,7 +486,8 @@ describe('空状态推荐', () => {
     // 「没有会话才拉推荐」这个判断在 ChatView.onMounted 里（视图层决定什么时候要），
     // composable 这层只负责「拉一次并缓存」。
     const spy = vi.mocked(api.chatSuggestions).mockResolvedValue({
-      list: [{ id: 9, nickname: '对方', avatar: null, postCount: 3 }]
+      list: [{ id: 9, nickname: '对方', avatar: null, postCount: 3 }],
+      followingTotal: 3
     })
 
     await chat.loadSuggestions()
@@ -497,6 +498,17 @@ describe('空状态推荐', () => {
     expect(chat.suggestions.value).toHaveLength(1)
   })
 
+  it('关注总数被记下来，空状态靠它区分「没关注」和「都聊过了」', async () => {
+    // 这两种情况在推荐列表里都长成空数组，光看 list 分不出来。
+    vi.mocked(api.chatSuggestions).mockResolvedValue({
+      list: [],
+      followingTotal: 5
+    })
+
+    await chat.loadSuggestions()
+    expect(chat.followingTotal.value).toBe(5)
+  })
+
   it('拉推荐失败也不报错，静默退回纯文案', async () => {
     vi.mocked(api.chatSuggestions).mockRejectedValue(new Error('boom'))
     vi.mocked(api.list).mockResolvedValue({ list: [] as never })
@@ -504,6 +516,33 @@ describe('空状态推荐', () => {
     await chat.loadConversations()
     await expect(chat.loadSuggestions()).resolves.toBeUndefined()
     expect(chat.suggestions.value).toEqual([])
+  })
+})
+
+/*
+ * 私信准入门槛（先关注才能发起）在前端的落点：
+ * 被拒时**把服务端的原因透出来**。
+ *
+ * 笼统的「无法发起会话」等于让用户自己猜为什么被挡下来 ——
+ * 「需要先关注对方才能发消息」直接告诉他下一步该干什么。
+ */
+describe('私信门槛的拒绝提示', () => {
+  it('服务端说清了原因，就照着说', async () => {
+    vi.mocked(api.create).mockRejectedValue({
+      response: { data: { message: '需要先关注对方才能发消息' } }
+    })
+
+    await chat.startWithPeer(PEER.id)
+    expect(toastCalls).toContain('需要先关注对方才能发消息')
+  })
+
+  it('拿不到原因时才退回兜底文案', async () => {
+    // 网络断了这类情况：服务端根本没回话。
+    // 这时候也必须有话可说 —— 静默失败最让人摸不着头脑。
+    vi.mocked(api.create).mockRejectedValue(new Error('network down'))
+
+    await chat.startWithPeer(PEER.id)
+    expect(toastCalls).toContain('无法发起会话')
   })
 })
 

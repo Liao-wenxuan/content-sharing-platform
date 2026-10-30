@@ -65,8 +65,14 @@ vi.mock('@/composables/useWebSocket', () => ({ useWebSocket: () => ({ unreadTota
  * 于是「还没有 active pinia」直接炸掉。stub 也救不了，
  * 因为 stub 只影响渲染，不阻止模块被求值。
  * 这里要验的是消息页的接线，聊天本身在 use-chat.test.ts 里测过了。
+ *
+ * ⚠️ 路径必须带 `.vue`：这里 mock 的是 `@/views/ChatView.vue`，
+ * 而 MessagesView 里 import 的正是带扩展名的那个。
+ * 写成 `@/views/ChatView`（少扩展名）解析出来是**另一个 module id**，
+ * mock 根本不命中 —— 之前一直没人发现，是因为聊天 Tab 从来没被渲染过，
+ * 真实的 ChatView 压根没机会执行。
  */
-vi.mock('@/views/ChatView', () => ({ default: { template: '<div class="chat-stub" />' } }))
+vi.mock('@/views/ChatView.vue', () => ({ default: { template: '<div class="chat-stub" />' } }))
 vi.mock('@/composables/useChat', () => ({ useChat: () => ({}) }))
 
 const ElMessage = { success: vi.fn(), error: vi.fn() }
@@ -78,7 +84,10 @@ vi.mock('@/utils/element', () => ({
 }))
 
 const push = vi.fn()
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+// useRoute 也要 mock：消息页用 ?peer= 判断「从个人主页发消息进来」，
+// 少了这个导出整个 setup 就炸（vi.mock 是全量替换，不是部分 mock）。
+const route = { query: {} as Record<string, string> }
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => route }))
 
 const prefs = vi.mocked(notificationsApi)
 const follows = vi.mocked(followsApi)
@@ -148,6 +157,9 @@ beforeEach(() => {
   setActivePinia(pinia)
   vi.clearAllMocks()
   useAuthStore().login({ id: 7, nickname: '我', avatar: null, cover: null }, 'tok')
+
+  // 每个用例从「没有 ?peer=」开始：它是「从个人主页发消息进来」的开关
+  route.query = {}
 
   notifyState.list.value = [mkNotification()]
   notifyState.unreadCount.value = 2
@@ -280,5 +292,30 @@ describe('MessagesView 未登录', () => {
     await flushPromises()
 
     expect(push).toHaveBeenCalledWith({ path: '/login', query: { redirect: '/messages' } })
+  })
+})
+
+/*
+ * 从个人主页「发消息」进来的落地。
+ *
+ * 聊天面板是通知 Tab 的 **v-else** 分支 —— 不切 Tab 它根本不挂载，
+ * ?peer 这个参数就没人读，用户点了「发消息」看到的还是通知列表。
+ */
+describe('MessagesView 从个人主页发消息进来', () => {
+  it('带 ?peer= 时直接落到聊天 Tab', async () => {
+    route.query = { peer: '9' }
+
+    const w = mountView()
+    await flushPromises()
+
+    // ChatView 只有在聊天 Tab 才渲染（通知 Tab 是另一条 v-if 分支）
+    expect(w.find('.chat-stub').exists()).toBe(true)
+  })
+
+  it('没带 ?peer= 时停在通知 Tab', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.chat-stub').exists()).toBe(false)
   })
 })
