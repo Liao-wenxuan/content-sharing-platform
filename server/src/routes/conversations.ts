@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth'
 import {
   findConversation,
   getOrCreateConversation,
+  canStartChat,
   assertMember,
   listConversationsFor,
   listMessages,
@@ -84,6 +85,13 @@ router.post('/', requireAuth, (req: Request, res: Response) => {
     if (!peer) return res.status(404).json({ message: '用户不存在' })
 
     const existed = !!findConversation(me, peerId)
+
+    // 准入门槛：没聊过的话，必须我关注了对方才能发起（抖音那套，单向关注）。
+    // 已有会话豁免 —— 取关不影响历史私信，已经开始的事不因为取关而作废。
+    if (!canStartChat(me, peerId)) {
+      return res.status(403).json({ message: '需要先关注对方才能发消息' })
+    }
+
     const conv = getOrCreateConversation(me, peerId)
 
     res.status(existed ? 200 : 201).json({
