@@ -102,11 +102,36 @@ function ensureUser(email, nickname) {
        SELECT id FROM conversations WHERE user_a_id = ? OR user_b_id = ?)`
   ).run(row.id, row.id)
   db.prepare(`DELETE FROM conversations WHERE user_a_id = ? OR user_b_id = ?`).run(row.id, row.id)
+  // 关注关系也要清：不然上一轮跑留下的「A 关注 B」会让门槛断言永远测不到 403。
+  // e2e 反复跑，状态得自己能收拾干净。
+  db.prepare(`DELETE FROM follows WHERE follower_id = ? OR followee_id = ?`).run(row.id, row.id)
   db.close()
 
   const secret = getJwtSecret(ROOT)
 
   return { id: row.id, token: jwt.sign({ userId: row.id, email }, secret) }
+}
+
+/**
+ * 直接写库改关注关系。
+ *
+ * 走 HTTP 接口会撞 writeLimiter，而且这里要的是「造出关系」，
+ * 不是「验接口」—— 接口另有测试覆盖。
+ */
+function setFollow(followerId, followeeId, follow) {
+  const db = new Database(process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'))
+  if (follow) {
+    db.prepare(`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`).run(
+      followerId,
+      followeeId
+    )
+  } else {
+    db.prepare(`DELETE FROM follows WHERE follower_id = ? AND followee_id = ?`).run(
+      followerId,
+      followeeId
+    )
+  }
+  db.close()
 }
 
 /** 把 token 注入页面（addInitScript 必须有 page，所以和建号分开） */
@@ -153,8 +178,23 @@ try {
   )
   check('坏 token 的连接被拒（4401）', badCode === 4401, `closeCode=${badCode}`)
 
-  // ---------- 3. A 建会话并进入聊天 ----------
-  console.log('\n[3] 建立会话')
+  // ---------- 3. 私信门槛 + 建会话 ----------
+  console.log('\n[3] 私信门槛与建会话')
+  // 还没关注 B —— 建会话必须被拦下来
+  const gated = await api('/api/conversations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userA.token}` },
+    body: JSON.stringify({ userId: userB.id })
+  })
+  check('没关注就发起私信被拦（403）', gated.status === 403, `status=${gated.status}`)
+  check(
+    '拒绝文案说清了要先去关注',
+    String(gated.body?.message || '').includes('关注'),
+    `message=${gated.body?.message}`
+  )
+
+  // 关注之后就能发起
+  setFollow(userA.id, userB.id, true)
   // 建会话必须带 token，否则 401、会话根本不存在，ChatView 就是空状态
   const convRes = await api('/api/conversations', {
     method: 'POST',
@@ -162,9 +202,23 @@ try {
     body: JSON.stringify({ userId: userB.id })
   })
   check(
-    '会话创建成功',
+    '关注之后会话创建成功',
     convRes.status === 201 || convRes.status === 200,
     `status=${convRes.status}`
+  )
+
+  // 取关：门槛只管「怎么开始」，已经开始的事不作废。
+  // 后面 [4]~[8] 的消息全在「已取关」状态下发 —— 顺便全程验证这条豁免。
+  setFollow(userA.id, userB.id, false)
+  const reused = await api('/api/conversations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userA.token}` },
+    body: JSON.stringify({ userId: userB.id })
+  })
+  check(
+    '取关之后仍能复用同一个会话',
+    reused.status === 200 && reused.body?.id === convRes.body?.id,
+    `status=${reused.status} id=${reused.body?.id}`
   )
 
   await openChat(pageA)
