@@ -15,6 +15,11 @@ import { useFollow } from '@/composables/useFollow'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 
+// 未登录时提示 + 跳登录页，所以要能断言跳转。
+// 不 mock 的话 useRouter() 在组件外返回 undefined，跳转会静默消失。
+const push = vi.fn()
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+
 vi.mock('@/api/follows', () => ({
   followsApi: {
     follow: vi.fn(),
@@ -202,6 +207,18 @@ describe('toggle 关注 / 取关', () => {
     expect(followsApi.follow).not.toHaveBeenCalled()
     expect(hook.isFollowing.value).toBe(false)
     expect(show).toHaveBeenCalledWith('登录后才能关注', 'info')
+  })
+
+  it('未登录：把人送去登录页，而不是只丢一句话', async () => {
+    // 只提示不跳转的话，用户看到一句话却不知道该去哪 ——
+    // 这次点击就白点了。所以提示和跳转必须一起发生。
+    vi.spyOn(useToastStore(), 'show').mockImplementation(() => {})
+    useAuthStore().logout()
+
+    const { hook } = makeHook()
+    await hook.toggle()
+
+    expect(push).toHaveBeenCalledWith(expect.objectContaining({ path: '/login' }))
   })
 
   it('关注自己：拦在发请求之前', async () => {

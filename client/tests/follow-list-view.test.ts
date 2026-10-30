@@ -33,9 +33,12 @@ vi.mock('@/api/follows', () => ({
  *  共享对象会让上一个用例的组件在下一个用例里跟着重载 */
 let route: { params: Record<string, string>; query: Record<string, string> }
 
+/** 未登录点关注要跳登录页，所以要能断言跳转 */
+const push = vi.fn()
+
 vi.mock('vue-router', () => ({
   useRoute: () => route,
-  useRouter: () => ({ push: vi.fn() })
+  useRouter: () => ({ push })
 }))
 
 const api = vi.mocked(followsApi)
@@ -189,7 +192,7 @@ describe('FollowListView 行内关注按钮', () => {
     expect(w.findAll('.row')[1].find('.btn-stub').exists()).toBe(true)
   })
 
-  it('未登录点关注只弹提示，不发请求', async () => {
+  it('未登录点关注：提示 + 跳登录页，不发请求', async () => {
     api.followers.mockResolvedValue({
       list: [mkUser()],
       pagination: { total: 1, hasMore: false }
@@ -201,6 +204,9 @@ describe('FollowListView 行内关注按钮', () => {
     await flushPromises()
 
     expect(api.follow).not.toHaveBeenCalled()
+    // 这个页面是公开的，游客也会看到行内关注按钮 ——
+    // 只弹一句话的话，游客站在这儿无路可走，得把他送去登录
+    expect(push).toHaveBeenCalledWith(expect.objectContaining({ path: '/login' }))
   })
 
   it('关注成功后按钮翻转，计数用服务端给的权威值', async () => {
