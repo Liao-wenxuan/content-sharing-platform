@@ -24,6 +24,7 @@ import {
   type FolderFilter
 } from '@/api/favorites'
 import { useFollow } from '@/composables/useFollow'
+import { useChatEntry } from '@/composables/useChatEntry'
 import { NICKNAME_MAX_LENGTH } from '@/constants'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
@@ -130,6 +131,18 @@ const {
   toggle: toggleFollowRaw
 } = useFollow(targetId)
 
+/**
+ * 「给这个人发消息」的完整流程：门槛 → 确认 → 关注 → 直接开聊。
+ *
+ * 关注和私信的顺序由这里决定 —— 用户点的是「发消息」，
+ * 就该一步到位，而不是被要求先去做另一件事再回来。
+ */
+const { start: startChat } = useChatEntry({
+  peerId: targetId,
+  nickname: computed(() => profileUser.value?.nickname ?? null),
+  follow: () => toggleFollowRaw()
+})
+
 /** 本人主页不显示关注按钮，所以「互相关注」标签只在他人主页有意义 */
 const showMutual = computed(() => !isOwner.value && isFollowing.value && isFollowedBy.value)
 
@@ -202,13 +215,15 @@ function goFollowList(tab: 'followers' | 'following') {
 /**
  * 去和这个人私聊。
  *
- * 私信门槛是「先关注才能发起」（单向），所以按钮的可用状态直接跟着 isFollowing 走：
- * 没关注时显示成「关注后可私信」并且禁用 —— 把原因写在按钮上，
- * 比让人点进去撞一句 403 才知道规则要好。
+ * 门槛是「先关注才能发起」，但这里**不把人赶回「关注」按钮** ——
+ * 那样等于让用户自己拼两步（先关注、再回来找发消息），
+ * 而他的意图明明是「给这个人发消息」。
+ *
+ * 完整流程在 useChatEntry 里（未关注 → 确认 → 关注 → 直接开聊），
+ * 抽成 composable 是为了能脱离组件测。
  */
 function goChat() {
-  if (!targetId.value) return
-  router.push({ path: '/messages', query: { peer: String(targetId.value) } })
+  void startChat()
 }
 // ===== 小红书号 =====
 const xhsIdCopyState = ref<'idle' | 'copied'>('idle')
@@ -463,8 +478,11 @@ const emptyHint = computed(() => {
                   </el-button>
 
                   <!--
-                    私信入口。门槛是「先关注才能发起」，所以可用状态跟着 isFollowing 走：
-                    没关注时按钮上直接写着原因，不用让人点了才知道规则。
+                    私信入口。
+                    门槛是「先关注才能发起」，但按钮**始终可点** ——
+                    disabled 的按钮点了没反应，用户既不知道为什么被挡，
+                    也不知道该点旁边的「关注」才能解开。
+                    所以改成：点「发消息」→ 确认一下 → 关注并直接开聊。
                     本人主页和游客不显示（游客连登录态都没有）。
                   -->
                   <el-button
@@ -473,10 +491,9 @@ const emptyHint = computed(() => {
                     round
                     plain
                     class="chat-btn"
-                    :disabled="!isFollowing"
                     @click="goChat"
                   >
-                    {{ isFollowing ? '发消息' : '关注后可私信' }}
+                    发消息
                   </el-button>
 
                   <!-- 互相关注：只有「我也关注了对方」且「对方也关注我」才亮，
