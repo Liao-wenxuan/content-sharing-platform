@@ -98,7 +98,8 @@ beforeAll(async () => {
   for (const [name, email] of [
     ['alice', 'ws-alice@test.com'],
     ['bob', 'ws-bob@test.com'],
-    ['carol', 'ws-carol@test.com']
+    ['carol', 'ws-carol@test.com'],
+    ['dave', 'ws-dave@test.com']
   ] as const) {
     const res = await fetch(`http://127.0.0.1:${port}/api/auth/register`, {
       method: 'POST',
@@ -110,6 +111,18 @@ beforeAll(async () => {
       id: body.userInfo.id,
       token: jwt.sign({ userId: body.userInfo.id, email }, env.JWT_SECRET)
     }
+  }
+
+  // alice 给 bob / carol 搭话（这几条用例走 WS 的 receiverId 旁路，
+  // 不传 conversationId），私信门槛要求发起方关注过对方，所以把关注关系铺平。
+  //
+  // **dave 故意不给关注** —— 他是门槛用例的被搭话者，
+  // 全程保持「alice 没关注过 dave」，这样门槛用例才真的踩在门槛上。
+  for (const followee of [accounts.bob.id, accounts.carol.id]) {
+    db.prepare(`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`).run(
+      accounts.alice.id,
+      followee
+    )
   }
 })
 
@@ -316,6 +329,46 @@ describe('发消息', () => {
     })
     const got = await carol.waitFor('message')
     expect(got.payload.message.conversationId).toBeGreaterThan(0)
+  })
+
+  it('没关注就想搭话会被门槛拦下（receiverId 旁路也守同一条规则）', async () => {
+    // alice 从没关注过 dave。这条走的正是上面那条用例的旁路 ——
+    // 客户端不传 conversationId，让服务端现建会话。
+    //
+    // 如果这里不守门槛，「先关注才能私聊」就只是个装饰：
+    // 只要客户端不传 conversationId，门槛就形同虚设。
+    const alice = openAs('alice')
+    const dave = openAs('dave')
+    clients.push(alice, dave)
+    await Promise.all([alice.waitFor('ready'), dave.waitFor('ready')])
+
+    alice.send({
+      type: 'send_message',
+      payload: { receiverId: accounts.dave.id, content: '搭讪' }
+    })
+
+    const err = await alice.waitFor('error')
+    expect(err.payload.code).toBe('need_follow')
+    expect(err.payload.message).toContain('关注')
+
+    // 一条都不能落库，也不能留下半个会话
+    const { total } = db
+      .prepare(`SELECT COUNT(*) AS total FROM messages WHERE content = ?`)
+      .get('搭讪') as { total: number }
+    expect(total).toBe(0)
+    // 查这一**对**用户的会话，两个方向都算 ——
+    // 别写成 `user_a_id = ? OR user_b_id = ?`：
+    // 那样 alice↔bob 的会话也会被算进来（alice 可能是较小的那个），
+    // 断言会莫名其妙地数到别人的会话。
+    const conv = db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM conversations
+         WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)`
+      )
+      .get(accounts.alice.id, accounts.dave.id, accounts.dave.id, accounts.alice.id) as {
+      c: number
+    }
+    expect(conv.c).toBe(0)
   })
 })
 

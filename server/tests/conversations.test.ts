@@ -63,6 +63,22 @@ beforeAll(async () => {
   bobId = bob.id
   carolId = carol.id
 
+  // 三人互相关注。
+  //
+  // 私信有准入门槛（先关注才能发起），而这个文件测的是**会话本身**的规则：
+  // 幂等、状态码、排序。把「有没有关注」这个前置条件铺平，
+  // 别让门槛混进这些用例的意图里 —— 门槛有它自己的测试文件。
+  for (const [a, b] of [
+    [alice.id, bob.id],
+    [alice.id, carol.id],
+    [bob.id, alice.id],
+    [bob.id, carol.id],
+    [carol.id, alice.id],
+    [carol.id, bob.id]
+  ]) {
+    db.prepare(`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`).run(a, b)
+  }
+
   // 会话在 beforeAll 里就建好：不能等到某个测试用例里再建，
   // 否则 beforeEach 去查会话 id 时表还是空的，19 条用例会一起崩。
   const conv = await request(app)

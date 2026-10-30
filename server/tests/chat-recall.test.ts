@@ -70,6 +70,13 @@ beforeAll(async () => {
   aliceId = alice.id
   bobId = bob.id
 
+  // 私信准入门槛：bob 要私聊 alice，得先关注她。
+  // 这个文件测的是撤回和会话设置，前置条件在这里铺平。
+  db.prepare(`INSERT OR IGNORE INTO follows (follower_id, followee_id) VALUES (?, ?)`).run(
+    bob.id,
+    alice.id
+  )
+
   const conv = await request(app)
     .post('/api/conversations')
     .set('Authorization', `Bearer ${bobToken}`)
