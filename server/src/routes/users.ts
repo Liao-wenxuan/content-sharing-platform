@@ -100,18 +100,25 @@ router.get('/chat-suggestions', requireAuth, (req: Request, res: Response) => {
 
     const limit = Math.min(12, Math.max(1, Number(req.query.limit) || 6))
 
-    // 排除自己、排除已经聊过的人；有笔记的排前面（同话题的人更有得聊）
+    // 只推「我关注了、而且还没聊过」的人。
+    //
+    // 口径必须和私信准入门槛一致（canStartChat）：推荐一个我根本不能私聊的人，
+    // 点头像只会撞一堵墙 —— 空状态推荐不是「随便推几个好看的人」，
+    // 是「推几个点得动的人」。
+    //
+    // JOIN follows 顺带排除了自己：follows 上有 CHECK (follower_id <> followee_id)，
+    // 所以「我关注我自己」这行根本不存在。
     const rows = db
       .prepare(
         `SELECT u.id, u.nickname, u.avatar,
                 (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count
          FROM users u
-         WHERE u.id <> @me
-           AND NOT EXISTS (
-             SELECT 1 FROM conversations c
-             WHERE (c.user_a_id = @me AND c.user_b_id = u.id)
-                OR (c.user_b_id = @me AND c.user_a_id = u.id)
-           )
+         JOIN follows f ON f.followee_id = u.id AND f.follower_id = @me
+         WHERE NOT EXISTS (
+           SELECT 1 FROM conversations c
+           WHERE (c.user_a_id = @me AND c.user_b_id = u.id)
+              OR (c.user_b_id = @me AND c.user_a_id = u.id)
+         )
          ORDER BY post_count DESC, u.id ASC
          LIMIT @limit`
       )
@@ -123,7 +130,13 @@ router.get('/chat-suggestions', requireAuth, (req: Request, res: Response) => {
         nickname: r.nickname,
         avatar: r.avatar,
         postCount: r.post_count
-      }))
+      })),
+      // 我关注的人一共几个 —— 前端靠它区分两种「空」：
+      // 「你还没关注任何人」和「你关注的人都聊过了」。
+      // 只给 list 的话这两种都长成空数组，文案只能瞎猜。
+      followingTotal: (
+        db.prepare(`SELECT COUNT(*) AS c FROM follows WHERE follower_id = ?`).get(me) as any
+      ).c
     })
   } catch (err: any) {
     console.error('[Chat Suggestions Error]', err)
