@@ -198,6 +198,18 @@ function goFollowList(tab: 'followers' | 'following') {
   if (!id) return
   router.push({ name: 'follow-list', params: { id: String(id) }, query: { tab } })
 }
+
+/**
+ * 去和这个人私聊。
+ *
+ * 私信门槛是「先关注才能发起」（单向），所以按钮的可用状态直接跟着 isFollowing 走：
+ * 没关注时显示成「关注后可私信」并且禁用 —— 把原因写在按钮上，
+ * 比让人点进去撞一句 403 才知道规则要好。
+ */
+function goChat() {
+  if (!targetId.value) return
+  router.push({ path: '/messages', query: { peer: String(targetId.value) } })
+}
 // ===== 小红书号 =====
 const xhsIdCopyState = ref<'idle' | 'copied'>('idle')
 
@@ -448,6 +460,23 @@ const emptyHint = computed(() => {
                     @click="toggleFollow"
                   >
                     {{ isFollowing ? '已关注' : '关注' }}
+                  </el-button>
+
+                  <!--
+                    私信入口。门槛是「先关注才能发起」，所以可用状态跟着 isFollowing 走：
+                    没关注时按钮上直接写着原因，不用让人点了才知道规则。
+                    本人主页和游客不显示（游客连登录态都没有）。
+                  -->
+                  <el-button
+                    v-if="!isOwner && auth.isLoggedIn"
+                    size="small"
+                    round
+                    plain
+                    class="chat-btn"
+                    :disabled="!isFollowing"
+                    @click="goChat"
+                  >
+                    {{ isFollowing ? '发消息' : '关注后可私信' }}
                   </el-button>
 
                   <!-- 互相关注：只有「我也关注了对方」且「对方也关注我」才亮，

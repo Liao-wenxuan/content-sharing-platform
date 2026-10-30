@@ -10,7 +10,7 @@
  * 因为它们在同一个入口里，分成两个数字只会让人以为要点两次。
  */
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/utils/element'
 import { Star, User, ChatDotRound } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -29,6 +29,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import ChatView from '@/views/ChatView.vue'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 // 只取未读数；连接生命周期由 App.vue 统一管，这里不重复 connect/disconnect
 const { unreadTotal } = useWebSocket()
@@ -180,6 +181,12 @@ onMounted(() => {
     router.push({ path: '/login', query: { redirect: '/messages' } })
     return
   }
+  // 从个人主页「发消息」进来的：直接落到聊天 Tab。
+  //
+  // 不切的话 ChatView 根本不挂载（它在 v-else 分支里），
+  // ?peer 这个参数就没人读 —— 用户点了「发消息」，
+  // 看到的还是通知列表，等于按钮没生效。
+  if (route.query.peer) activeSection.value = 'chat'
   // 进页面就把未读数拉一次并订阅 WS 帧：铃铛的初值不能只靠 WS，
   // 否则刷新页面到 WS 连上之前，铃铛是空的
   startNotifications()
