@@ -17,6 +17,7 @@ import { useRoute } from 'vue-router'
 import { followsApi, type FollowUser } from '@/api/follows'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useLoginHint } from '@/utils/login-hint'
 import EmptyState from '@/components/EmptyState.vue'
 
 type TabKey = 'followers' | 'following'
@@ -24,6 +25,7 @@ type TabKey = 'followers' | 'following'
 const route = useRoute()
 const auth = useAuthStore()
 const toast = useToastStore()
+const { promptLogin } = useLoginHint()
 
 const targetId = computed<number | null>(() => {
   const num = Number(route.params.id)
@@ -96,7 +98,10 @@ function loadMore() {
 async function toggleRow(user: FollowUser) {
   if (busyId.value !== null) return
   if (!auth.isLoggedIn) {
-    toast.show('登录后才能关注', 'info')
+    // 这个页面是公开的，游客也会看到行内的关注按钮。
+    // 只提示不跳转的话，游客站在别人的粉丝列表前无路可走 ——
+    // 提示 + 送去登录页，登录完回到这一页。
+    promptLogin('关注')
     return
   }
 

@@ -2,6 +2,7 @@ import { ref, type Ref } from 'vue'
 import { favoritesApi } from '@/api/favorites'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useLoginHint } from '@/utils/login-hint'
 
 /**
  * 收藏按钮的状态与副作用
@@ -17,6 +18,7 @@ import { useToastStore } from '@/stores/toast'
 export function useFavorite(postId: Ref<number | null>) {
   const auth = useAuthStore()
   const toast = useToastStore()
+  const { promptLogin } = useLoginHint()
 
   const favorited = ref(false)
   const favoriteCount = ref(0)
@@ -48,10 +50,10 @@ export function useFavorite(postId: Ref<number | null>) {
     if (!id || loading.value) return false
 
     if (!auth.isLoggedIn) {
-      // 详情页那一层会先跳登录页，这里是兜底：
-      // 将来在别的入口（列表页行内收藏之类）复用这个 composable 时，
-      // 至少不会静悄悄地发一个注定 401 的请求
-      toast.show('登录后才能收藏', 'info')
+      // 提示 + 送去登录页（带 redirect，登录完回到刚才这页）。
+      // 只提示不跳转的话，用户看到一句话却不知道该去哪 ——
+      // 这次点击就白点了。详见 utils/login-hint.ts
+      promptLogin('收藏')
       return false
     }
 

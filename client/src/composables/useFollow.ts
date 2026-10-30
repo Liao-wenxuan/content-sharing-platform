@@ -2,6 +2,7 @@ import { ref, computed, type Ref } from 'vue'
 import { followsApi } from '@/api/follows'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import { useLoginHint } from '@/utils/login-hint'
 
 /**
  * 关注按钮的状态与副作用
@@ -21,6 +22,7 @@ import { useToastStore } from '@/stores/toast'
 export function useFollow(targetId: Ref<number | null>) {
   const auth = useAuthStore()
   const toast = useToastStore()
+  const { promptLogin } = useLoginHint()
 
   const isFollowing = ref(false)
   const isFollowedBy = ref(false)
@@ -52,7 +54,9 @@ export function useFollow(targetId: Ref<number | null>) {
     if (!id || loading.value) return false
 
     if (!auth.isLoggedIn) {
-      toast.show('登录后才能关注', 'info')
+      // 提示 + 送去登录页：只提示的话用户不知道该干嘛，
+      // 这次点击就白点了。详见 utils/login-hint.ts
+      promptLogin('关注')
       return false
     }
     if (id === auth.user?.id) {
