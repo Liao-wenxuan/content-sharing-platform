@@ -11,7 +11,7 @@
  * 用户往上翻历史时不打断，右下角出现「N 条新消息」让他自己决定要不要回去。
  */
 import { ref, watch, nextTick, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Connection,
   Clock,
@@ -33,6 +33,7 @@ import { useRelativeTime } from '@/composables/useRelativeTime'
 import { buildTimeline } from '@/utils/chatTimeline'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const { formatTime } = useRelativeTime()
 const { latency } = useWebSocket()
@@ -46,6 +47,8 @@ const {
   activeMessages,
   loadingList,
   loadingMessages,
+  listError,
+  messagesError,
   hasMoreHistory,
   peerTyping,
   failedLocalIds,
@@ -219,6 +222,28 @@ watch(
   }
 )
 
+/**
+ * 消息加载失败后的重试。
+ *
+ * 走 openConversation 而不是直接调 messages 接口：
+ * 失败时这条会话没进 messagesByConv，openConversation 会重新拉一次；
+ * 而且这次拉成功才标已读（见 useChat 里那段注释）。
+ */
+function reloadMessages() {
+  if (!activeId.value) return
+  void openConversation(activeId.value)
+}
+
+/**
+ * 空状态的出口：去「推荐关注」那片看看有谁值得关注。
+ *
+ * 只写一句「先关注几个人」却不给按钮，等于让用户自己猜去哪 ——
+ * 空状态的价值就在于它本身是内容，不该是死路。
+ */
+function goDiscover() {
+  router.push({ path: '/messages', query: { tab: 'notifications' } })
+}
+
 onMounted(async () => {
   await loadConversations()
 
@@ -273,13 +298,17 @@ watch(activeId, () => {
       - 关注的人都聊过了 → 告诉他这不是故障（去个人主页找新的人）
       只给「还没有其他人注册」的话，第二种情况会显得像功能坏了。
     -->
-    <p v-else class="discover-empty">
-      {{
-        followingTotal > 0
-          ? '你关注的人都已经聊过了，去个人主页看看新的吧'
-          : '先关注几个人，就能开始聊天了'
-      }}
-    </p>
+    <div v-else class="discover-empty">
+      <p>
+        {{
+          followingTotal > 0
+            ? '你关注的人都已经聊过了，去个人主页看看新的吧'
+            : '先关注几个人，就能开始聊天了'
+        }}
+      </p>
+      <!-- 空状态也要有出口：只说「去关注」却不给按钮，用户得自己猜去哪 -->
+      <el-button type="primary" plain size="small" @click="goDiscover"> 看看谁值得关注 </el-button>
+    </div>
   </div>
 
   <div v-else class="chat">
@@ -300,6 +329,15 @@ watch(activeId, () => {
       </div>
 
       <div v-if="loadingList" class="list-hint">加载中…</div>
+
+      <!--
+        列表拉不下来时给重试：只弹一句 toast 的话，
+        用户眼前是一片空白 —— 既不知道发生了什么，也不知道自己能做什么。
+      -->
+      <div v-else-if="listError" class="list-hint list-error">
+        <p>会话列表加载失败</p>
+        <el-button size="small" @click="loadConversations">重试</el-button>
+      </div>
 
       <ul v-else class="conv-items">
         <!--
@@ -411,6 +449,12 @@ watch(activeId, () => {
           </div>
 
           <div v-if="loadingMessages && !activeMessages.length" class="list-hint">加载中…</div>
+
+          <!-- 同理：消息拉不下来时给重试，而不是留一片空白 -->
+          <div v-else-if="messagesError && !activeMessages.length" class="list-hint list-error">
+            <p>消息加载失败</p>
+            <el-button size="small" @click="reloadMessages">重试</el-button>
+          </div>
 
           <template v-for="item in timeline" :key="item.key">
             <!-- 时间分隔线：两条消息隔太久才画一条 -->
@@ -719,6 +763,19 @@ watch(activeId, () => {
   text-align: center;
   color: var(--muted-foreground);
   font-size: var(--fs-sm);
+}
+
+/* 加载失败：留一个重试按钮，让界面不是一片死寂 */
+.list-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 16px;
+}
+
+.list-error p {
+  margin: 0;
 }
 
 .list-hint .sub {

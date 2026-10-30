@@ -43,6 +43,14 @@ const messagesByConv = ref<Record<number, ChatMessage[]>>({})
 const activeId = ref<number | null>(null)
 const loadingList = ref(false)
 const loadingMessages = ref(false)
+/**
+ * 这两个错误状态是给界面「重试」用的。
+ *
+ * 只有 toast 的话，界面那边是一片空白 —— 用户既不知道发生了什么，
+ * 也不知道自己能做什么，只能刷新页面。
+ */
+const listError = ref(false)
+const messagesError = ref(false)
 const hasMoreHistory = ref(false)
 const nextBefore = ref<number | null>(null)
 const peerTyping = ref(false)
@@ -173,12 +181,14 @@ function upsertConversation(conv: Conversation) {
 
 async function loadConversations() {
   loadingList.value = true
+  listError.value = false
   try {
     const { list } = await conversationsApi.list()
     conversations.value = list
     // 聊过的人变多了，推荐名单要跟着变（否则会出现「推荐了一个已经在会话里的人」）
     if (list.length > 0) suggestions.value = []
   } catch {
+    listError.value = true
     toast.show('会话列表加载失败', 'error')
   } finally {
     loadingList.value = false
@@ -206,13 +216,19 @@ async function openConversation(convId: number) {
 
   if (!messagesByConv.value[convId]) {
     loadingMessages.value = true
+    messagesError.value = false
     try {
       const page = await conversationsApi.messages(convId)
       messagesByConv.value[convId] = page.list
       hasMoreHistory.value = page.pagination.hasMore
       nextBefore.value = page.pagination.nextBefore
     } catch {
+      messagesError.value = true
       toast.show('消息加载失败', 'error')
+      // **消息都没看到，先别标已读** ——
+      // 标了的话未读清零，等用户点「重试」把消息拉回来时，
+      // 「以下为新消息」那条分界线已经找不回来了（未读数被抹掉了）。
+      return
     } finally {
       loadingMessages.value = false
     }
@@ -467,6 +483,8 @@ export function useChat() {
     activeMessages,
     loadingList,
     loadingMessages,
+    listError,
+    messagesError,
     hasMoreHistory,
     peerTyping,
     failedLocalIds,

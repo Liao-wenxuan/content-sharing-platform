@@ -181,12 +181,6 @@ onMounted(() => {
     router.push({ path: '/login', query: { redirect: '/messages' } })
     return
   }
-  // 从个人主页「发消息」进来的：直接落到聊天 Tab。
-  //
-  // 不切的话 ChatView 根本不挂载（它在 v-else 分支里），
-  // ?peer 这个参数就没人读 —— 用户点了「发消息」，
-  // 看到的还是通知列表，等于按钮没生效。
-  if (route.query.peer) activeSection.value = 'chat'
   // 进页面就把未读数拉一次并订阅 WS 帧：铃铛的初值不能只靠 WS，
   // 否则刷新页面到 WS 连上之前，铃铛是空的
   startNotifications()
@@ -194,6 +188,29 @@ onMounted(() => {
   loadSuggestions()
   loadPrefs()
 })
+
+/**
+ * 外部能直接落到某个 Tab：?tab=notifications / ?tab=chat
+ *
+ * 两个来源：
+ * - `?peer=<id>`：从个人主页「发消息」进来的，要落聊天 Tab
+ * - `?tab=notifications`：聊天空状态里的「看看谁值得关注」，
+ *   落回通知 Tab —— 那边的右栏有「推荐关注」
+ *
+ * 聊天面板是通知 Tab 的 **v-else** 分支，不切它根本不挂载，
+ * ?peer 就没人读 —— 用户点了「发消息」，看到的还是通知列表。
+ */
+watch(
+  () => [route.query.tab, route.query.peer] as const,
+  ([tab, peer]) => {
+    if (peer) {
+      activeSection.value = 'chat'
+    } else if (tab === 'chat' || tab === 'notifications') {
+      activeSection.value = tab
+    }
+  },
+  { immediate: true }
+)
 
 // 切分类就重新拉对应的那一组（后端已经把「评论和@ = comment + mention」合并好了）
 watch(activeCategory, (cat) => {
