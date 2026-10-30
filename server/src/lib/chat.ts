@@ -49,6 +49,37 @@ export function getOrCreateConversation(userId: number, peerId: number): Convers
     .get(a, b) as ConversationRow
 }
 
+/**
+ * 我是否关注了对方。
+ *
+ * 私信准入门槛的口径只有这一处 —— HTTP 路由和 WebSocket 都调它，
+ * 两边不会算出不一样的结果。
+ */
+export function followsUser(followerId: number, followeeId: number): boolean {
+  const row = db
+    .prepare(`SELECT 1 AS ok FROM follows WHERE follower_id = ? AND followee_id = ?`)
+    .get(followerId, followeeId)
+  return !!row
+}
+
+/**
+ * 我能不能发起和某个人的私聊。
+ *
+ * 规则（抖音那套，单向关注）：
+ * - **已经聊过 → 一直能聊**。取关不影响历史私信，
+ *   这是「保留会话」的直接推论。门槛只管「怎么开始」，
+ *   不管「已经开始的事」。
+ * - **没聊过 → 必须我关注了对方**。单向：对方没关注我不影响 ——
+ *   对方照样收到消息，并自动出现在他的会话列表里。
+ *
+ * 注意这里判断的是**发起方**：门槛管的是「谁先开口」，
+ * 不是「对方愿不愿意接」。
+ */
+export function canStartChat(me: number, peerId: number): boolean {
+  if (findConversation(me, peerId)) return true
+  return followsUser(me, peerId)
+}
+
 /** 我是否是该会话成员；不是就返回 null（调用方一律回 403） */
 export function assertMember(conversationId: number, userId: number): ConversationRow | null {
   const row = db.prepare(`SELECT * FROM conversations WHERE id = ?`).get(conversationId) as
