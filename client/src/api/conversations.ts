@@ -31,11 +31,14 @@ export const conversationsApi = {
     return request.get<{ list: Conversation[] }>('/conversations')
   },
 
-  /** 可能想和你聊的人（已排除聊过的人），聊天空状态用 */
-  chatSuggestions(limit = 6): Promise<{ list: ChatSuggestion[] }> {
-    return request.get<{ list: ChatSuggestion[] }>('/users/chat-suggestions', {
-      params: { limit }
-    })
+  /** 可能想和你聊的人（我关注了、还没聊过的），聊天空状态用 */
+  chatSuggestions(limit = 6): Promise<{ list: ChatSuggestion[]; followingTotal: number }> {
+    return request.get<{ list: ChatSuggestion[]; followingTotal: number }>(
+      '/users/chat-suggestions',
+      {
+        params: { limit }
+      }
+    )
   },
 
   /** 打开和某个用户的会话；已存在则复用（幂等） */

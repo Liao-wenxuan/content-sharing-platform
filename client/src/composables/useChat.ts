@@ -31,6 +31,14 @@ const tempIdToLocalId = new Map<string, number>()
 
 const conversations = ref<Conversation[]>([])
 const suggestions = ref<ChatSuggestion[]>([])
+/**
+ * 我关注的人一共几个。
+ *
+ * 空状态有两种「空」：一个关注都没关注，和关注的人全聊过了。
+ * 两者在推荐列表里都长成空数组，光看 list 分不出来 ——
+ * 文案瞎猜的话就会在「去关注几个人」和「他们都聊过了」之间随机说错一个。
+ */
+const followingTotal = ref(0)
 const messagesByConv = ref<Record<number, ChatMessage[]>>({})
 const activeId = ref<number | null>(null)
 const loadingList = ref(false)
@@ -181,8 +189,9 @@ async function loadConversations() {
 async function loadSuggestions() {
   if (suggestions.value.length) return
   try {
-    const { list } = await conversationsApi.chatSuggestions(6)
+    const { list, followingTotal: total } = await conversationsApi.chatSuggestions(6)
     suggestions.value = list
+    followingTotal.value = total
   } catch {
     // 拉不到就让空状态退回纯文案，不报错
   }
@@ -249,8 +258,10 @@ async function startWithPeer(peerId: number) {
     const conv = await conversationsApi.create(peerId)
     upsertConversation(conv)
     await openConversation(conv.id)
-  } catch {
-    toast.show('无法发起会话', 'error')
+  } catch (err: any) {
+    // 把服务端的原话透出去：「需要先关注对方才能发消息」。
+    // 笼统的「无法发起会话」等于让用户自己猜为什么被挡下来。
+    toast.show(err?.response?.data?.message || '无法发起会话', 'error')
   }
 }
 
@@ -450,6 +461,7 @@ export function useChat() {
     // 状态
     conversations,
     suggestions,
+    followingTotal,
     activeId,
     activeConversation,
     activeMessages,
