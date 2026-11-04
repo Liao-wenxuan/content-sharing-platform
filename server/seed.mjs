@@ -162,26 +162,44 @@ cleaned += corrupt.length
 console.log(`清理编码损坏笔记 ${corrupt.length} 条`)
 
 // ---------- 3. 演示用户 ----------
+//
+// 凭据是**公开**的：README 首屏写的就是这一组，招聘方 / 面试官拿它直接登录。
+//
+// 这里原来给的是随机密码，注释还写着「这些账号只能进不能登」——
+// 那条注释当时是对的，但它是站在「自用」立场写的：演示数据只要长得像就行，
+// 谁登进去不重要。一旦这个站要给人看，它就是最贵的一处设计错误：
+// 精心造的关注图、粉丝、钱包余额、订单全锁在登录墙后面，而门没有把手。
+//
+// 所以现在：邮箱固定、密码固定、**已存在的账号也强制拉回这组凭据**
+// （老库重跑 seed 时，密码不跟着改的话 README 里那行就是错的 —— 比不写更糟）。
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'csp-demo-2026'
+const demoEmail = (i) => `demo${i + 1}@csp.local`
+
 const insertUser = db.prepare(
   `INSERT OR IGNORE INTO users (email, password_hash, nickname) VALUES (?, ?, ?)`
 )
 const findUser = db.prepare('SELECT id FROM users WHERE nickname = ?')
+const findEmail = db.prepare('SELECT id FROM users WHERE email = ?')
+const syncPassword = db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`)
+const syncEmail = db.prepare(`UPDATE users SET email = ? WHERE id = ?`)
+const demoHash = bcrypt.hashSync(DEMO_PASSWORD, 10)
+
 const userIds = []
-for (const nick of NICKNAMES) {
+for (const [i, nick] of NICKNAMES.entries()) {
+  const email = demoEmail(i)
   const hit = findUser.get(nick)
   if (hit) {
+    syncPassword.run(demoHash, hit.id)
+    // 邮箱只在没被别人占着时才改，否则 UNIQUE 会把整个 seed 打挂
+    const taken = findEmail.get(email)
+    if (!taken || taken.id === hit.id) syncEmail.run(email, hit.id)
     userIds.push(hit.id)
     continue
   }
-  // 随机密码 → 这些账号只能进不能登
-  insertUser.run(
-    `demo_${Buffer.from(nick).toString('hex').slice(0, 12)}@demo.local`,
-    bcrypt.hashSync(Math.random().toString(36) + Date.now(), 10),
-    nick
-  )
+  insertUser.run(email, demoHash, nick)
   userIds.push(findUser.get(nick).id)
 }
-console.log(`演示用户就绪：${userIds.length} 个`)
+console.log(`演示账号就绪：${userIds.length} 个，统一密码 ${DEMO_PASSWORD}`)
 
 // ---------- 3.5 关注关系 ----------
 // 没有关注图的话，关注流 / 粉丝列表 / 推荐关注全是空的，演示时看不出效果。
