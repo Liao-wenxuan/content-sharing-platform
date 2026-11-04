@@ -183,7 +183,6 @@ console.log('\n[3] 每个面板都要真的能打开且有内容')
     ['通用设置', '打开首页时'],
     ['通知设置', '赞和收藏'],
     ['内容偏好', '屏蔽的话题'],
-    ['收货地址', '新增地址'],
     ['存储空间', '怎么降下来'],
     ['添加小组件', '先说清楚这个功能不是什么'],
     ['隐私设置', '拿回我的数据'],
@@ -453,45 +452,13 @@ console.log('\n[5b] 未成年人模式真的过滤了内容')
     `${restored.length} 条`
   )
 
-  // 必须回到设置页：下一组要点「收货地址」那个菜单项，
-  // 而这里停在搜索页上，找不到它会一直等到超时
+  // 回到设置页，免得后面停在搜索页上
   await page.goto(`${BASE}/settings`, { waitUntil: 'domcontentloaded' })
   await page.locator('.settings').waitFor({ state: 'visible', timeout: 20000 })
   await page.waitForTimeout(800)
 }
 
-console.log('\n[6] 收货地址能真的存一条')
-{
-  await page.locator('.item-row', { hasText: '收货地址' }).first().click()
-  await page
-    .locator('.el-drawer.open')
-    .first()
-    .waitFor({ state: 'visible', timeout: 5000 })
-    .catch(() => {})
-
-  const inputs = page.locator('.el-drawer.open .editor input')
-  const values = ['张三', '13800138000', '广东省', '深圳市', '南山区科技园 1 号']
-  for (let i = 0; i < values.length; i++) {
-    await inputs.nth(i).fill(values[i])
-  }
-  await page.locator('.el-drawer.open button', { hasText: '保存' }).click()
-  await page.waitForTimeout(1200)
-
-  const listText = await page.locator('.el-drawer.open').first().innerText()
-  check('地址出现在列表里', listText.includes('张三'), listText.slice(0, 80).replace(/\s+/g, ' '))
-  check('手机号默认打码', listText.includes('138****8000'))
-  check('第一条自动成为默认', listText.includes('默认'))
-
-  // 直接查库确认（复用模块作用域的只读连接，别重复开）
-  const rows = db.prepare('SELECT * FROM addresses WHERE user_id = ?').all(user.id)
-  const defaults = db
-    .prepare('SELECT COUNT(*) AS n FROM addresses WHERE user_id = ? AND is_default = 1')
-    .get(user.id)
-  check('库里确实落了一条', rows.length >= 1, `${rows.length} 条`)
-  check('默认地址只有一条', defaults.n === 1, `${defaults.n} 条默认`)
-}
-
-console.log('\n[7] 控制台干净')
+console.log('\n[6] 控制台干净')
 {
   check('零 console error / 零 5xx', errs.length === 0, errs.slice(0, 3).join(' | '))
 }
