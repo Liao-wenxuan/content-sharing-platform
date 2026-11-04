@@ -25,7 +25,9 @@ import {
 } from '@/api/favorites'
 import { useFollow } from '@/composables/useFollow'
 import { useChatEntry } from '@/composables/useChatEntry'
-import { NICKNAME_MAX_LENGTH } from '@/constants'
+import { useImageField } from '@/composables/useImageField'
+import { NICKNAME_MAX_LENGTH, AVATAR_MAX_EDGE, COVER_MAX_EDGE, IMAGE_QUALITY } from '@/constants'
+import { isValidImageUrl } from '@/utils/image'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -112,6 +114,36 @@ const editAvatar = ref('')
 const editCover = ref('')
 const editSubmitting = ref(false)
 const editError = ref('')
+
+/**
+ * 头像和封面的上传流程，各一份。
+ *
+ * 之前这两个字段只能填图片链接 —— 用户得自己找图床、
+ * 传上去、再把链接贴回来。发布笔记那条路已经有上传 + 压缩了，
+ * 这里没接上，等于同一个项目里两套做法。
+ *
+ * 压缩参数按用途分：头像显示 72px、封面是 1080px 宽的横条，
+ * 用同一个上限要么头像太大，要么封面不够清晰。
+ */
+const avatarField = useImageField({
+  maxEdge: AVATAR_MAX_EDGE,
+  quality: 0.85,
+  label: '头像'
+})
+const coverField = useImageField({
+  maxEdge: COVER_MAX_EDGE,
+  quality: IMAGE_QUALITY,
+  label: '封面'
+})
+
+// 模板里要用到的是 ref 本身，顶层 ref 在模板里会自动 unwrap ——
+// 藏在对象属性里的 ref 不会（avatarField.uploading 会是 Ref 对象而不是布尔值）
+const { uploading: avatarUploading, progress: avatarProgress, error: avatarError } = avatarField
+const { uploading: coverUploading, progress: coverProgress, error: coverError } = coverField
+
+/** 链接填得对不对（空串 = 不设，合法） */
+const avatarUrlValid = computed(() => isValidImageUrl(editAvatar.value))
+const coverUrlValid = computed(() => isValidImageUrl(editCover.value))
 
 const targetId = computed<number | null>(() => {
   const id = route.params.id
@@ -308,6 +340,8 @@ function openEdit() {
   editAvatar.value = profileUser.value.avatar || ''
   editCover.value = profileUser.value.cover || ''
   editError.value = ''
+  avatarField.reset()
+  coverField.reset()
   showEditModal.value = true
 }
 
@@ -315,6 +349,26 @@ function closeEdit() {
   showEditModal.value = false
   editSubmitting.value = false
   editError.value = ''
+}
+
+/**
+ * 选好一张图 → 压缩 → 上传 → 回填链接。
+ *
+ * **回填而不是「传完直接存」是有意的**：用户看得见填进去的是什么，
+ * 也能在保存前改成别的。悄悄替他决定用哪张图，比让他看一眼更糟。
+ */
+async function onAvatarChange(uploadFile: { raw?: File }) {
+  const file = uploadFile?.raw
+  if (!file) return
+  const url = await avatarField.upload(file)
+  if (url) editAvatar.value = url
+}
+
+async function onCoverChange(uploadFile: { raw?: File }) {
+  const file = uploadFile?.raw
+  if (!file) return
+  const url = await coverField.upload(file)
+  if (url) editCover.value = url
 }
 
 async function submitEdit() {
@@ -325,6 +379,23 @@ async function submitEdit() {
   }
   if (nickname.length > NICKNAME_MAX_LENGTH) {
     editError.value = `昵称不能超过 ${NICKNAME_MAX_LENGTH} 字`
+    return
+  }
+
+  // 链接格式不对就别提交 —— 服务端只查长度（≤1000），
+  // 存进去之后主页上就是一张裂图，用户还以为功能坏了。
+  if (!avatarUrlValid.value) {
+    editError.value = '头像链接格式不对，需要 http(s) 开头的图片地址'
+    return
+  }
+  if (!coverUrlValid.value) {
+    editError.value = '封面链接格式不对，需要 http(s) 开头的图片地址'
+    return
+  }
+
+  // 还在上传就保存，存下去的是空链接
+  if (avatarField.uploading.value || coverField.uploading.value) {
+    editError.value = '图片还在上传，等上传完再保存'
     return
   }
 
@@ -724,11 +795,91 @@ watch(activeScope, async (scope) => {
             placeholder="给自己起个名字"
           />
         </el-form-item>
-        <el-form-item label="头像地址">
-          <el-input v-model="editAvatar" placeholder="https://... 图片链接" clearable />
+        <!--
+          头像和封面：上传和贴链接两种入口并存。
+
+          之前只有「贴链接」—— 用户得自己找图床、传上去、再把链接贴回来。
+          同一个项目里发布笔记那条路已经有上传 + 压缩了，
+          这里没接上等于同一个产品里两套做法。
+
+          两种入口都留着：有人就是想用已有的图床链接，
+          上来就让人家必须传文件是另一种强人所难。
+        -->
+        <el-form-item label="头像">
+          <div class="image-field">
+            <el-avatar :size="56" :src="editAvatar || undefined" class="image-preview" alt="">
+              {{ avatarText(editNickname) }}
+            </el-avatar>
+            <div class="image-field-body">
+              <div class="image-field-actions">
+                <el-upload
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept="image/*"
+                  :on-change="onAvatarChange"
+                >
+                  <el-button size="small" :loading="avatarUploading">
+                    {{ editAvatar ? '换一张' : '上传图片' }}
+                  </el-button>
+                </el-upload>
+                <el-progress
+                  v-if="avatarUploading"
+                  :percentage="avatarProgress"
+                  :stroke-width="4"
+                  class="upload-progress"
+                />
+              </div>
+              <el-input
+                v-model="editAvatar"
+                placeholder="或粘贴图片链接"
+                clearable
+                :error="!avatarUrlValid"
+              />
+              <p v-if="!avatarUrlValid" class="image-field-error">
+                链接要以 http:// 或 https:// 开头
+              </p>
+              <p v-if="avatarError" class="image-field-error">{{ avatarError }}</p>
+            </div>
+          </div>
         </el-form-item>
-        <el-form-item label="主页封面地址">
-          <el-input v-model="editCover" placeholder="https://... 图片链接" clearable />
+
+        <el-form-item label="主页封面">
+          <div class="image-field">
+            <div class="cover-preview" :class="{ 'is-empty': !editCover }">
+              <img v-if="editCover" :src="editCover" alt="封面预览" />
+              <span v-else>暂无封面</span>
+            </div>
+            <div class="image-field-body">
+              <div class="image-field-actions">
+                <el-upload
+                  :auto-upload="false"
+                  :show-file-list="false"
+                  accept="image/*"
+                  :on-change="onCoverChange"
+                >
+                  <el-button size="small" :loading="coverUploading">
+                    {{ editCover ? '换一张' : '上传图片' }}
+                  </el-button>
+                </el-upload>
+                <el-progress
+                  v-if="coverUploading"
+                  :percentage="coverProgress"
+                  :stroke-width="4"
+                  class="upload-progress"
+                />
+              </div>
+              <el-input
+                v-model="editCover"
+                placeholder="或粘贴图片链接"
+                clearable
+                :error="!coverUrlValid"
+              />
+              <p v-if="!coverUrlValid" class="image-field-error">
+                链接要以 http:// 或 https:// 开头
+              </p>
+              <p v-if="coverError" class="image-field-error">{{ coverError }}</p>
+            </div>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -748,6 +899,65 @@ watch(activeScope, async (scope) => {
 
 .guest-card {
   padding: 40px 0;
+}
+
+/* ===== 编辑资料：图片字段 =====
+   预览 + 上传 + 贴链接三件套并排。
+   预览放在左边，因为「我要换的是这张」是用户点上传按钮时脑子里想的事 —— */
+.image-field {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.image-preview {
+  flex: none;
+  border: 1px solid var(--border);
+}
+
+.image-field-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.image-field-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.image-field-actions .el-progress {
+  flex: 1;
+  min-width: 0;
+}
+
+.image-field-error {
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--el-color-danger);
+}
+
+.cover-preview {
+  flex: none;
+  width: 132px;
+  height: 72px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: var(--fs-xs);
+}
+
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* ===== 封面 ===== */
