@@ -1,118 +1,94 @@
 {
-  "capturedAt": "2026-11-04T12:04:21.447Z",
-  "clientSrcHash": "1a8663d8216b4116196bc0f8e84f66db011783160a731a57273dec70a61c9e78",
+  "capturedAt": "2026-11-04T13:18:20.932Z",
+  "clientSrcHash": "a20d9b552b8b3f7d1149df06918ae3f4d229bb2ebf54afbfb4e448616de100c6",
   "shots": [
     {
       "file": "01-home.jpeg",
-      "bytes": 378712
+      "bytes": 367822
     },
     {
       "file": "02-search.jpeg",
-      "bytes": 242084
+      "bytes": 242004
     },
     {
       "file": "03-detail.jpeg",
-      "bytes": 154320
+      "bytes": 153529
     },
     {
       "file": "04-login.png",
-      "bytes": 21872
+      "bytes": 21908
     },
     {
       "file": "06-home-logged-in.jpeg",
-      "bytes": 418106
+      "bytes": 399286
     },
     {
       "file": "07-publish.png",
-      "bytes": 78156
+      "bytes": 77490
     },
     {
       "file": "08-profile.jpeg",
-      "bytes": 211196
+      "bytes": 210501
     },
     {
       "file": "09-messages.png",
-      "bytes": 81806
+      "bytes": 82689
     },
     {
       "file": "10-settings.png",
-      "bytes": 80367
+      "bytes": 81627
     },
     {
       "file": "12-search-suggest.jpeg",
-      "bytes": 417743
+      "bytes": 395849
     },
     {
       "file": "13-favorites.jpeg",
-      "bytes": 108975
+      "bytes": 108452
     },
     {
       "file": "14-topic.jpeg",
-      "bytes": 265817
+      "bytes": 266420
     },
     {
       "file": "15-follows.jpeg",
-      "bytes": 66679
+      "bytes": 65842
     },
     {
       "file": "16-detail-comments.jpeg",
-      "bytes": 167586
-    },
-    {
-      "file": "21-market-shop.png",
-      "bytes": 289543
-    },
-    {
-      "file": "22-market-product.png",
-      "bytes": 55289
-    },
-    {
-      "file": "23-market-cart.png",
-      "bytes": 66940
-    },
-    {
-      "file": "24-market-orders.png",
-      "bytes": 69224
-    },
-    {
-      "file": "25-market-wallet.png",
-      "bytes": 71543
+      "bytes": 166898
     },
     {
       "file": "26-feed-recommend.jpeg",
-      "bytes": 396796
+      "bytes": 382017
     },
     {
       "file": "27-interest.jpeg",
-      "bytes": 108063
+      "bytes": 107370
     },
     {
       "file": "28-image-compress.png",
-      "bytes": 91773
+      "bytes": 91175
     },
     {
       "file": "29-reveal-stagger.png",
-      "bytes": 217165
+      "bytes": 1279871
     },
     {
       "file": "30-reveal-done.png",
-      "bytes": 228151
+      "bytes": 1287281
     },
     {
       "file": "31-reveal-reduced.png",
-      "bytes": 227959
+      "bytes": 1287265
     },
     {
       "file": "32-settings.png",
-      "bytes": 78386
+      "bytes": 79518
     },
     {
       "file": "33-settings-panel.png",
-      "bytes": 88502
-    },
-    {
-      "file": "34-market-mine.png",
-      "bytes": 60649
+      "bytes": 103033
     }
   ]
 }

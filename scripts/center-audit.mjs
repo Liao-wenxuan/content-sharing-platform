@@ -12,7 +12,6 @@ const WIDTH = Number(process.argv[2] || 1920)
 
 const PAGES = [
   { path: '/', block: '.explore', container: '.content' },
-  { path: '/market', block: '.market', container: '.content' },
   { path: '/post/18', block: '.detail', container: '.content' },
   { path: '/profile/me', block: '.profile', container: '.content' },
   { path: '/messages', block: '.messages', container: '.content' },

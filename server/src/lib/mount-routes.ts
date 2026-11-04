@@ -10,13 +10,8 @@ import conversationsRouter from '../routes/conversations'
 import notificationsRouter from '../routes/notifications'
 import topicsRouter from '../routes/topics'
 import viewHistoryRouter from '../routes/viewHistory'
-import productsRouter from '../routes/products'
-import cartRouter from '../routes/cart'
-import ordersRouter from '../routes/orders'
-import walletRouter from '../routes/wallet'
 import feedRouter from '../routes/feed'
 import settingsRouter from '../routes/settings'
-import addressesRouter from '../routes/addresses'
 import accountsRouter from '../routes/accounts'
 import aiRouter from '../routes/ai'
 
@@ -45,13 +40,6 @@ export function mountApiRouters(app: Express): void {
   app.use('/api/conversations', conversationsRouter)
   app.use('/api/notifications', notificationsRouter)
   app.use('/api/topics', topicsRouter)
-  // ===== 市集：三个独立前缀，不和 /api/posts 混 =====
-  // 商品 / 购物车 / 订单互相之间不共享路径前缀，
-  // 所以不存在「/:id 吃掉 /me」的顺序问题，各自内部自己注意即可。
-  app.use('/api/products', productsRouter)
-  app.use('/api/cart', cartRouter)
-  app.use('/api/orders', ordersRouter)
-  app.use('/api/wallet', walletRouter)
   // 推荐流独占 /api/feed 前缀。它内部有 /profile 和 /feedback 这些字面量路由，
   // 但没有 /:id 之类的通配，所以不存在顺序问题。
   app.use('/api/feed', feedRouter)
@@ -61,7 +49,6 @@ export function mountApiRouters(app: Express): void {
   // 但 settings 内部的 /storage /export /password 是**字面量**路由，
   // 而它没有 /:id，所以也不存在顺序问题（这一点和 feedRouter 一样）。
   app.use('/api/settings', settingsRouter)
-  app.use('/api/addresses', addressesRouter)
   app.use('/api/accounts', accountsRouter)
   // 站内 AI 问答。独占 /api/ai 前缀，内部只有 /suggest 和 /chat 两个
   // 字面量路由，没有 /:id，所以不存在顺序问题。

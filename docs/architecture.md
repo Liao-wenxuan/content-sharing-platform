@@ -19,9 +19,6 @@ Express :3000  ── better-sqlite3 ──► data.db (SQLite file)
 
 > 下面是**内容域**的核心关系。完整表清单见 `server/src/lib/schema.ts`，
 > 那里每张表的注释都写了「为什么这么建」，比这里更详细。
-> 交易域（products / cart_items / orders / order_items / wallets /
-> wallet_transactions / transit_accounts / transit_transactions）
-> 见[市集一节](#市集与支付)。
 
 ```mermaid
 erDiagram
@@ -113,7 +110,6 @@ erDiagram
 | 位置                         | 原因                                                                                                                                                                                      |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `comments.parent_id`         | `ALTER TABLE ADD COLUMN` 不支持加外键（外键只能在 CREATE TABLE 时声明），而表已存在。为一张老表做「新建 + 拷贝 + 改名」代价远大于收益。删父评论时是否级联删回复，本来就该由应用层显式决定 |
-| `order_items.product_id`     | 商品被删之后订单行必须留着，否则「我买过什么」的历史会跟着商品一起消失                                                                                                                    |
 | `feed_session_items.post_id` | 快照是一次性的；笔记被删之后 JOIN 自然查不到，读取时跳过并让游标照常前进                                                                                                                  |
 
 ## 请求流程：上传 + 发布
@@ -231,33 +227,6 @@ xhr.send(formData)
 
 倒过来会抛 InvalidStateError。
 
-## 市集与支付
-
-```
-买家  ──hold───▶  平台在途  ──settle──▶  卖家     （买家确认收货）
-                    │
-                    └──release─▶  买家          （退款，钱原路退回）
-```
-
-**守恒律：所有钱包余额 + 在途余额 == 充值总额。**
-`GET /api/wallet/audit` 和钱包页上那条对勾都是在算这条式子。
-
-为什么必须有「在途」这一层：常见做法「拍下即付款，钱直接给卖家」
-在这个项目里立刻崩 —— 买家付了 12850，卖家余额 +12850，账是平的，
-但买家退款就��**从卖家账里扣**。卖家一旦把余额花掉，这笔钱扣不回来，
-于是要么退款失败（业务上荒谬），要么允许卖家余额为负（违反 CHECK 约束）。
-
-退款只发生在结算之前（`completed` 和 `refunded` 都是终态），
-所以「退款退不回来」在设计上就不存在，不是靠兜底逻辑挡住的。
-
-在途独立成表而不是塞进 `wallets`：`wallets.user_id` 有
-`FOREIGN KEY REFERENCES users(id)`，写一个假的平台 user_id 要么被外键挡，
-要么得为绕过外键放松约束。而且用户钱包是「用户能花的钱」，
-在途是「用户碰不到的钱」—— 混一张表的话任何遍历 wallets
-算累计资产的代码都会把在途算进去。
-
-详见 `server/src/lib/transit.ts` 的文件头注释。
-
 ## 路线图
 
 - [x] 阶段 0：项目骨架（Vite + Vue 3 + TS，路由、Pinia、axios）
@@ -269,7 +238,6 @@ xhr.send(formData)
 - [x] 阶段 6：桌面端重构（Element Plus + 三栏布局，取代移动端 BottomNav / 抽屉）
 - [x] 阶段 7：即时通讯（WS 1v1：乐观发送 / ack 收敛 / 多端同步 / 断线重连补发）
 - [x] 阶段 8：内容社区能力 —— 关注体系 / 收藏夹 / 通知中心 / 话题页 / 评论增强 / 通知偏好 / 浏览记录 / 搜索
-- [x] 阶段 9：市集（完整 C2C 交易链路 + 在途资金与全局对账）
 - [x] 阶段 10：**推荐流**（兴趣画像 + 打分 + 冻结快照翻页 + 负反馈与可解释）
 - [x] 阶段 11：**图片处理**（上传前 canvas 压缩 + EXIF 方向校正 + 隐私元数据剥离）
 - [x] 阶段 12：**滚动入场**（IntersectionObserver 错峰 + 三层降级防线 + 逐帧 e2e 验证）
@@ -356,4 +324,3 @@ useReveal.ts        滚动入场：IntersectionObserver + 错峰档位 + 降级�
 | 推荐打分 | `server/src/lib/feed-score.ts`（纯函数）+ `feed-profile.ts`（画像）+ `feed.ts`（快照翻页）       |
 | 图片处理 | `client/src/utils/image.ts`（纯函数层）+ `imageCompress.ts`（canvas + 降级阶梯 + 串行）          |
 | 动效体系 | `client/src/assets/styles/motion.css`（token + reduced-motion 兜底）+ `composables/useReveal.ts` |
-| 交易链路 | `server/src/lib/wallet.ts` / `transit.ts` + `server/src/routes/orders.ts`                        |

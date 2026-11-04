@@ -383,7 +383,6 @@ const GUEST_PAGES = [
   { name: '笔记详情', path: `/post/${samples.post}` },
   { name: '个人主页', path: `/profile/${samples.author}` },
   { name: '话题页', path: '/topic/%E7%BE%8E%E9%A3%9F' },
-  { name: '市集', path: '/market' },
   { name: '兴趣画像', path: '/interest' },
   { name: 'AI 对话', path: '/ai?q=%E7%A9%BF%E6%90%AD' },
   { name: '404', path: '/this-route-does-not-exist' }
@@ -395,9 +394,7 @@ const AUTH_PAGES = [
   { name: '收藏夹', path: '/favorites' },
   { name: '浏览记录', path: '/history' },
   { name: '发布页', path: '/publish' },
-  { name: '购物车', path: '/market/cart' },
-  { name: '订单', path: '/market/orders' },
-  { name: '钱包', path: '/market/wallet' }
+  { name: '收藏', path: '/favorites' }
 ]
 
 let fails = 0

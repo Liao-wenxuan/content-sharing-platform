@@ -50,13 +50,9 @@ const PAGES = (uid) => [
   ['个人主页', `/profile/${uid}`, '.profile'],
   ['关注列表', `/follows/${uid}`, '.follow-list'],
   ['话题页', '/topic/%E7%BE%8E%E9%A3%9F', '.topic'],
-  ['市集', '/market', '.market'],
   ['设置', '/settings', '.settings'],
   ['消息', '/messages', '.messages'],
   ['收藏夹', '/favorites', '.fav-manage'],
-  ['购物车', '/market/cart', '.cart-view'],
-  ['订单', '/market/orders', '.orders'],
-  ['钱包', '/market/wallet', '.wallet'],
   ['兴趣画像', '/interest', '.interest'],
   ['浏览记录', '/history', '.view-history']
 ]

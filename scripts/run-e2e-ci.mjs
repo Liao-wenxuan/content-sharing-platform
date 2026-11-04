@@ -48,7 +48,6 @@ const SUITES = [
   ['topic', 'test:topic'],
   ['comment', 'test:comment'],
   ['view-history', 'test:history'],
-  ['market', 'test:market'],
   ['feed', 'test:feed'],
   ['image', 'test:image'],
   ['reveal', 'test:reveal'],

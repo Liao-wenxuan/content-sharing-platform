@@ -9,7 +9,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@/api/settings'
 import { formatBytes, formatCount, formatRelative } from '@/utils/format'
-import { maskPhone, formatAddress } from '@/api/addresses'
 
 // ===== 纯函数层（不需要 mock）=====
 
@@ -51,32 +50,6 @@ describe('formatRelative', () => {
     expect(formatRelative(new Date(now - 5 * 60000))).toContain('分钟前')
     expect(formatRelative(new Date(now - 3 * 3600000))).toContain('小时前')
     expect(formatRelative(new Date(now - 3 * 86400000))).toContain('天前')
-  })
-})
-
-describe('地址展示', () => {
-  const addr = {
-    id: 1,
-    receiver: '张三',
-    phone: '13800138000',
-    province: '广东省',
-    city: '深圳市',
-    detail: '南山区 1 号',
-    isDefault: true,
-    createdAt: ''
-  }
-
-  it('拼成一行而不是三行', () => {
-    expect(formatAddress(addr)).toBe('广东省 深圳市 南山区 1 号')
-  })
-
-  it('手机号打码中间四位', () => {
-    // 地址簿虽然只有自己能看，但这一屏可能被人看到
-    expect(maskPhone('13800138000')).toBe('138****8000')
-  })
-
-  it('太短的号码原样返回（打码后反而看不懂）', () => {
-    expect(maskPhone('123')).toBe('123')
   })
 })
 

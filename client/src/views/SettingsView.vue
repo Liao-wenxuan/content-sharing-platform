@@ -26,7 +26,6 @@ import {
   Lock,
   Coin,
   Operation,
-  Location,
   Grid,
   Opportunity,
   Moon,
@@ -48,7 +47,6 @@ import PanelNotify from './settings/PanelNotify.vue'
 import PanelLanguage from './settings/PanelLanguage.vue'
 import PanelPrivacy from './settings/PanelPrivacy.vue'
 import PanelStorage from './settings/PanelStorage.vue'
-import PanelAddresses from './settings/PanelAddresses.vue'
 import PanelWidget from './settings/PanelWidget.vue'
 import PanelHelp from './settings/PanelHelp.vue'
 import PanelAbout from './settings/PanelAbout.vue'
@@ -218,14 +216,6 @@ const groups: MenuGroup[] = [
   {
     title: '常用工具',
     items: [
-      {
-        key: 'address',
-        label: '收货地址',
-        desc: '地址簿',
-        icon: Location,
-        kind: 'panel',
-        panel: 'addresses'
-      },
       {
         key: 'storage',
         label: '存储空间',
@@ -459,7 +449,7 @@ onMounted(async () => {
         <div class="danger-row">
           <div class="danger-info">
             <div class="danger-title">退出登录</div>
-            <p class="danger-hint">退出后需要重新输入邮箱和密码。你的笔记、设置和订单都不会丢。</p>
+            <p class="danger-hint">退出后需要重新输入邮箱和密码。你的笔记和设置都不会丢。</p>
           </div>
           <el-button type="danger" plain :icon="SwitchButton" @click="logout">退出登录</el-button>
         </div>
@@ -528,15 +518,6 @@ onMounted(async () => {
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelStorage />
-    </el-drawer>
-
-    <el-drawer
-      :model-value="openPanel === 'addresses'"
-      title="收货地址"
-      size="560px"
-      @update:model-value="(v: boolean) => !v && close()"
-    >
-      <PanelAddresses />
     </el-drawer>
 
     <el-drawer

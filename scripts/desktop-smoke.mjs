@@ -60,7 +60,7 @@ check('顶栏 TopBar 存在', await page.locator('header.top-bar').isVisible())
 check('Element Plus 样式已加载', await page.locator('.el-menu').isVisible())
 
 const navText = await page.locator('.nav-menu').innerText()
-for (const label of ['发现', '发布', '市集', '我的', '设置']) {
+for (const label of ['发现', '发布', '我的', '设置']) {
   check(`侧栏含「${label}」`, navText.includes(label))
 }
 // 搜索入口在顶栏下拉、消息改成顶栏铃铛，都不再占侧栏位置

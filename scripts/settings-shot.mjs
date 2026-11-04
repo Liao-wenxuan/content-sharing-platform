@@ -44,14 +44,14 @@ await page.waitForTimeout(600)
 await page.screenshot({ path: path.join(SHOTS_DIR, '32-settings.png') })
 console.log('  32-settings.png')
 
-// 面板示例：收货地址抽屉
+// 面板示例：存储空间抽屉
 //
 // 注意选择器是 `.el-drawer.open` 而不是 `.el-drawer`：
-// 设置页把 11 个面板**全都**挂在 DOM 里（只是没打开），
-// 用 `.el-drawer` 会匹配到 11 个 —— Playwright 的严格模式直接报歧义。
+// 设置页把 10 个面板**全都**挂在 DOM 里（只是没打开），
+// 用 `.el-drawer` 会匹配到 10 个 —— Playwright 的严格模式直接报歧义。
 await page.evaluate(() => window.scrollTo(0, 0))
 await page.waitForTimeout(300)
-await page.locator('.item-row.clickable[data-item="address"]').click()
+await page.locator('.item-row.clickable[data-item="storage"]').click()
 await page.locator('.el-drawer.open').first().waitFor({ state: 'visible', timeout: 10000 })
 await page.waitForTimeout(800)
 await page.screenshot({ path: path.join(SHOTS_DIR, '33-settings-panel.png') })

@@ -125,9 +125,8 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
     <section class="block">
       <h3 class="block-title">拿回我的数据</h3>
       <p class="block-desc">
-        下载一份 JSON，包含你的账号资料、全部笔记、评论、点赞、关注、收藏、
-        收货地址和订单。<b>不包含</b>密码、登录凭据和钱包流水 ——
-        那不是你的个人数据，而且导出文件会到处转发。
+        下载一份 JSON，包含你的账号资料、全部笔记、评论、点赞、关注、收藏。
+        <b>不包含</b>密码和登录凭据 —— 那不是你的个人数据， 而且导出文件会到处转发。
       </p>
 
       <el-button type="primary" :loading="exporting" @click="exportMyData">
@@ -156,7 +155,6 @@ const blockedCount = computed(() => settings.value.blockedTags.length)
         <li>账号资料<b>邮箱 · 昵称 · 头像</b></li>
         <li>内容<b>笔记正文 · 图片 · 评论</b></li>
         <li>互动关系<b>点赞 · 关注 · 收藏</b></li>
-        <li>交易<b>订单 · 钱包流水</b></li>
         <li>图片元数据<b>上传前已剥离 EXIF</b></li>
       </ul>
       <p class="note">

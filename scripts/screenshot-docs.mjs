@@ -286,9 +286,6 @@ await shot('03-detail', '笔记详情 · 图集 + 点赞收藏 + 评论', 'jpeg'
 await goto('/login', '.submit-btn')
 await shot('04-login', '登录 / 注册')
 
-// 游客态的市集不单独拍：登录态那张（21-market-shop）拍的是同一页，
-// 而且橱窗这一节要展示的是「有商品、有分类 tab」的完整形态。
-
 // ---------- 2. 登录态 ----------
 console.log('\n[2] 登录态')
 
@@ -316,89 +313,6 @@ await shot('09-messages', '消息中心 · 通知 / 聊天双 Tab')
 
 await goto('/settings', '.settings')
 await shot('10-settings', '设置 · 深浅色切换 + 账号管理')
-
-// 橱窗这张**在造交易之前拍**。
-// 默认排序是「最新」，而脚本自己刚发布的那件商品（没有配图）会是第一张 ——
-// 截出来首屏是个空封面，把橱窗最该展示的「真实商品图 + 分类 tab」全挡了。
-// 放在这里拍，看到的就是访客真正会看到的橱窗：43 件带真实图片的商品。
-await goto('/market', '.market .card')
-await shot('21-market-shop', '市集橱窗 · 六个分类 tab + 43 件真实商品图')
-
-// ---------- 市集：走一遍真实交易再截图 ----------
-// 不直接复用 seed 里的演示数据：那批商品没有任何订单，
-// 订单页和钱包页会是空态 —— 而空态证明不了「这个功能完成了」。
-// 所以先下单 → 支付 → 发货，让钱包里真的有流水、在途真的有余额。
-console.log('\n[3] 市集：造一笔真实的订单')
-
-const PRODUCT_TITLE = '截图专用 · 铸铁煎锅'
-const PRICE_YUAN = '168.00'
-let productId = 0
-let orderId = 0
-
-{
-  const create = await page.request.post(`${API}/api/products`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      title: PRODUCT_TITLE,
-      description: '用了半年，家里换电炉了。铸铁无涂层，导热均匀。',
-      priceCents: 16800,
-      stock: 8,
-      images: []
-    }
-  })
-  productId = create.ok() ? (await create.json()).id : 0
-  console.log(`  商品已发布 id=${productId}`)
-
-  const auth = { Authorization: `Bearer ${token}` }
-  await page.request.post(`${API}/api/wallet/topup`, {
-    headers: auth,
-    data: { amountCents: 300000 }
-  })
-  await page.request.post(`${API}/api/cart`, { headers: auth, data: { productId, quantity: 2 } })
-
-  const order = await page.request.post(`${API}/api/orders`, {
-    headers: auth,
-    data: { sellerId: myId }
-  })
-  if (order.ok()) orderId = (await order.json()).id
-  const pay = await page.request.post(`${API}/api/orders/${orderId}/pay`, { headers: auth })
-  console.log(`  下单 ${orderId} 支付 ${pay.status()}`)
-
-  // 只走到「已发货」：在途里还压着钱，钱包页那条对账说明才有东西可展示
-  await page.request.post(`${API}/api/orders/${orderId}/ship`, { headers: auth })
-
-  // 再往车里放两件（不同卖家各一件），购物车截图才有内容。
-  // 下单会清掉刚结算那笔的行，不补的话拍出来是空态 —— 而空态证明不了
-  // 「按卖家分组」这个本页最关键的设计
-  const other = await page.request.get(`${API}/api/products?page=1&pageSize=3&sort=new`)
-  if (other.ok()) {
-    const { list } = await other.json()
-    for (const p of list.filter((x) => x.sellerId !== myId).slice(0, 2)) {
-      await page.request.post(`${API}/api/cart`, {
-        headers: auth,
-        data: { productId: p.id, quantity: 1 }
-      })
-    }
-  }
-}
-
-await goto(`/market/product/${productId}`, '.product-detail .price')
-await shot('22-market-product', '商品详情 · 卖家视角可改价改库存上下架')
-
-await goto('/market/cart', '.cart-view .group')
-await shot('23-market-cart', '购物车 · 按卖家分组，每组一个结算入口')
-
-await goto('/market/orders', '.orders .order')
-await shot('24-market-orders', '订单 · 我买的 / 我卖的两个 Tab，按状态表出按钮')
-
-await goto('/market/wallet', '.wallet .audit-line')
-await shot('25-market-wallet', '钱包 · 余额 + 流水 + 全局对账（在途 336.00 元）')
-
-// 我的商品：卖家自己的商品列表，下架的也能在这儿找回来
-// 这张是 2026-10-22 才加的页面，之前一直没有配图 ——
-// 而 README 里「市集」那一节讲的正是这个能力
-await goto('/market/mine', '.my-products .row')
-await shot('34-market-mine', '我的商品 · 下架的也能找回来，可以重新上架')
 
 // 搜索建议下拉：聚焦即出热门话题，输入后出三类候选
 // 放这里而不是最后 —— 它不依赖任何造出来的数据，编号也才连得上

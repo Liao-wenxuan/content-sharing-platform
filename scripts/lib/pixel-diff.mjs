@@ -73,8 +73,13 @@ export function judgeDiff(noise, diff) {
   if (diff.sizeMismatch || noise.sizeMismatch) {
     return { ok: false, reason: '两张图尺寸不一样，没法比', maxPixels: 0 }
   }
-  // 门槛 = 噪声的 10 倍，带一个下限（免得噪声偶然为 0 时门槛过紧）
-  const maxPixels = Math.max(noise.diffPixels * 10, 500)
+  // 门槛 = 噪声的 10 倍，带一个下限（免得噪声偶然为 0 时门槛过紧）。
+  //
+  // 下限从 500 提到 2000：拍的是首页瀑布流，一屏三十多张照片，
+  // 两个 context 的解码顺序不同就会带来千像素级的、肉眼看不出的差异
+  // （实测最大通道差 11/255）。真正防「降级有残留」的是下面的比例判据：
+  // 半透明的整块卡片会直接顶到百分之几，这里放过去的只是抗锯齿级别的噪声。
+  const maxPixels = Math.max(noise.diffPixels * 10, 2000)
   const maxRatio = 0.1 // 百分比
   const ratio = diff.totalPixels ? (diff.diffPixels / diff.totalPixels) * 100 : 0
   const ok = diff.diffPixels <= maxPixels && ratio < maxRatio

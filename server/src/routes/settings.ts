@@ -198,44 +198,7 @@ router.get('/export', requireAuth, (req: Request, res: Response) => {
          WHERE f.user_id = ?`
       )
       .all(userId)
-    const addresses = db.prepare('SELECT * FROM addresses WHERE user_id = ?').all(userId)
 
-    /*
-     * 订单：买过的 **和** 卖出的都要导出。
-     *
-     * ⚠️ 关系链比想象的长，中间还隔着 products：
-     *   orders.user_id  是**买家**（一个订单只有一个买家）
-     *   products.seller_id 是卖家，而订单行只存 product_id
-     *
-     * 只按 `orders.user_id = ?` 查会把「我卖出的东西」整批漏掉，
-     * 而用户导出数据的动机恰恰包含这一项。
-     *
-     * 用 EXISTS 而不是 JOIN + DISTINCT：JOIN 会因为一个订单有多行而
-     * 产生重复行，DISTINCT 又要靠整行比较去重，EXISTS 更直接。
-     */
-    const orders = db
-      .prepare(
-        `SELECT o.* FROM orders o
-         WHERE o.user_id = ?
-            OR EXISTS (
-              SELECT 1 FROM order_items i
-              JOIN products p ON p.id = i.product_id
-              WHERE i.order_id = o.id AND p.seller_id = ?
-            )
-         ORDER BY o.id DESC`
-      )
-      .all(userId, userId)
-
-    /*
-     * ⚠️ 刻意**不导出**：password_hash、token、wallet 余额。
-     *
-     * 前两个是凭据 —— 导出的文件会到处转发，带着凭据等于把账号送出去。
-     * 钱包余额会出现在订单里，但流水不该跟着走：
-     * 那是账本，不是个人数据。
-     *
-     * 也**不导出** transits：在途余额是「买家付了、卖家还没拿到的钱」，
-     * 它属于交易对手关系而不是「我的数据」。
-     */
     res.json({
       exportedAt: new Date().toISOString(),
       version: 1,
@@ -245,16 +208,12 @@ router.get('/export', requireAuth, (req: Request, res: Response) => {
       likes,
       follows,
       favorites,
-      addresses,
-      orders,
       counts: {
         posts: posts.length,
         comments: comments.length,
         likes: likes.length,
         follows: follows.length,
-        favorites: favorites.length,
-        addresses: addresses.length,
-        orders: orders.length
+        favorites: favorites.length
       }
     })
   } catch (err: any) {

@@ -6,7 +6,7 @@
  *
  * 测的重点是 activeMenu 那张分支表。组件注释里记着一件事：
  * 早期版本给 NavItem 加了个 match()，结果发现项的 match 在**所有**非关注路由上
- * 都返回 true，find() 第一个就命中，于是 /favorites、/settings、/market
+ * 都返回 true，find() 第一个就命中，于是 /favorites、/settings
  * 全被高亮成「发现」。
  *
  * 「按 path 穷举」这种写法必然要补分支，每补一个就多一处能漏。
@@ -120,24 +120,23 @@ beforeEach(() => {
 })
 
 describe('SideNav', () => {
-  it('登录时七个入口都在', () => {
+  it('登录时六个入口都在', () => {
     const wrapper = mountNav()
     expect(indexesOf(wrapper)).toEqual([
       '/',
       '/?channel=follow',
       '/publish',
-      '/market',
       '/favorites',
       '/profile/me',
       '/settings'
     ])
   })
 
-  it('未登录时只留不需要登录的三个入口', () => {
+  it('未登录时只留不需要登录的两个入口', () => {
     mocks.isLoggedIn = false
     const wrapper = mountNav()
-    // 发现 / 市集 / 我的 —— 其余四个点了也是被守卫弹回登录页
-    expect(indexesOf(wrapper)).toEqual(['/', '/market', '/profile/me'])
+    // 发现 / 我的 —— 其余几个点了也是被守卫弹回登录页
+    expect(indexesOf(wrapper)).toEqual(['/', '/profile/me'])
   })
 
   it('未登录时底部是「登录 / 注册」，登录后是创作引导', () => {
@@ -176,14 +175,6 @@ describe('SideNav', () => {
       expect(activeOf(mountNav())).toBe('/profile/me')
     })
 
-    it('市集的四个子页都归「市集」', () => {
-      // 漏掉这个分支的话，在购物车里侧栏会全灭
-      for (const p of ['/market', '/market/product/5', '/market/cart', '/market/orders']) {
-        mocks.route.path = p
-        expect(activeOf(mountNav())).toBe('/market')
-      }
-    })
-
     it('粉丝 / 关注列表回「关注」', () => {
       mocks.route.path = '/follows/9'
       expect(activeOf(mountNav())).toBe('/?channel=follow')
@@ -209,8 +200,8 @@ describe('SideNav', () => {
     })
 
     it('任何路径都只高亮一项', () => {
-      // 早期版本 /favorites、/settings、/market 全被高亮成「发现」
-      for (const p of ['/', '/favorites', '/settings', '/market/cart', '/follows/9', '/post/1']) {
+      // 早期版本 /favorites、/settings 全被高亮成「发现」
+      for (const p of ['/', '/favorites', '/settings', '/follows/9', '/post/1']) {
         mocks.route.path = p
         const wrapper = mountNav()
         const active = activeOf(wrapper)

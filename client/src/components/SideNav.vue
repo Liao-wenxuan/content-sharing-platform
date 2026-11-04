@@ -14,7 +14,7 @@
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, EditPen, Shop, User, Setting, Star, Collection } from '@element-plus/icons-vue'
+import { Compass, EditPen, User, Setting, Star, Collection } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -34,7 +34,6 @@ const navItems: NavItem[] = [
   // 和「发现」共用 `/` 这一个 path（只是 query 的差别），见 activeMenu
   { path: '/?channel=follow', label: '关注', icon: Star, requiresAuth: true },
   { path: '/publish', label: '发布', icon: EditPen, requiresAuth: true },
-  { path: '/market', label: '市集', icon: Shop },
   // 收藏夹管理页：主页「收藏」tab 只管看，整理归类放这里
   { path: '/favorites', label: '收藏', icon: Collection, requiresAuth: true },
   { path: '/profile/me', label: '我的', icon: User },
@@ -56,7 +55,7 @@ const isFollowRoute = computed(() => route.path === '/' && route.query.channel =
  *
  * 早期版本给 NavItem 加了个 match() 让「发现」优先匹配，
  * 结果发现项的 match 在**所有**非关注路由上都返回 true，
- * find() 第一个就命中，于是 /favorites、/settings、/market 全被高亮成「发现」。
+ * find() 第一个就命中，于是 /favorites、/settings 全被高亮成「发现」。
  * match() 这种「靠第一个 true 决定结果」的写法太容易误伤，
  * 改成按 path 穷举，每个分支都能一眼看出该高亮谁。
  */
@@ -64,10 +63,6 @@ const activeMenu = computed(() => {
   const path = route.path
   if (path === '/') return isFollowRoute.value ? '/?channel=follow' : '/'
   if (path.startsWith('/profile')) return '/profile/me'
-  // 市集的四个子页（详情 / 购物车 / 订单 / 钱包）都归「市集」这一项。
-  // 漏掉这个分支的话，在购物车里侧栏会全灭 ——
-  // 和当初 /follows/* 漏判是同一类错，都是「按 path 穷举」必然要补的分支
-  if (path.startsWith('/market')) return '/market'
   // 粉丝 / 关注列表是从「关注」这一项点进去的下钻页，高亮要跟着回「关注」，
   // 否则这一页侧栏全灭，看不出自己从哪来
   if (path.startsWith('/follows')) return '/?channel=follow'

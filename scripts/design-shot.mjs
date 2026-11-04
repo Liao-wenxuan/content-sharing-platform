@@ -6,7 +6,6 @@
  *
  * 拍的四个页面各自代表一种结构：
  *   home    瀑布流（大量卡片 + 图片）
- *   market  规整网格（面板 / 卡片 / 价格）
  *   detail  详情页（正文 / 评论 / 表单，最长文本）
  *   settings 设置页（最多控件类型：开关 / 单选 / 输入 / 分段）
  *
@@ -38,7 +37,6 @@ const browser = await chromium.launch()
 /** [路由, 就绪选择器, 截图前要滚到哪] */
 const PAGES = [
   ['home', '/', '.masonry .card'],
-  ['market', '/market', '.grid .card'],
   ['detail', '/post', '.detail'],
   ['settings', '/settings', '.settings']
 ]

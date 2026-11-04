@@ -52,14 +52,6 @@ const WIDGETS: WidgetDef[] = [
     glyph: '✉'
   },
   {
-    key: 'market',
-    label: '我的订单',
-    desc: '跳到市集并选中「订单」',
-    path: '/market',
-    hash: '#orders',
-    glyph: '▣'
-  },
-  {
     key: 'interest',
     label: '调推荐偏好',
     desc: '跳到兴趣画像页',

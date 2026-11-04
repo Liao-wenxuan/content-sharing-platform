@@ -8,7 +8,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
 import request from 'supertest'
 import { createTestApp, teardownTestDb } from './app'
-import db from '../src/lib/db'
 import { DEFAULT_SETTINGS, parseSettings, mergeSettings, sanitizeTags } from '../src/lib/settings'
 import type { Express } from 'express'
 
@@ -190,39 +189,6 @@ describe('GET /api/settings/export —— 导出我的数据', () => {
     expect(res.body.profile.password_hash).toBeUndefined()
   })
 
-  it('⚠️ **卖出订单也要导出**（orders.user_id 只是买家）', async () => {
-    // 用户导出数据的动机包含「我卖出了什么」，
-    // 而卖出关系隔着 products.seller_id —— 只按 orders.user_id 查会整批漏掉
-    const seller = await signUp(`exs_${stamp()}@t.local`)
-    const buyer = await signUp(`exb_${stamp()}@t.local`)
-
-    const product = await request(app)
-      .post('/api/products')
-      .set(seller.auth)
-      .send({ title: '导出测试商品', priceCents: 1000, stock: 5, images: [] })
-    // 断言里带上 body：失败时能直接看到服务端说了什么，
-    // 而不用再回头去加日志重跑一遍
-    expect(product.status, JSON.stringify(product.body)).toBe(201)
-    const sellerId = product.body.sellerId
-
-    const cart = await request(app)
-      .post('/api/cart')
-      .set(buyer.auth)
-      .send({ productId: product.body.id, quantity: 1 })
-    expect(cart.status).toBe(200)
-
-    // 下单传的是 sellerId（订单是「买这个卖家的全部购物车」）
-    const order = await request(app).post('/api/orders').set(buyer.auth).send({ sellerId })
-    expect(order.status, `下单失败：${JSON.stringify(order.body)}`).toBe(201)
-
-    const asSeller = await request(app).get('/api/settings/export').set(seller.auth)
-    expect(asSeller.status).toBe(200)
-    expect(asSeller.body.counts.orders).toBe(1)
-
-    const asBuyer = await request(app).get('/api/settings/export').set(buyer.auth)
-    expect(asBuyer.body.counts.orders).toBe(1)
-  })
-
   it('未登录 → 401', async () => {
     expect((await request(app).get('/api/settings/export')).status).toBe(401)
   })
@@ -278,136 +244,6 @@ describe('PUT /api/settings/password', () => {
       .put('/api/settings/password')
       .send({ currentPassword: 'a', newPassword: 'bbbbbb' })
     expect(res.status).toBe(401)
-  })
-})
-
-describe('收货地址', () => {
-  let auth: { Authorization: string }
-
-  beforeEach(async () => {
-    const u = await signUp(`ad_${stamp()}@t.local`)
-    auth = u.auth
-  })
-
-  const valid = {
-    receiver: '张三',
-    phone: '13800138000',
-    province: '广东省',
-    city: '深圳市',
-    detail: '南山区科技园 1 号'
-  }
-
-  it('新增成功，第一条自动成为默认', async () => {
-    // 不自动设默认的话，用户存完第一条还要手动去点「设为默认」
-    const res = await request(app).post('/api/addresses').set(auth).send(valid)
-    expect(res.status).toBe(201)
-
-    const list = await request(app).get('/api/addresses').set(auth)
-    expect(list.body.list).toHaveLength(1)
-    expect(list.body.list[0].is_default).toBe(1)
-  })
-
-  it('缺字段 / 超长 / 手机号格式错 → 400 且说清是哪一项', async () => {
-    const missing = await request(app)
-      .post('/api/addresses')
-      .set(auth)
-      .send({ ...valid, receiver: '' })
-    expect(missing.status).toBe(400)
-    expect(missing.body.message).toContain('收货人')
-
-    const tooLong = await request(app)
-      .post('/api/addresses')
-      .set(auth)
-      .send({ ...valid, detail: 'x'.repeat(200) })
-    expect(tooLong.status).toBe(400)
-
-    const badPhone = await request(app)
-      .post('/api/addresses')
-      .set(auth)
-      .send({ ...valid, phone: 'abc' })
-    expect(badPhone.status).toBe(400)
-    expect(badPhone.body.message).toContain('手机号')
-  })
-
-  it('**同一用户最多一个默认地址**（不能靠 UNIQUE(user_id, is_default)）', async () => {
-    // SQLite 认为 0 == 0，用 UNIQUE 的话第二条非默认地址就会撞约束
-    const email = `ad_${stamp()}@t.local`
-    const u = await signUp(email)
-    const auth = u.auth
-
-    const first = await request(app).post('/api/addresses').set(auth).send(valid)
-    const second = await request(app)
-      .post('/api/addresses')
-      .set(auth)
-      .send({ ...valid, receiver: '李四' })
-    expect(second.status).toBe(201)
-
-    // 把第二条设为默认，第一条必须自动取消
-    const patch = await request(app)
-      .patch(`/api/addresses/${second.body.id}`)
-      .set(auth)
-      .send({ isDefault: true })
-    expect(patch.status).toBe(200)
-
-    const userId = (db.prepare('SELECT id FROM users WHERE email = ?').get(email) as any).id
-    const defaults = db
-      .prepare('SELECT id FROM addresses WHERE user_id = ? AND is_default = 1')
-      .all(userId) as { id: number }[]
-
-    expect(defaults).toHaveLength(1)
-    expect(defaults[0].id).toBe(second.body.id)
-    expect(first.status).toBe(201)
-  })
-
-  it('删掉默认地址后，剩下的最新一条自动接任', async () => {
-    // 不这么做的话用户会落入「没有任何默认地址」的状态，
-    // 将来接下单流程时只能报一个他看不懂的错
-    const first = await request(app).post('/api/addresses').set(auth).send(valid)
-    const second = await request(app)
-      .post('/api/addresses')
-      .set(auth)
-      .send({ ...valid, receiver: '李四' })
-
-    await request(app).delete(`/api/addresses/${first.body.id}`).set(auth)
-
-    const list = await request(app).get('/api/addresses').set(auth)
-    const remaining = list.body.list
-    expect(remaining).toHaveLength(1)
-    expect(remaining[0].id).toBe(second.body.id)
-    expect(remaining[0].is_default).toBe(1)
-  })
-
-  it('PATCH 只改传了的字段（PATCH 而不是 PUT 的语义）', async () => {
-    const created = await request(app).post('/api/addresses').set(auth).send(valid)
-    const res = await request(app)
-      .patch(`/api/addresses/${created.body.id}`)
-      .set(auth)
-      .send({ receiver: '王五' })
-    expect(res.status).toBe(200)
-
-    const list = await request(app).get('/api/addresses').set(auth)
-    expect(list.body.list[0].receiver).toBe('王五')
-    expect(list.body.list[0].city).toBe(valid.city)
-  })
-
-  it('改别人的地址 → 404（不是 403：403 等于确认了这个 ID 存在）', async () => {
-    const other = await signUp(`ad_${stamp()}@t.local`)
-    const created = await request(app).post('/api/addresses').set(other.auth).send(valid)
-    const res = await request(app).patch(`/api/addresses/${created.body.id}`).set(auth).send({
-      receiver: '黑客'
-    })
-    expect(res.status).toBe(404)
-  })
-
-  it('DELETE 不存在的地址 → 200（幂等）', async () => {
-    // 「确保它不在」和「改成 N」语义不同：
-    // 用户点了两次删不该第二次就报错
-    expect((await request(app).delete('/api/addresses/999999').set(auth)).status).toBe(200)
-  })
-
-  it('未登录一律 401', async () => {
-    expect((await request(app).get('/api/addresses')).status).toBe(401)
-    expect((await request(app).post('/api/addresses').send(valid)).status).toBe(401)
   })
 })
 

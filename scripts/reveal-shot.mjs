@@ -1,10 +1,10 @@
 /**
  * 截滚动入场的对比图
  *
- * 拍的是**市集网格**而不是首页瀑布流，原因是错峰在规整网格上更明显：
- * 瀑布流只有 5 列、每列一整个容器，一屏看过去各列进度接近；
- * 而市集一屏 10+ 个商品卡，每张的 delay 不同，
- * 截在动画中途能清楚看到「有的已经亮了、有的还在暗处」。
+ * 拍的是首页瀑布流：错峰作用在每一列上（每列一个容器，各自 delay），
+ * 截在动画中途时，能看见「靠前的列已经亮了、靠后的列还在暗处」；
+ * 它也是侧栏页之外唯一一屏就铺满几十张卡的页面 ——
+ * 一屏之内就能看出差序。
  *
  * 做法是等固定时长后截图 —— 靠 sleep 撞时刻不可靠，
  * 所以这里只截两张：正常模式的「中途」和「完成」，
@@ -36,7 +36,7 @@ const user = ensureShotUser(EMAIL, NICK)
 
 const browser = await chromium.launch()
 
-async function shoot(name, { reducedMotion, waitMs, path: route = '/market', settle = false, as }) {
+async function shoot(name, { reducedMotion, waitMs, path: route = '/', settle = false, as }) {
   const ctx = await browser.newContext({
     viewport: { width: 1600, height: 1000 },
     reducedMotion,
@@ -48,7 +48,7 @@ async function shoot(name, { reducedMotion, waitMs, path: route = '/market', set
     authPayload(user)
   )
   await page.goto(`${BASE}${route}`, { waitUntil: 'domcontentloaded' })
-  await page.locator('.grid .card').first().waitFor({ state: 'attached', timeout: 20000 })
+  await page.locator('.masonry-col').first().waitFor({ state: 'attached', timeout: 20000 })
 
   if (settle) {
     /*
@@ -91,7 +91,15 @@ async function shoot(name, { reducedMotion, waitMs, path: route = '/market', set
       )
       .catch(() => console.log('  （有卡片没过渡完，继续 —— 这本身就是要看的现象）'))
     await page.evaluate(() => window.scrollTo(0, 0))
-    await page.waitForTimeout(400)
+    // 瀑布流的图是懒加载的：图没下完，两张「完成态」会差出一整块缩略图，
+    // 那不是降级残留，是网络。所以先等所有 img 解码完再拍。
+    await page
+      .waitForFunction(
+        () => Array.from(document.images).every((i) => i.complete && i.naturalWidth > 0),
+        { timeout: 20000 }
+      )
+      .catch(() => console.log('  （有图片没下完，继续）'))
+    await page.waitForTimeout(600)
   }
 
   await page.waitForTimeout(waitMs)

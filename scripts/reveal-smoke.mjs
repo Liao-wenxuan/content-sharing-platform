@@ -256,8 +256,8 @@ console.log('\n[5] 降低动效之后的终态，和正常完成态一致')
       ([t, u]) => localStorage.setItem('auth', JSON.stringify({ user: u, token: t })),
       [user.token, { id: user.id, nickname: user.nickname, avatar: null, cover: null }]
     )
-    await page.goto(`${BASE}/market`, { waitUntil: 'domcontentloaded' })
-    await page.locator('.grid .card').first().waitFor({ state: 'attached', timeout: 20000 })
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' })
+    await page.locator('.masonry-col').first().waitFor({ state: 'attached', timeout: 20000 })
 
     // 先滚到底把每一行都触发一遍，再滚回顶部 ——
     // 不这么做的话，两张图比的不是「降级效果」，而是「哪些卡片碰巧在视口里」：

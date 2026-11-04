@@ -134,7 +134,7 @@ export function useReveal(
    * 观察器不存在，就没人给它们加 `is-revealed`，于是整片商品看不见。
    *
    * 而且这个 bug 只在「从别的页面跳过来」时出现：
-   * 整页刷新进 /market 的话，motion-ready 从来没被加上，CSS 默认态是「可见」。
+   * 整页刷新进一个二级列表页的话，motion-ready 从来没被加上，CSS 默认态是「可见」。
    */
   const stop = watchEffect(() => {
     const root = containerRef.value
