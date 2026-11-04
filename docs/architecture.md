@@ -39,6 +39,7 @@ erDiagram
         text content "500 字以内"
         text image_urls "JSON array"
         text topic_tag
+        text visibility "'public' | 'private'，默认 public"
         text created_at
     }
     likes {
@@ -272,8 +273,10 @@ xhr.send(formData)
 - [x] 阶段 10：**推荐流**（兴趣画像 + 打分 + 冻结快照翻页 + 负反馈与可解释）
 - [x] 阶段 11：**图片处理**（上传前 canvas 压缩 + EXIF 方向校正 + 隐私元数据剥离）
 - [x] 阶段 12：**滚动入场**（IntersectionObserver 错峰 + 三层降级防线 + 逐帧 e2e 验证）
+- [x] 阶段 13：**私密笔记**（`posts.visibility` 一列 + 九条读路径全部加条件 + 主页公开/私密切换）
 - [ ] 未做（诚实占位，不是遗漏）
-  - 笔记的「私密 / 合集」筛选：主页那两个 tab 点了是空态，界面上写明了
+  - **合集**：`collections` / `collection_items` 两张表 + CRUD + 发布页「收进哪个合集」。
+    主页那个入口已经从界面上摘掉了 —— 会被人点到的空按钮比没有更糟
   - 真实全文检索：现在是 `LIKE` + 索引友好匹配，十万级要换 FTS5 / ES
   - 内容审核 / 举报
 
