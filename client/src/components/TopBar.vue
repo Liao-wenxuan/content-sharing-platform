@@ -373,6 +373,7 @@ function onOutsideClick(e: MouseEvent) {
                 class="row-avatar"
                 :size="24"
                 :src="row.avatar || undefined"
+                alt=""
               >
                 {{ row.value.slice(0, 1) }}
               </el-avatar>
@@ -443,7 +444,7 @@ function onOutsideClick(e: MouseEvent) {
       <!-- 已登录：头像下拉 -->
       <el-dropdown v-if="auth.isLoggedIn" trigger="click" @command="handleCommand">
         <button type="button" class="user-trigger">
-          <el-avatar :size="32" :src="auth.user?.avatar || undefined">
+          <el-avatar :size="32" :src="auth.user?.avatar || undefined" alt="">
             {{ avatarText }}
           </el-avatar>
           <span class="user-name">{{ auth.user?.nickname }}</span>

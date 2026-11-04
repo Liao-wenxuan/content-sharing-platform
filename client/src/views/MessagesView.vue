@@ -317,7 +317,7 @@ watch(activeCategory, (cat) => {
               :class="{ unread: !item.read }"
             >
               <span class="unread-dot" :class="{ on: !item.read }" aria-hidden="true" />
-              <el-avatar :size="38" :src="item.actor.avatar || undefined" class="avatar">
+              <el-avatar :size="38" :src="item.actor.avatar || undefined" class="avatar" alt="">
                 {{ avatarText(item.actor.nickname) }}
               </el-avatar>
               <button type="button" class="activity-main activity-open" @click="openItem(item)">
@@ -377,7 +377,7 @@ watch(activeCategory, (cat) => {
 
             <ul v-else class="suggest-list">
               <li v-for="u in suggestions" :key="u.id" class="suggest-item">
-                <el-avatar :size="36" :src="u.avatar || undefined" class="avatar">
+                <el-avatar :size="36" :src="u.avatar || undefined" class="avatar" alt="">
                   {{ avatarText(u.nickname) }}
                 </el-avatar>
                 <div class="suggest-info">

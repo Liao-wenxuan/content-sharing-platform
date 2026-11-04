@@ -283,7 +283,7 @@ watch(activeId, () => {
       <!-- 和会话列表同理：<li> 给列表语义，按钮给点击和键盘 -->
       <li v-for="s in suggestions" :key="s.id" class="discover-wrap">
         <button type="button" class="discover-item" @click="startWithPeer(s.id)">
-          <el-avatar :size="52" :src="s.avatar || undefined">{{
+          <el-avatar :size="52" :src="s.avatar || undefined" alt="">{{
             s.nickname.slice(0, 1)
           }}</el-avatar>
           <span class="discover-name">{{ s.nickname }}</span>
@@ -363,7 +363,7 @@ watch(activeId, () => {
               :hidden="conv.unreadCount === 0 || conv.muted"
               class="avatar-badge"
             >
-              <el-avatar :size="40" :src="conv.peer.avatar || undefined">
+              <el-avatar :size="40" :src="conv.peer.avatar || undefined" alt="">
                 {{ conv.peer.nickname.slice(0, 1) }}
               </el-avatar>
               <span v-if="isPeerOnline(conv)" class="online-dot" />
@@ -424,7 +424,7 @@ watch(activeId, () => {
     <section class="chat-main">
       <template v-if="activeConversation">
         <header class="chat-head">
-          <el-avatar :size="32" :src="activeConversation.peer.avatar || undefined">
+          <el-avatar :size="32" :src="activeConversation.peer.avatar || undefined" alt="">
             {{ activeConversation.peer.nickname.slice(0, 1) }}
           </el-avatar>
           <div class="head-info">
@@ -484,6 +484,7 @@ watch(activeId, () => {
                 :size="30"
                 class="msg-avatar"
                 :src="avatarOf(item.message.senderId) || undefined"
+                alt=""
               >
                 {{ avatarTextOf(item.message.senderId) }}
               </el-avatar>

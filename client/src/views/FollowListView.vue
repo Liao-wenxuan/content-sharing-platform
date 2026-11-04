@@ -162,7 +162,7 @@ watch([activeTab, targetId], () => load(true))
     <ul v-else class="rows">
       <li v-for="u in list" :key="u.id" class="row">
         <router-link :to="`/profile/${u.id}`" class="row-link">
-          <el-avatar :size="44" :src="u.avatar || undefined">
+          <el-avatar :size="44" :src="u.avatar || undefined" alt="">
             {{ avatarText(u.nickname) }}
           </el-avatar>
           <div class="row-info">

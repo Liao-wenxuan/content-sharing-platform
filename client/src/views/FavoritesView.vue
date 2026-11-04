@@ -226,7 +226,7 @@ onMounted(load)
         <ul v-else class="post-list">
           <li v-for="p in unclassified" :key="p.id" class="post-row">
             <el-checkbox :model-value="selected.includes(p.id)" @change="toggleSelect(p.id)" />
-            <el-avatar :size="32" :src="p.author?.avatar || undefined" />
+            <el-avatar :size="32" :src="p.author?.avatar || undefined" alt="" />
             <div class="post-info">
               <div class="post-text">{{ p.content }}</div>
               <div class="post-meta">{{ p.author?.nickname }}</div>

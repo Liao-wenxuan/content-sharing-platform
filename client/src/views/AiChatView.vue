@@ -239,7 +239,7 @@ onBeforeUnmount(() => {
             <ul v-else class="source-list">
               <li v-for="u in turn.sources.users" :key="u.id" class="source-item">
                 <button type="button" class="source-btn" @click="goUser(u.id)">
-                  <el-avatar :size="28" :src="u.avatar || undefined">
+                  <el-avatar :size="28" :src="u.avatar || undefined" alt="">
                     {{ u.nickname.slice(0, 1) }}
                   </el-avatar>
                   <span class="source-body">
