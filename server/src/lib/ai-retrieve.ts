@@ -280,7 +280,7 @@ export function retrieve(query: string, limit = 6): RetrieveResult {
           (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
         FROM posts p
         JOIN users u ON p.user_id = u.id
-        WHERE ${ors}
+        WHERE (${ors}) AND p.visibility = 'public'
         LIMIT 400
       `
       )

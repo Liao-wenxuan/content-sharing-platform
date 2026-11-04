@@ -34,6 +34,7 @@ function hotTopics(limit = 3): string[] {
                   WHERE p2.topic_tag = p.topic_tag) AS likes
          FROM posts p
          WHERE p.topic_tag IS NOT NULL AND p.topic_tag <> ''
+           AND p.visibility = 'public'
          GROUP BY topic_tag
          ORDER BY likes DESC, n DESC
          LIMIT ?`

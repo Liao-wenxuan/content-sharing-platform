@@ -77,11 +77,13 @@ router.get('/', optionalAuth, (req: Request, res: Response) => {
                                  json_extract(s.image_urls, '$[0]'))
                  FROM posts s
                  WHERE s.topic_tag = p.topic_tag
+                   AND s.visibility = 'public'
                    AND json_array_length(s.image_urls) > 0
                  ORDER BY s.created_at DESC, s.id DESC
                  LIMIT 1) AS cover
          FROM posts p
          WHERE p.topic_tag IS NOT NULL AND p.topic_tag <> ''
+           AND p.visibility = 'public'
            ${pattern ? "AND p.topic_tag LIKE ? ESCAPE '\\'" : ''}
          GROUP BY p.topic_tag
          ORDER BY post_count DESC, latest_at DESC, p.topic_tag ASC
@@ -119,7 +121,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
     const summary = db
       .prepare(
         `SELECT COUNT(*) AS post_count, COUNT(DISTINCT user_id) AS author_count, MAX(created_at) AS latest_at
-         FROM posts WHERE topic_tag = ?`
+         FROM posts WHERE topic_tag = ? AND visibility = 'public'`
       )
       .get(tag) as any
 
@@ -140,7 +142,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
          FROM posts p
          JOIN users u ON u.id = p.user_id
-         WHERE p.topic_tag = ?
+         WHERE p.topic_tag = ? AND p.visibility = 'public'
          ORDER BY p.created_at DESC, p.id DESC
          LIMIT ? OFFSET ?`
       )

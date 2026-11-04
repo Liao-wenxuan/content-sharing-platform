@@ -64,6 +64,7 @@ export function initSchema(db: Database.Database): void {
       image_urls TEXT,
       image_thumbs TEXT,
       topic_tag TEXT,
+      visibility TEXT NOT NULL DEFAULT 'public',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
@@ -77,6 +78,13 @@ export function initSchema(db: Database.Database): void {
   if (!existingPostCols.has('image_thumbs')) {
     db.exec('ALTER TABLE posts ADD COLUMN image_thumbs TEXT')
     console.log('[DB] Migrated: posts.image_thumbs added')
+  }
+
+  // 私密笔记：默认 public，老库补列时同样是 public —— 已经发出去的内容
+  // 不会因为加了这个功能突然变成私密。
+  if (!existingPostCols.has('visibility')) {
+    db.exec("ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'")
+    console.log('[DB] Migrated: posts.visibility added')
   }
 
   db.exec(`

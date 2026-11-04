@@ -111,7 +111,7 @@ router.get('/chat-suggestions', requireAuth, (req: Request, res: Response) => {
     const rows = db
       .prepare(
         `SELECT u.id, u.nickname, u.avatar,
-                (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count
+                (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.visibility = 'public') AS post_count
          FROM users u
          JOIN follows f ON f.followee_id = u.id AND f.follower_id = @me
          WHERE NOT EXISTS (
@@ -170,7 +170,7 @@ router.get('/follow-suggestions', requireAuth, (req: Request, res: Response) => 
     const rows = db
       .prepare(
         `SELECT u.id, u.nickname, u.avatar,
-                (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count,
+                (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.visibility = 'public') AS post_count,
                 (SELECT COUNT(*) FROM follows f WHERE f.followee_id = u.id) AS follower_count
          FROM users u
          WHERE u.id <> @me
@@ -216,12 +216,15 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
       return res.status(404).json({ message: '用户不存在' })
     }
 
+    const scope = String(req.query.scope ?? 'public')
+    const visibilityClause = scope === 'private' ? "visibility = 'private'" : "visibility = 'public'"
+
     const rows = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, created_at
       FROM posts
-      WHERE user_id = ?
+      WHERE user_id = ? AND ${visibilityClause}
       ORDER BY created_at DESC, id DESC
     `
       )
@@ -234,6 +237,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
         avatar: user.avatar,
         cover: user.cover
       },
+      scope,
       list: rows.map((row) => ({
         id: row.id,
         userId: row.user_id,
@@ -241,6 +245,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
         imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
         imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
+        visibility: row.visibility,
         createdAt: toISO(row.created_at)
       })),
       total: rows.length
@@ -389,7 +394,7 @@ function followList(
   const rows = db
     .prepare(
       `SELECT u.id, u.nickname, u.avatar,
-              (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count,
+              (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.visibility = 'public') AS post_count,
               EXISTS(SELECT 1 FROM follows mine
                      WHERE mine.follower_id = @me AND mine.followee_id = u.id) AS is_following
        FROM follows f
@@ -501,12 +506,21 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
       return res.status(404).json({ message: '该用户已设置为私密' })
     }
 
+    // 主页的「公开 / 私密」两个筛选。私密只有本人能查 —— 不是前端隐藏入口，
+    // 而是这里直接拒。判据同 profile 隐私开关：谁能看到这条数据，只能由服务端定。
+    const isOwner = typeof req.userId === 'number' && req.userId === id
+    const scope = String(req.query.scope ?? 'public')
+    if (scope === 'private' && !isOwner) {
+      return res.status(403).json({ message: '只能查看自己的私密笔记' })
+    }
+    const visibilityClause = scope === 'private' ? "visibility = 'private'" : "visibility = 'public'"
+
     const rows = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, created_at
       FROM posts
-      WHERE user_id = ?
+      WHERE user_id = ? AND ${visibilityClause}
       ORDER BY created_at DESC, id DESC
     `
       )
@@ -519,6 +533,7 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
         avatar: user.avatar,
         cover: user.cover
       },
+      scope,
       list: rows.map((row) => ({
         id: row.id,
         userId: row.user_id,
@@ -526,6 +541,7 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
         imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
         imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
+        visibility: row.visibility,
         createdAt: toISO(row.created_at)
       })),
       total: rows.length

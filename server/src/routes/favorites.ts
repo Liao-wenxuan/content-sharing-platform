@@ -157,8 +157,16 @@ router.get('/me/favorites', requireAuth, (req: Request, res: Response) => {
       params.folder = filterFolder
     }
 
+    // 别人的笔记转成私密之后，不该继续留在我的收藏列表里（点进去就是 404）。
+    // 自己收藏自己的私密笔记仍然可见 —— 「我的收藏」是我的视角，不是公共列表。
+    where += ` AND (p.visibility <> 'private' OR p.user_id = @me)`
+
     const total = (
-      db.prepare(`SELECT COUNT(*) AS c FROM favorites f WHERE ${where}`).get(params) as any
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM favorites f JOIN posts p ON p.id = f.post_id WHERE ${where}`
+        )
+        .get(params) as any
     ).c
 
     const rows = db

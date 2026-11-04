@@ -10,6 +10,7 @@ import {
   UPLOAD_MAX_FILES
 } from '../constants'
 import { thumbsFromRow, parseThumbs } from '../lib/postImages'
+import { parseVisibility, canViewPost, PUBLIC_ONLY } from '../lib/visibility'
 
 const router = Router()
 
@@ -20,7 +21,10 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       return res.status(401).json({ message: '未登录' })
     }
 
-    const { content, imageUrls, imageThumbs, topicTag } = req.body
+    const { content, imageUrls, imageThumbs, topicTag, visibility } = req.body
+
+    // 宽松写入、严格读取：认不出来的值一律按 public
+    const postVisibility = parseVisibility(visibility)
 
     if (!content || typeof content !== 'string' || content.trim() === '') {
       return res.status(400).json({ message: '内容不能为空' })
@@ -53,18 +57,18 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
     const result = db
       .prepare(
         `
-      INSERT INTO posts (user_id, content, image_urls, image_thumbs, topic_tag)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO posts (user_id, content, image_urls, image_thumbs, topic_tag, visibility)
+      VALUES (?, ?, ?, ?, ?, ?)
     `
       )
-      .run(userId, content.trim(), imageUrlsJson, imageThumbsJson, topicTag || null)
+      .run(userId, content.trim(), imageUrlsJson, imageThumbsJson, topicTag || null, postVisibility)
 
     const postId = result.lastInsertRowid as number
 
     const newPost = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, created_at
       FROM posts WHERE id = ?
     `
       )
@@ -77,6 +81,7 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       imageUrls: newPost.image_urls ? JSON.parse(newPost.image_urls) : [],
       imageThumbs: thumbsFromRow(newPost),
       topicTag: newPost.topic_tag,
+      visibility: newPost.visibility,
       createdAt: toISO(newPost.created_at)
     })
   } catch (err: any) {
@@ -115,6 +120,10 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
     // 3. 拼 WHERE
     const conditionsSql: string[] = []
     const conditionParams: any[] = []
+
+    // 公开列表只查 public —— 包括作者自己。自己的私密笔记不该从推荐流里冒出来，
+    // 那会让「私密」变成「只是没出现在别人的列表里」。
+    conditionsSql.push(PUBLIC_ONLY)
 
     if (channel === 'follow') {
       // 未登录没有关注图可查，直接空结果（前端按登录态决定跳 login 还是提示）
@@ -225,11 +234,12 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
     const orderBy = ORDER_BY[sortKey] ?? ORDER_BY.latest
 
     // 搜索范围：正文 / 话题标签 / 作者昵称
+    // 私密笔记不进搜索结果 —— 连作者自己搜不到也一样：搜索是「找公开内容」的入口
     const whereClause = `WHERE (
       p.content LIKE ? ESCAPE '\\'
       OR p.topic_tag LIKE ? ESCAPE '\\'
       OR u.nickname LIKE ? ESCAPE '\\'
-    )`
+    ) AND ${PUBLIC_ONLY}`
     const whereParams = [pattern, pattern, pattern]
 
     const total = (
@@ -303,6 +313,7 @@ router.get('/search/suggest', optionalAuth, (req: Request, res: Response) => {
         `SELECT topic_tag AS tag, COUNT(*) AS count
          FROM posts
          WHERE topic_tag IS NOT NULL AND topic_tag <> ''
+           AND visibility = 'public'
          GROUP BY topic_tag
          ORDER BY count DESC, topic_tag ASC
          LIMIT 8`
@@ -323,7 +334,7 @@ router.get('/search/suggest', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `SELECT p.id, p.content, p.image_urls, p.image_thumbs
          FROM posts p
-         WHERE p.content LIKE ? ESCAPE '\\'
+         WHERE p.content LIKE ? ESCAPE '\\' AND ${PUBLIC_ONLY}
          ORDER BY (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) DESC, p.id DESC
          LIMIT 5`
       )
@@ -336,6 +347,7 @@ router.get('/search/suggest', optionalAuth, (req: Request, res: Response) => {
           `SELECT DISTINCT topic_tag AS tag
            FROM posts
            WHERE topic_tag IS NOT NULL AND topic_tag LIKE ? ESCAPE '\\'
+             AND visibility = 'public'
            ORDER BY topic_tag
            LIMIT 5`
         )
@@ -387,7 +399,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -399,6 +411,12 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       .get(id) as any
 
     if (!row) {
+      return res.status(404).json({ message: '笔记不存在' })
+    }
+
+    // 私密笔记对非作者一律 404 —— 不是 403。
+    // 403 等于告诉对方「这条存在，只是你看不到」，而点赞数、评论数都能被反推出来。
+    if (!canViewPost(row.visibility, row.user_id, req.userId)) {
       return res.status(404).json({ message: '笔记不存在' })
     }
 
@@ -418,6 +436,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
       imageThumbs: thumbsFromRow(row),
       topicTag: row.topic_tag,
+      visibility: row.visibility,
       createdAt: toISO(row.created_at),
       likeCount: row.like_count,
       commentCount: row.comment_count,

@@ -5,6 +5,7 @@ import { scoreCandidate, type FeedCandidate, type FeedProfile } from './feed-sco
 import { buildProfile, nicknameMap, topAuthors, topTopics } from './feed-profile'
 import { CATEGORY_LABEL, type ContentCategory } from '../constants'
 import { thumbsFromRow } from './postImages'
+import { PUBLIC_ONLY } from './visibility'
 
 /**
  * 推荐流编排
@@ -135,7 +136,9 @@ function loadCandidates(
   muted: MutedFilter
 ): FeedCandidate[] {
   const label = CATEGORY_LABEL[category]
-  const conditions: string[] = []
+  // 私密笔记不进候选池。放在最前面而不是拼在条件末尾，是为了让「推荐流永远只推公开内容」
+  // 成为一行看得见的常量，而不是散落在各个 conditions.push 里的一处遗漏。
+  const conditions: string[] = [PUBLIC_ONLY]
   const params: any[] = []
   // 'recommend' 不按话题过滤 —— 它本来就是「什么都看」的入口
   if (category !== 'recommend') {
@@ -345,7 +348,7 @@ function loadPostsByIds(ids: number[]) {
               (SELECT COUNT(*) FROM comments  WHERE post_id = p.id) AS comment_count
          FROM posts p
          JOIN users u ON u.id = p.user_id
-        WHERE p.id IN (${placeholders})`
+        WHERE p.id IN (${placeholders}) AND p.visibility = 'public'`
     )
     .all(...unique) as any[]
 

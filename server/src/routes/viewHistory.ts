@@ -92,8 +92,17 @@ router.get('/me/view-history', requireAuth, (req: Request, res: Response) => {
     const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
     const offset = (page - 1) * pageSize
 
+    // 计数也要跟着过滤：否则列表只有 8 条、total 写着 9 条，
+    // 前端按 total 判断 hasMore 就会一直请求空页
     const total = (
-      db.prepare('SELECT COUNT(*) AS c FROM view_history WHERE user_id = ?').get(userId) as any
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM view_history v
+             JOIN posts p ON p.id = v.post_id
+            WHERE v.user_id = ?
+              AND (p.visibility <> 'private' OR p.user_id = ?)`
+        )
+        .get(userId, userId) as any
     ).c
 
     // JOIN posts / users：列表要显示封面、正文、作者。
@@ -113,10 +122,11 @@ router.get('/me/view-history', requireAuth, (req: Request, res: Response) => {
            JOIN posts p ON p.id = v.post_id
            JOIN users  u ON u.id = p.user_id
           WHERE v.user_id = ?
+            AND (p.visibility <> 'private' OR p.user_id = ?)
           ORDER BY v.viewed_at DESC
           LIMIT ? OFFSET ?`
       )
-      .all(userId, pageSize, offset) as any[]
+      .all(userId, userId, pageSize, offset) as any[]
 
     res.json({
       list: rows.map((r) => ({
