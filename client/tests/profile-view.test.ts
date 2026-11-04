@@ -19,7 +19,6 @@ import { postsApi } from '@/api/posts'
 import { favoritesApi } from '@/api/favorites'
 import { followsApi } from '@/api/follows'
 import { authApi } from '@/api/auth'
-import { conversationsApi } from '@/api/conversations'
 import { uploadImage } from '@/api/uploads'
 import { useAuthStore } from '@/stores/auth'
 import ProfileView from '@/views/ProfileView.vue'
@@ -38,7 +37,6 @@ vi.mock('@/api/follows', () => ({
   followsApi: { relation: vi.fn(), suggestions: vi.fn(), follow: vi.fn(), unfollow: vi.fn() }
 }))
 vi.mock('@/api/auth', () => ({ authApi: { updateProfile: vi.fn() } }))
-vi.mock('@/api/conversations', () => ({ conversationsApi: { create: vi.fn() } }))
 vi.mock('@/api/uploads', () => ({ uploadImage: vi.fn() }))
 vi.mock('@/utils/imageCompress', () => ({
   compressImage: vi.fn(async () => ({
