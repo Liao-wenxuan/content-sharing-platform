@@ -162,6 +162,49 @@ await page.locator('.el-dialog .el-button--primary').click()
 await page.waitForTimeout(800)
 check('昵称已更新', (await page.locator('.nickname').innerText()) === newNick)
 
+// 编辑资料不该只能贴链接 —— 上传入口也得有
+//
+// 这条盯的是「头像 / 封面只有 URL 输入框」那个老问题：
+// 用户得自己找图床、传上去、再把链接贴回来。
+// 同一个项目里发布笔记早就有上传了。
+//
+// 用真的 1×1 PNG：服务端按**魔数**判断文件类型（不看扩展名），
+// 所以必须是真 PNG 字节，不能随便塞几个字节。
+await page.locator('.edit-btn').click()
+await page.locator('.el-dialog').waitFor({ state: 'visible' })
+check('编辑弹窗里有头像 / 封面两个上传入口', (await page.locator('.el-dialog .el-upload').count()) === 2)
+
+const pngBuffer = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64'
+)
+await page.setInputFiles('.el-dialog input[type="file"]', {
+  name: 'avatar.png',
+  mimeType: 'image/png',
+  buffer: pngBuffer
+})
+
+// 上传完要把链接回填到输入框 —— 用户得看得见填进去的是什么
+let uploaded = false
+try {
+  await page.waitForFunction(
+    () => {
+      const inputs = document.querySelectorAll('.el-dialog input')
+      return [...inputs].some((i) => i.value && i.value.includes('/uploads/'))
+    },
+    { timeout: 30000 }
+  )
+  uploaded = true
+} catch {
+  uploaded = false
+}
+check('上传完链接回填到输入框', uploaded)
+
+await page.locator('.el-dialog .el-button--primary').click()
+await page.waitForTimeout(1500)
+const avatarSrc = await page.locator('.info-card .el-avatar img').getAttribute('src')
+check('头像真的换了', !!avatarSrc && avatarSrc.includes('/uploads/'), avatarSrc || '(没有 img)')
+
 // ---------- 7. 消息页（从顶栏铃铛进，侧栏已无入口）----------
 console.log('\n[7] 消息页（ElTabs，入口=顶栏铃铛）')
 await page.locator('.top-bar button[aria-label="消息"]').click()
