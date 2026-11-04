@@ -22,6 +22,13 @@ docker compose --profile seed run --rm seed    # 39 笔记 / 43 商品 / 6 用�
 
 功能形态参考小红书，视觉层是自建的工业 HUD 风格；**PC 桌面端**布局，组件层使用 Element Plus（完全接管其主题变量），本地 SQLite 存储；除 Express / ws / multer / better-sqlite3 这类基础库外没有别的运行时依赖。目标是展示一个完整的前后端分离项目该有的工程能力。
 
+> **如果你是面试官，三条路任选**：
+> ① 打开 <https://csp.bscjs.top> 用上面的账号登录 —— 市集里下一单 → 付款 → 确认收货 → 退款，
+> 钱包流水和 `GET /api/wallet/audit` 的守恒律能当场对上；
+> ② 只想读代码：`docs/interview.md` 是每个技术点的「为什么这么做 + 踩过什么坑」，
+> `docs/architecture.md` 是模块划分与表结构；
+> ③ 想本地复现：`docker compose up --build -d` 起完整环境，`npm run test:e2e:all` 顺序跑完 15 套回归。
+
 [![CI](https://github.com/Liao-wenxuan/content-sharing-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Liao-wenxuan/content-sharing-platform/actions/workflows/ci.yml)
 [![Browser](https://github.com/Liao-wenxuan/content-sharing-platform/actions/workflows/browser.yml/badge.svg)](https://github.com/Liao-wenxuan/content-sharing-platform/actions/workflows/browser.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
