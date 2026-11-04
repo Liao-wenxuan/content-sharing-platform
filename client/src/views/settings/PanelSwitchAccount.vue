@@ -147,7 +147,7 @@ async function forget(acc: DeviceAccount) {
         class="acc"
         :class="{ current: acc.id === auth.user?.id }"
       >
-        <el-avatar :size="34" class="acc-avatar">
+        <el-avatar :size="34" :src="acc.avatar || undefined" class="acc-avatar" alt="">
           {{ acc.nickname?.slice(0, 1) || '?' }}
         </el-avatar>
 

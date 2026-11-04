@@ -471,7 +471,12 @@ watch(activeScope, async (scope) => {
           <!-- 资料卡 -->
           <el-card shadow="never" class="info-card">
             <div class="info-body">
-              <el-avatar :size="72" class="avatar">
+              <!--
+                头像的 src **必须绑** —— 不绑的话用户存进去的头像地址
+                永远不显示，页面上永远只有昵称首字，
+                而数据库里确实存了那个地址（界面上却看不出来）。
+              -->
+              <el-avatar :size="72" :src="profileUser.avatar || undefined" class="avatar" alt="">
                 {{ avatarText(profileUser.nickname) }}
               </el-avatar>
 
@@ -675,7 +680,7 @@ watch(activeScope, async (scope) => {
             <ul class="suggest-list">
               <li v-for="u in suggested" :key="u.id" class="suggest-item">
                 <router-link :to="`/profile/${u.id}`" class="suggest-link">
-                  <el-avatar :size="36" :src="u.avatar || undefined" class="avatar-sm">
+                  <el-avatar :size="36" :src="u.avatar || undefined" class="avatar-sm" alt="">
                     {{ avatarText(u.nickname) }}
                   </el-avatar>
                 </router-link>

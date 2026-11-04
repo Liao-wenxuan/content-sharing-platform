@@ -318,13 +318,18 @@ function markCoverBroken(postId: number) {
             class="author"
             :to="`/profile/${item.post.author.id}`"
           >
-            <el-avatar :size="18" class="avatar">
+            <el-avatar
+              :size="18"
+              :src="item.post.author?.avatar || undefined"
+              class="avatar"
+              alt=""
+            >
               {{ avatarText(item.post.author?.nickname) }}
             </el-avatar>
             <span class="nickname">{{ item.post.author?.nickname || '未知用户' }}</span>
           </router-link>
           <span v-else class="author author--plain" title="这条笔记没有关联作者">
-            <el-avatar :size="18" class="avatar">
+            <el-avatar :size="18" class="avatar" alt="">
               {{ avatarText(item.post.author?.nickname) }}
             </el-avatar>
             <span class="nickname">{{ item.post.author?.nickname || '未知用户' }}</span>

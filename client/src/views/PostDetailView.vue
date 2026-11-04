@@ -405,7 +405,7 @@ watch(
       <article class="main-col">
         <!-- 作者栏 -->
         <header class="author-bar">
-          <el-avatar :size="44" class="avatar">
+          <el-avatar :size="44" :src="post.author?.avatar || undefined" class="avatar" alt="">
             {{ avatarText(post.author?.nickname) }}
           </el-avatar>
           <div class="author-meta">
@@ -563,7 +563,12 @@ watch(
 
           <ul v-else class="comment-list">
             <li v-for="item in comments" :key="item.id" class="comment-item">
-              <el-avatar :size="32" :src="item.author?.avatar || undefined" class="avatar-sm">
+              <el-avatar
+                :size="32"
+                :src="item.author?.avatar || undefined"
+                class="avatar-sm"
+                alt=""
+              >
                 {{ avatarText(item.author?.nickname) }}
               </el-avatar>
               <div class="comment-main">
@@ -617,7 +622,12 @@ watch(
 
                   <ul v-if="!isRepliesCollapsed(item.id)" class="reply-list">
                     <li v-for="r in repliesOf(item.id)" :key="r.id" class="reply-item">
-                      <el-avatar :size="24" :src="r.author?.avatar || undefined" class="avatar-xs">
+                      <el-avatar
+                        :size="24"
+                        :src="r.author?.avatar || undefined"
+                        class="avatar-xs"
+                        alt=""
+                      >
                         {{ avatarText(r.author?.nickname) }}
                       </el-avatar>
                       <div class="reply-main">
