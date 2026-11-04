@@ -217,7 +217,8 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
     }
 
     const scope = String(req.query.scope ?? 'public')
-    const visibilityClause = scope === 'private' ? "visibility = 'private'" : "visibility = 'public'"
+    const visibilityClause =
+      scope === 'private' ? "visibility = 'private'" : "visibility = 'public'"
 
     const rows = db
       .prepare(
@@ -513,7 +514,8 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
     if (scope === 'private' && !isOwner) {
       return res.status(403).json({ message: '只能查看自己的私密笔记' })
     }
-    const visibilityClause = scope === 'private' ? "visibility = 'private'" : "visibility = 'public'"
+    const visibilityClause =
+      scope === 'private' ? "visibility = 'private'" : "visibility = 'public'"
 
     const rows = db
       .prepare(

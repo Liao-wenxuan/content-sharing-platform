@@ -118,9 +118,7 @@ describe('公共列表里不出现', () => {
   })
 
   it('搜索联想也不给', async () => {
-    const res = await request(app)
-      .get('/api/posts/search/suggest')
-      .query({ q: MARK })
+    const res = await request(app).get('/api/posts/search/suggest').query({ q: MARK })
     expect(JSON.stringify(res.body)).not.toContain('私密的那一篇')
   })
 

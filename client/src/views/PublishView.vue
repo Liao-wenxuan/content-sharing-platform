@@ -567,7 +567,8 @@ async function handleSubmit() {
           </el-form-item>
 
           <div class="form-actions">
-            <el-button @click="onCancel">取消</el-button>            <el-button
+            <el-button @click="onCancel">取消</el-button>
+            <el-button
               type="primary"
               :loading="submitting"
               :disabled="!canSubmit"
