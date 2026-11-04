@@ -33,6 +33,7 @@ import {
   findExifSegment,
   formatBytes,
   describeSavings,
+  isValidImageUrl,
   DEFAULT_MAX_EDGE
 } from '@/utils/image'
 import { buildJpeg } from './helpers/exif-fixture'
@@ -347,5 +348,46 @@ describe('findExifSegment', () => {
         expect(seg.offset + seg.length).toBeLessThanOrEqual(len)
       }
     }
+  })
+})
+
+// ===== 图片链接校验 =====
+
+describe('图片链接能不能用', () => {
+  it('空串 = 不设这个字段，合法', () => {
+    expect(isValidImageUrl('')).toBe(true)
+    expect(isValidImageUrl('   ')).toBe(true)
+  })
+
+  it('http / https 绝对地址合法', () => {
+    expect(isValidImageUrl('https://example.com/a.png')).toBe(true)
+    expect(isValidImageUrl('http://example.com/a.png')).toBe(true)
+    // 协议大小写不敏感
+    expect(isValidImageUrl('HTTPS://EXAMPLE.COM/A.PNG')).toBe(true)
+  })
+
+  it('站内上传的相对路径合法', () => {
+    // 上传接口返回的就是这个形状
+    expect(isValidImageUrl('/uploads/1755-abc.jpg')).toBe(true)
+  })
+
+  it('data: 不行：它能塞任意内容（含带脚本的 SVG）', () => {
+    expect(isValidImageUrl('data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=')).toBe(false)
+  })
+
+  it('javascript: 不行', () => {
+    // 写在 img src 里不会执行，但同一个字段将来被放进
+    // <a href> 或 style 里就是另一回事了
+    expect(isValidImageUrl('javascript:alert(1)')).toBe(false)
+  })
+
+  it('别的相对路径不行（站内只认 /uploads/）', () => {
+    expect(isValidImageUrl('/etc/passwd')).toBe(false)
+    expect(isValidImageUrl('./a.png')).toBe(false)
+  })
+
+  it('ftp / file 这种协议不行', () => {
+    expect(isValidImageUrl('ftp://example.com/a.png')).toBe(false)
+    expect(isValidImageUrl('file:///C:/a.png')).toBe(false)
   })
 })
