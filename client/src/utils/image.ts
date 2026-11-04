@@ -338,3 +338,26 @@ function readOrientationFromTiff(view: DataView, tiffStart: number): ExifOrienta
   }
   return 1
 }
+
+/**
+ * 图片链接能不能用。
+ *
+ * 只认三种：
+ * - 空串：表示「这个字段不设」（清空头像 / 封面）
+ * - http:// 或 https:// 开头的绝对地址
+ * - /uploads/... 这种站内相对路径 —— 上传接口返回的就是它，
+ *   dev 下 vite 把 /uploads 反代给后端，生产是同源
+ *
+ * 挡掉 data: 和 javascript:：
+ * - data: 能塞任意内容（连 SVG 带脚本的那种）
+ * - javascript: 写在 img src 里不会执行，但同一个字段
+ *   将来被放进 <a href> 或 style 里就是另一回事了
+ *
+ * 与其等渲染时才发现是裂图，不如在输入框旁边就说清楚。
+ */
+export function isValidImageUrl(url: string): boolean {
+  const v = url.trim()
+  if (v === '') return true
+  if (v.startsWith('/uploads/')) return true
+  return /^https?:\/\//i.test(v)
+}
