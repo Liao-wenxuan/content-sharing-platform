@@ -56,15 +56,22 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: 'likes', label: '赞过' }
 ]
 
-// ===== 子筛选：公开 / 私密 / 合集 =====
-type Scope = 'public' | 'private' | 'collections'
+// ===== 子筛选：公开 / 私密 =====
+// 「合集」这一档摘掉了：它一直是个点了只会显示「即将上线」的按钮。
+// 按项目自己的判据 —— 会被人点到的占位比没有更糟 —— 在真做出来之前不该摆在这儿。
+// 私密是真的了：posts.visibility 落库，服务端强制过滤，非本人查直接 403。
+type Scope = 'public' | 'private'
 const activeScope = ref<Scope>('public')
 
-const scopes: { key: Scope; label: string }[] = [
-  { key: 'public', label: '公开' },
-  { key: 'private', label: '私密' },
-  { key: 'collections', label: '合集' }
-]
+/** 只有本人有「私密」这一栏 —— 别人的私密笔记连入口都不该出现 */
+const scopes = computed<{ key: Scope; label: string }[]>(() =>
+  isOwner.value
+    ? [
+        { key: 'public', label: '公开' },
+        { key: 'private', label: '私密' }
+      ]
+    : [{ key: 'public', label: '公开' }]
+)
 
 // ===== 收藏 tab =====
 // 收藏是私密内容：接口只给本人看，所以别人主页这一栏只显示「私密」占位，
@@ -408,9 +415,28 @@ const emptyHint = computed(() => {
   if (activeTab.value === 'comments') return '还没有发过评论'
   if (activeTab.value === 'favorites') return '还没有收藏任何笔记'
   if (activeTab.value === 'likes') return '还没有赞过任何笔记'
-  if (activeScope.value === 'private') return '私密笔记即将上线'
-  if (activeScope.value === 'collections') return '合集功能即将上线'
+  if (activeScope.value === 'private') return '还没有私密笔记，发布时可以选「仅自己可见」'
   return '还没有内容'
+})
+
+/**
+ * 切换「公开 / 私密」要重新取数，而不是在前端把两个列表过滤一遍 ——
+ * 前端过滤的前提是「私密的也在手里」，那等于把私密内容发给所有人再藏起来。
+ */
+watch(activeScope, async (scope) => {
+  const id = targetId.value
+  if (id === null || activeTab.value !== 'posts') return
+  try {
+    const data =
+      id === auth.user?.id
+        ? await postsApi.getMyPosts(scope)
+        : await postsApi.getUserPosts(id, scope)
+    posts.value = data.list
+    total.value = data.total
+  } catch {
+    posts.value = []
+    total.value = 0
+  }
 })
 </script>
 

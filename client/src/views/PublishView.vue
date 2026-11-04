@@ -19,7 +19,7 @@ import { ElMessage, ElMessageBox } from '@/utils/element'
 import { PictureFilled, UploadFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import { postsApi } from '@/api/posts'
+import { postsApi, type PostVisibility } from '@/api/posts'
 import { topicsApi, type TopicSummary } from '@/api/topics'
 import {
   POST_CONTENT_MAX_LENGTH,
@@ -42,6 +42,11 @@ const toast = useToastStore()
 // ===== 表单状态 =====
 const content = ref('')
 const topicTag = ref('')
+/**
+ * 谁可以看。默认公开 —— 大多数笔记就是要给人看的，
+ * 默认私密会让「发了但没人看到」变成一个需要排查的谜。
+ */
+const visibility = ref<PostVisibility>('public')
 /** 热门话题快捷选择：空着的输入框等于劝退 */
 const hotTopics = ref<TopicSummary[]>([])
 const submitting = ref(false)
@@ -384,7 +389,8 @@ async function handleSubmit() {
       content: text,
       imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       imageThumbs: imageThumbs.length > 0 ? imageThumbs : undefined,
-      topicTag: topicTag.value.trim() || undefined
+      topicTag: topicTag.value.trim() || undefined,
+      visibility: visibility.value
     })
 
     toast.show('发布成功', 'success')
@@ -544,9 +550,24 @@ async function handleSubmit() {
             </ul>
           </el-form-item>
 
+          <!-- 可见性：两档，把后果直接写在下面 —— 用户点「仅自己可见」时
+               最想知道的是「那它到底会不会出现在别人的首页」，不是这个开关叫什么 -->
+          <el-form-item label="谁可以看">
+            <el-radio-group v-model="visibility" size="small">
+              <el-radio-button value="public">公开</el-radio-button>
+              <el-radio-button value="private">仅自己可见</el-radio-button>
+            </el-radio-group>
+            <p class="visibility-hint">
+              {{
+                visibility === 'private'
+                  ? '只出现在你主页的「私密」栏，不进推荐流、搜索结果和话题页。'
+                  : '会出现在发现流、话题页和搜索结果里，所有人都能看到。'
+              }}
+            </p>
+          </el-form-item>
+
           <div class="form-actions">
-            <el-button @click="onCancel">取消</el-button>
-            <el-button
+            <el-button @click="onCancel">取消</el-button>            <el-button
               type="primary"
               :loading="submitting"
               :disabled="!canSubmit"
@@ -829,6 +850,14 @@ async function handleSubmit() {
   padding-left: 18px;
   font-size: var(--fs-sm);
   line-height: 1.9;
+  color: var(--muted-foreground);
+}
+
+/* 可见性说明：紧跟开关，用 muted 色 —— 它是解释不是警告 */
+.visibility-hint {
+  margin: 6px 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
   color: var(--muted-foreground);
 }
 </style>

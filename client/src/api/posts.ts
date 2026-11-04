@@ -2,8 +2,20 @@ import request from './request'
 
 // ===== 类型定义 =====
 
+/**
+ * 笔记可见性。只有两档，和 `server/src/lib/visibility.ts` 一一对应。
+ * 不做「仅关注者可见」：说不清的权限等于没有权限。
+ */
+export type PostVisibility = 'public' | 'private'
+/** 主页笔记栏的筛选口径（公开 / 私密） */
+export type PostScope = PostVisibility
+
 export interface CreatePostPayload {
   content: string
+  /**
+   * 可见性。缺省是 public —— 老的调用方（测试脚本、e2e）不改也不会出问题。
+   */
+  visibility?: PostVisibility
   imageUrls?: string[]
   /**
    * 与 imageUrls **一一对应**的列表缩略图。
@@ -33,6 +45,7 @@ export interface Post {
    */
   imageThumbs: string[]
   topicTag: string | null
+  visibility?: PostVisibility
   createdAt: string
   likeCount: number
   commentCount: number
@@ -140,13 +153,13 @@ export const postsApi = {
   },
 
   // 获取当前用户的帖子列表（需要 Bearer token）
-  getMyPosts(): Promise<UserPostsResponse> {
-    return request.get<UserPostsResponse>('/users/me/posts')
+  getMyPosts(scope: PostScope = 'public'): Promise<UserPostsResponse> {
+    return request.get<UserPostsResponse>('/users/me/posts', { params: { scope } })
   },
 
-  // 获取指定用户的帖子列表（公开）
-  getUserPosts(userId: number): Promise<UserPostsResponse> {
-    return request.get<UserPostsResponse>(`/users/${userId}/posts`)
+  // 获取指定用户的帖子列表。scope=private 只有本人能查（服务端 403）
+  getUserPosts(userId: number, scope: PostScope = 'public'): Promise<UserPostsResponse> {
+    return request.get<UserPostsResponse>(`/users/${userId}/posts`, { params: { scope } })
   },
 
   // 点赞（幂等：已赞则不重复）
