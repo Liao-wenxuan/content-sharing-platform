@@ -43,5 +43,22 @@ export const IMAGE_QUALITY = 0.82
  */
 export const IMAGE_THUMB_MAX_EDGE = 480
 
+/**
+ * 头像的边长上限。
+ *
+ * 主页上头像显示 72px，2x 屏是 144 —— 400 已经是三倍余量。
+ * 再大只是白占流量和磁盘：一张手机原图 4000×3000 压到 400×300，
+ * 体积能差两个数量级。
+ */
+export const AVATAR_MAX_EDGE = 400
+
+/**
+ * 主页封面的边长上限。
+ *
+ * 封面区在内容列里，宽度约 1080px，2x 屏 2160 —— 1600 是折中：
+ * 够清晰，又不至于把一张 12MP 的照片原样塞进数据库旁边的 uploads 目录。
+ */
+export const COVER_MAX_EDGE = 1600
+
 // API base（开发默认指向本地 Express + SQLite；生产会通过 VITE_API_BASE 覆盖）
 export const DEFAULT_API_BASE = 'http://localhost:3000/api'
