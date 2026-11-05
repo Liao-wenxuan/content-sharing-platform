@@ -49,45 +49,6 @@ try {
 const db = new Database(DB_PATH)
 db.pragma('foreign_keys = ON')
 
-// ---------- 0. 视频素材 ----------
-//
-// 演示视频随仓库分发在 server/data/（uploads/ 被 gitignore，data/ 没有），
-// seed 时复制进 uploads —— 和「seed:photos 下载图片」是同一个思路：
-// 让 `node seed.mjs` 一条命令之后，演示站就是一个**能直接看**的状态。
-const VIDEO_SRC = path('./data/demo-video.mp4')
-const VIDEO_DIR = UPLOAD_DIR + 'demo/video/'
-const VIDEO_DEST = VIDEO_DIR + 'demo.mp4'
-const VIDEO_POSTER = '/uploads/demo/video/demo-poster.svg'
-if (existsSync(VIDEO_SRC)) {
-  if (!existsSync(VIDEO_DIR)) mkdirSync(VIDEO_DIR, { recursive: true })
-  if (!existsSync(VIDEO_DEST)) {
-    copyFileSync(VIDEO_SRC, VIDEO_DEST)
-    console.log('演示视频已就位：/uploads/demo/video/demo.mp4')
-  }
-  // 海报：视频封面直接给一张 SVG（<video poster> 接受任何图片 URL）
-  if (!existsSync(VIDEO_DIR + 'demo-poster.svg')) {
-    writeFileSync(
-      VIDEO_DIR + 'demo-poster.svg',
-      `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1f2430"/>
-      <stop offset="1" stop-color="#3d3347"/>
-    </linearGradient>
-  </defs>
-  <rect width="800" height="500" fill="url(#g)"/>
-  <circle cx="400" cy="238" r="52" fill="rgba(255,255,255,0.14)"/>
-  <path d="M384 208 L384 268 L436 238 Z" fill="#fff"/>
-  <text x="400" y="336" text-anchor="middle" font-family="sans-serif" font-size="24"
-        fill="rgba(255,255,255,0.85)">演示视频 · Big Buck Bunny (CC-BY)</text>
-</svg>`,
-      'utf8'
-    )
-  }
-} else {
-  console.log('⚠ server/data/demo-video.mp4 不存在，视频演示笔记将指向 404')
-}
-
 // ---------- 1. 图片索引：按 d 前缀查文件 ----------
 //
 // demo 配图是 `npm run seed:photos` 从 Unsplash 下载到 uploads/demo/ 的，
@@ -199,6 +160,45 @@ for (const row of corrupt) {
 }
 cleaned += corrupt.length
 console.log(`清理编码损坏笔记 ${corrupt.length} 条`)
+
+// ---------- 1.5 视频素材 ----------
+//
+// 演示视频随仓库分发在 server/data/（uploads/ 被 gitignore，data/ 没有），
+// seed 时复制进 uploads —— 和「seed:photos 下载图片」是同一个思路：
+// 让 `node seed.mjs` 一条命令之后，演示站就是一个**能直接看**的状态。
+const VIDEO_SRC = path('./data/demo-video.mp4')
+const VIDEO_DIR = UPLOAD_DIR + 'demo/video/'
+const VIDEO_DEST = VIDEO_DIR + 'demo.mp4'
+const VIDEO_POSTER = '/uploads/demo/video/demo-poster.svg'
+if (existsSync(VIDEO_SRC)) {
+  if (!existsSync(VIDEO_DIR)) mkdirSync(VIDEO_DIR, { recursive: true })
+  if (!existsSync(VIDEO_DEST)) {
+    copyFileSync(VIDEO_SRC, VIDEO_DEST)
+    console.log('演示视频已就位：/uploads/demo/video/demo.mp4')
+  }
+  // 海报：视频封面直接给一张 SVG（<video poster> 接受任何图片 URL）
+  if (!existsSync(VIDEO_DIR + 'demo-poster.svg')) {
+    writeFileSync(
+      VIDEO_DIR + 'demo-poster.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f2430"/>
+      <stop offset="1" stop-color="#3d3347"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#g)"/>
+  <circle cx="400" cy="238" r="52" fill="rgba(255,255,255,0.14)"/>
+  <path d="M384 208 L384 268 L436 238 Z" fill="#fff"/>
+  <text x="400" y="336" text-anchor="middle" font-family="sans-serif" font-size="24"
+        fill="rgba(255,255,255,0.85)">演示视频 · Big Buck Bunny (CC-BY)</text>
+</svg>`,
+      'utf8'
+    )
+  }
+} else {
+  console.log('⚠ server/data/demo-video.mp4 不存在，视频演示笔记将指向 404')
+}
 
 // ---------- 3. 演示用户 ----------
 //
