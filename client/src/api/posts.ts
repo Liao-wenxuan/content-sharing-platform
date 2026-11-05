@@ -10,6 +10,9 @@ export type PostVisibility = 'public' | 'private'
 /** 主页笔记栏的筛选口径（公开 / 私密） */
 export type PostScope = PostVisibility
 
+/** 笔记媒体类型：图文 or 视频。一条笔记二选一，不混发 */
+export type PostMediaType = 'image' | 'video'
+
 export interface CreatePostPayload {
   content: string
   /**
@@ -24,6 +27,12 @@ export interface CreatePostPayload {
    */
   imageThumbs?: (string | null)[]
   topicTag?: string
+  /** 媒体类型，缺省 image */
+  mediaType?: PostMediaType
+  /** mediaType=video 时必填，/uploads/ 下的视频地址 */
+  videoUrl?: string
+  /** 视频封面（前端抽帧），可缺省 —— 缺了播放器显示黑底 */
+  videoPoster?: string
 }
 
 export interface PostAuthor {
@@ -46,6 +55,13 @@ export interface Post {
   imageThumbs: string[]
   topicTag: string | null
   visibility?: PostVisibility
+  /**
+   * 媒体类型。老接口路径（还没带 media 列的查询）会缺这个字段，
+   * 调用方一律按 `post.mediaType === 'video'` 判断 —— 缺省值当 image。
+   */
+  mediaType?: PostMediaType
+  videoUrl?: string | null
+  videoPoster?: string | null
   createdAt: string
   likeCount: number
   commentCount: number

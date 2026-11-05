@@ -27,6 +27,11 @@ export const UPLOAD_MAX_FILES = 9
 export const UPLOAD_MAX_SIZE_MB = 10
 export const UPLOAD_MAX_SIZE_BYTES = UPLOAD_MAX_SIZE_MB * 1024 * 1024
 
+// 视频上传限制（与 uploads.ts 的 video multer 配置一致）
+// 50MB ≈ 1080p 一分钟，演示项目不做分片/断点续传，单请求上限必须压得住
+export const VIDEO_MAX_SIZE_MB = 50
+export const VIDEO_MAX_SIZE_BYTES = VIDEO_MAX_SIZE_MB * 1024 * 1024
+
 /**
  * 一次请求里允许的文件数上限（主图 + 缩略图）。
  *

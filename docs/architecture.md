@@ -37,6 +37,9 @@ erDiagram
         text image_urls "JSON array"
         text topic_tag
         text visibility "'public' | 'private'，默认 public"
+        text media_type "'image' | 'video'，默认 image，不混发"
+        text video_url "仅 video：/uploads/ 下"
+        text video_poster "仅 video：前端抽帧的封面"
         text created_at
     }
     likes {
@@ -135,7 +138,7 @@ sequenceDiagram
     X-->>V: img.status = 'done', uploadedUrl
     V->>V: 预览图 + ✓ 徽章 (Vue reactive)
     U->>V: 填内容，点发布
-    V->>E: POST /api/posts { content, imageUrls: [...] }
+    V->>E: POST /api/posts { content, imageUrls: [...] , mediaType? }
     E->>D: INSERT INTO posts
     E-->>V: { post }
     V->>V: router.push('/')

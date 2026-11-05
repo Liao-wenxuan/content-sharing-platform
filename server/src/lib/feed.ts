@@ -4,7 +4,7 @@ import { toISO } from './time'
 import { scoreCandidate, type FeedCandidate, type FeedProfile } from './feed-score'
 import { buildProfile, nicknameMap, topAuthors, topTopics } from './feed-profile'
 import { CATEGORY_LABEL, type ContentCategory } from '../constants'
-import { thumbsFromRow } from './postImages'
+import { thumbsFromRow, mediaFromRow } from './postImages'
 import { PUBLIC_ONLY } from './visibility'
 
 /**
@@ -342,7 +342,7 @@ function loadPostsByIds(ids: number[]) {
 
   const rows = db
     .prepare(
-      `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+      `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
               u.nickname, u.avatar,
               (SELECT COUNT(*) FROM likes     WHERE post_id = p.id) AS like_count,
               (SELECT COUNT(*) FROM comments  WHERE post_id = p.id) AS comment_count
@@ -360,6 +360,7 @@ function loadPostsByIds(ids: number[]) {
       imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
       imageThumbs: thumbsFromRow(r),
       topicTag: r.topic_tag,
+      ...mediaFromRow(r),
       createdAt: toISO(r.created_at),
       likeCount: r.like_count,
       commentCount: r.comment_count,

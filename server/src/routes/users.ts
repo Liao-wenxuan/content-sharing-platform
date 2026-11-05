@@ -6,7 +6,7 @@ import { toISO } from '../lib/time'
 import { NICKNAME_MAX_LENGTH } from '../constants'
 import { createNotification } from '../lib/notify'
 import { isProfileVisible } from '../lib/settings'
-import { thumbsFromRow } from '../lib/postImages'
+import { thumbsFromRow, mediaFromRow } from '../lib/postImages'
 
 const router = Router()
 
@@ -223,7 +223,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
     const rows = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, media_type, video_url, video_poster, created_at
       FROM posts
       WHERE user_id = ? AND ${visibilityClause}
       ORDER BY created_at DESC, id DESC
@@ -247,6 +247,7 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
         imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
         visibility: row.visibility,
+        ...mediaFromRow(row),
         createdAt: toISO(row.created_at)
       })),
       total: rows.length
@@ -520,7 +521,7 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
     const rows = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, media_type, video_url, video_poster, created_at
       FROM posts
       WHERE user_id = ? AND ${visibilityClause}
       ORDER BY created_at DESC, id DESC
@@ -544,6 +545,7 @@ router.get('/:id/posts', optionalAuth, (req: Request, res: Response) => {
         imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
         visibility: row.visibility,
+        ...mediaFromRow(row),
         createdAt: toISO(row.created_at)
       })),
       total: rows.length

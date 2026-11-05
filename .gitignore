@@ -57,3 +57,4 @@ scripts/fetch-demo-photos2.mjs
 scripts/img-prompts.jsonl
 scripts/commit-atomic.ps1
 server/db-inspect.mjs
+.data/

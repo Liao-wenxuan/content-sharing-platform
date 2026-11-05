@@ -15,7 +15,7 @@
  */
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
-import { readdirSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readdirSync, existsSync, mkdirSync, writeFileSync, copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
@@ -48,6 +48,45 @@ try {
 
 const db = new Database(DB_PATH)
 db.pragma('foreign_keys = ON')
+
+// ---------- 0. 视频素材 ----------
+//
+// 演示视频随仓库分发在 server/data/（uploads/ 被 gitignore，data/ 没有），
+// seed 时复制进 uploads —— 和「seed:photos 下载图片」是同一个思路：
+// 让 `node seed.mjs` 一条命令之后，演示站就是一个**能直接看**的状态。
+const VIDEO_SRC = path('./data/demo-video.mp4')
+const VIDEO_DIR = UPLOAD_DIR + 'demo/video/'
+const VIDEO_DEST = VIDEO_DIR + 'demo.mp4'
+const VIDEO_POSTER = '/uploads/demo/video/demo-poster.svg'
+if (existsSync(VIDEO_SRC)) {
+  if (!existsSync(VIDEO_DIR)) mkdirSync(VIDEO_DIR, { recursive: true })
+  if (!existsSync(VIDEO_DEST)) {
+    copyFileSync(VIDEO_SRC, VIDEO_DEST)
+    console.log('演示视频已就位：/uploads/demo/video/demo.mp4')
+  }
+  // 海报：视频封面直接给一张 SVG（<video poster> 接受任何图片 URL）
+  if (!existsSync(VIDEO_DIR + 'demo-poster.svg')) {
+    writeFileSync(
+      VIDEO_DIR + 'demo-poster.svg',
+      `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f2430"/>
+      <stop offset="1" stop-color="#3d3347"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#g)"/>
+  <circle cx="400" cy="238" r="52" fill="rgba(255,255,255,0.14)"/>
+  <path d="M384 208 L384 268 L436 238 Z" fill="#fff"/>
+  <text x="400" y="336" text-anchor="middle" font-family="sans-serif" font-size="24"
+        fill="rgba(255,255,255,0.85)">演示视频 · Big Buck Bunny (CC-BY)</text>
+</svg>`,
+      'utf8'
+    )
+  }
+} else {
+  console.log('⚠ server/data/demo-video.mp4 不存在，视频演示笔记将指向 404')
+}
 
 // ---------- 1. 图片索引：按 d 前缀查文件 ----------
 //
@@ -337,6 +376,27 @@ const total = db.prepare('SELECT COUNT(*) AS c FROM posts').get().c
 const withImg = db
   .prepare(`SELECT COUNT(*) AS c FROM posts WHERE image_urls IS NOT NULL AND image_urls != '[]'`)
   .get().c
-console.log(`\n写入 ${POSTS.length} 条（其中 ${POSTS.length - noImage} 条带图）`)
-console.log(`库内共 ${total} 条，其中 ${withImg} 条有配图`)
+
+// ---------- 视频演示笔记 ----------
+// 独立于上面的 POSTS 循环：media_type/video_url 是新列，走单独一条 INSERT，
+// 失败也不影响前面的图文数据（老库没迁移成功时给出人话提示）。
+if (existsSync(VIDEO_DEST)) {
+  try {
+    db.prepare(
+      `INSERT INTO posts (user_id, content, topic_tag, visibility, media_type, video_url, video_poster, created_at)
+       VALUES (?, ?, ?, 'public', 'video', ?, ?, datetime('now', '-12 minutes'))`
+    ).run(
+      userIds[3],
+      '拍了一支 10 秒的短片：风把蒲公英吹散的那一下，值得按下录制键。点开看，有声音。',
+      '视频',
+      '/uploads/demo/video/demo.mp4',
+      VIDEO_POSTER
+    )
+    console.log(`已写入 1 条视频笔记（${total + 1} 条总计，其中 ${withImg} 条带图）`)
+  } catch (e) {
+    console.log(`⚠ 视频笔记写入失败（后端 schema 可能没迁移）: ${e.message}`)
+  }
+} else {
+  console.log(`库内共 ${total} 条，其中 ${withImg} 条有配图`)
+}
 db.close()

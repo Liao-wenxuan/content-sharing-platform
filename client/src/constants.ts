@@ -11,6 +11,11 @@ export const UPLOAD_MAX_SIZE_MB = 10
 export const UPLOAD_MAX_SIZE_BYTES = UPLOAD_MAX_SIZE_MB * 1024 * 1024
 export const UPLOAD_TIMEOUT_MS = 60_000
 
+// 视频上传限制（与 server uploads.ts 的 video 配置一致）
+export const VIDEO_MAX_SIZE_MB = 50
+export const VIDEO_MAX_SIZE_BYTES = VIDEO_MAX_SIZE_MB * 1024 * 1024
+export const VIDEO_UPLOAD_TIMEOUT_MS = 300_000
+
 // ===== 上传前的图片压缩 =====
 
 /**

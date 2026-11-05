@@ -65,6 +65,9 @@ export function initSchema(db: Database.Database): void {
       image_thumbs TEXT,
       topic_tag TEXT,
       visibility TEXT NOT NULL DEFAULT 'public',
+      media_type TEXT NOT NULL DEFAULT 'image',
+      video_url TEXT,
+      video_poster TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id)
     )
@@ -85,6 +88,21 @@ export function initSchema(db: Database.Database): void {
   if (!existingPostCols.has('visibility')) {
     db.exec("ALTER TABLE posts ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'")
     console.log('[DB] Migrated: posts.visibility added')
+  }
+
+  // 视频笔记：默认 image，老库补列后所有旧笔记自然还是图文笔记。
+  // media_type 用 TEXT 而不是布尔位 —— 将来加音频/直播不至于再迁一次列。
+  if (!existingPostCols.has('media_type')) {
+    db.exec("ALTER TABLE posts ADD COLUMN media_type TEXT NOT NULL DEFAULT 'image'")
+    console.log('[DB] Migrated: posts.media_type added')
+  }
+  if (!existingPostCols.has('video_url')) {
+    db.exec('ALTER TABLE posts ADD COLUMN video_url TEXT')
+    console.log('[DB] Migrated: posts.video_url added')
+  }
+  if (!existingPostCols.has('video_poster')) {
+    db.exec('ALTER TABLE posts ADD COLUMN video_poster TEXT')
+    console.log('[DB] Migrated: posts.video_poster added')
   }
 
   db.exec(`

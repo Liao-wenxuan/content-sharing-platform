@@ -5,8 +5,9 @@ import fs from 'fs'
 import { randomBytes } from 'crypto'
 import { requireAuth } from '../middleware/auth'
 import { uploadLimiter } from '../middleware/rateLimit'
-import { UPLOAD_MAX_REQUEST_FILES, UPLOAD_MAX_SIZE_BYTES } from '../constants'
+import { UPLOAD_MAX_REQUEST_FILES, UPLOAD_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '../constants'
 import { sniffImageType } from '../lib/imageType'
+import { sniffVideoType } from '../lib/videoType'
 
 const router = Router()
 
@@ -56,6 +57,24 @@ const upload = multer({
     // 只允许 image/*
     if (!file.mimetype.startsWith('image/')) {
       cb(new Error('只能上传图片文件'))
+      return
+    }
+    cb(null, true)
+  }
+})
+
+// 视频单独一个 multer 实例：单文件、独立的大小上限、只收 video/mp4 | video/webm。
+// 不和图片共用 —— 两者的限额、过滤、错误文案都不一样，
+// 共用一套配置只会得到「 either 都太松 or 都太紧」。
+const videoUpload = multer({
+  storage,
+  limits: {
+    fileSize: VIDEO_MAX_SIZE_BYTES,
+    files: 1
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype !== 'video/mp4' && file.mimetype !== 'video/webm') {
+      cb(new Error('只能上传 MP4 / WebM 视频'))
       return
     }
     cb(null, true)
@@ -137,6 +156,50 @@ router.post('/', uploadLimiter, requireAuth, (req, res, _next) => {
     }
 
     res.json({ files: result })
+  })
+})
+
+// ===== POST /api/uploads/video —— 视频上传（鉴权）=====
+// 客户端 FormData field name: 'video'，单文件。
+// 返回：{ file: { url, filename, size, mimetype } }
+//
+// 和图片同一个流程：.tmp 落盘 → 魔数定扩展名 → 校验失败整次回滚。
+// 不支持多文件：一条笔记只有一个视频，「多视频」只是没有产品意义的复杂度。
+router.post('/video', uploadLimiter, requireAuth, (req, res, _next) => {
+  videoUpload.single('video')(req, res, (err: any) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? '视频不能超过 50MB' : err.message || '上传失败'
+      console.error('[Upload/video] multer error:', err.code, err.message)
+      return res.status(400).json({ message: msg })
+    }
+
+    const f = req.file as Express.Multer.File | undefined
+    if (!f) {
+      return res.status(400).json({ message: '没有收到文件' })
+    }
+
+    const sniffed = sniffVideoType(f.path)
+    if (!sniffed) {
+      try {
+        fs.unlinkSync(f.path)
+      } catch {
+        // 同图片：清理失败不改变响应语义
+      }
+      console.error('[Upload/video] 拒绝上传: 魔数不是 MP4/WebM')
+      return res.status(400).json({ message: '只能上传 MP4 / WebM 视频' })
+    }
+
+    const finalName = `${path.basename(f.filename, path.extname(f.filename))}${sniffed.ext}`
+    fs.renameSync(f.path, path.join(UPLOAD_DIR, finalName))
+
+    res.json({
+      file: {
+        url: `/uploads/${finalName}`,
+        filename: finalName,
+        size: f.size,
+        mimetype: sniffed.mime
+      }
+    })
   })
 })
 

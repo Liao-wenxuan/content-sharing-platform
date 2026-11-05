@@ -16,10 +16,10 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { UploadFile } from '@/utils/element'
 import { ElMessage, ElMessageBox } from '@/utils/element'
-import { PictureFilled, UploadFilled } from '@element-plus/icons-vue'
+import { PictureFilled, UploadFilled, VideoCameraFilled } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
-import { postsApi, type PostVisibility } from '@/api/posts'
+import { postsApi, type PostVisibility, type PostMediaType } from '@/api/posts'
 import { topicsApi, type TopicSummary } from '@/api/topics'
 import {
   POST_CONTENT_MAX_LENGTH,
@@ -27,6 +27,9 @@ import {
   UPLOAD_MAX_SIZE_MB,
   UPLOAD_MAX_SIZE_BYTES,
   UPLOAD_TIMEOUT_MS,
+  VIDEO_MAX_SIZE_MB,
+  VIDEO_MAX_SIZE_BYTES,
+  VIDEO_UPLOAD_TIMEOUT_MS,
   IMAGE_MAX_EDGE,
   IMAGE_QUALITY,
   IMAGE_THUMB_MAX_EDGE,
@@ -34,6 +37,7 @@ import {
 } from '@/constants'
 import { compressImage, compressSeries } from '@/utils/imageCompress'
 import { formatBytes, describeSavings } from '@/utils/image'
+import { validateVideoFile, captureVideoPoster } from '@/utils/video'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -77,6 +81,39 @@ interface PendingImage {
 const images = ref<PendingImage[]>([])
 let nextImgId = 1
 
+// ===== 视频笔记 =====
+//
+// 一条笔记要么图文要么视频（服务端也这么卡），切换时把另一边清掉 ——
+// 「图和视频都留着，提交时二选一」会造出「我选了图怎么发出去是视频」的客服工单。
+interface PendingVideo {
+  file: File
+  previewUrl: string
+  /** 视频本体上传后的 URL */
+  uploadedUrl: string | null
+  /** 前端抽帧的封面，上传图片通道后的 URL；null = 抽帧失败，播放器黑底兜底 */
+  posterUrl: string | null
+  posterBlob: Blob | null
+  status: 'pending' | 'uploading' | 'done' | 'error'
+  progress: number
+  errorMsg?: string
+}
+const mediaKind = ref<PostMediaType>('image')
+const videoItem = ref<PendingVideo | null>(null)
+
+/** 切媒体类型：清掉另一侧的已选内容（预览 URL 一并释放） */
+function switchMediaKind(kind: PostMediaType) {
+  if (kind === mediaKind.value) return
+  mediaKind.value = kind
+  if (kind === 'video') {
+    images.value.forEach((img) => URL.revokeObjectURL(img.previewUrl))
+    images.value = []
+  } else if (videoItem.value) {
+    URL.revokeObjectURL(videoItem.value.previewUrl)
+    videoItem.value = null
+  }
+  errorMsg.value = ''
+}
+
 // 上传限制（client + server 防御性校验；值在 src/constants.ts）
 const MAX_IMAGES = UPLOAD_MAX_IMAGES
 const MAX_SIZE_MB = UPLOAD_MAX_SIZE_MB
@@ -95,8 +132,10 @@ const canSubmit = computed(
   () =>
     content.value.trim().length > 0 &&
     content.value.trim().length <= POST_CONTENT_MAX_LENGTH &&
-    allUploaded.value &&
-    !submitting.value
+    !submitting.value &&
+    (mediaKind.value === 'video'
+      ? videoItem.value !== null && videoItem.value.status === 'done'
+      : allUploaded.value)
 )
 
 // ===== 校验：登录 + 自动重定向 =====
@@ -337,10 +376,148 @@ function removeImage(id: number) {
   images.value.splice(idx, 1)
 }
 
+// ===== 视频上传 =====
+
+function handleVideoChange(uploadFile: UploadFile) {
+  const file = uploadFile.raw
+  if (!file) return
+
+  const v = validateVideoFile(file, VIDEO_MAX_SIZE_BYTES)
+  if (!v.ok) {
+    ElMessage.error(`${v.reason}（≤ ${VIDEO_MAX_SIZE_MB}MB）`)
+    return
+  }
+
+  // 换视频要先把旧预览释放掉 —— ObjectURL 不还就是泄漏
+  if (videoItem.value) URL.revokeObjectURL(videoItem.value.previewUrl)
+  videoItem.value = reactive<PendingVideo>({
+    file,
+    previewUrl: URL.createObjectURL(file),
+    uploadedUrl: null,
+    posterUrl: null,
+    posterBlob: null,
+    status: 'pending',
+    progress: 0
+  })
+  void uploadVideo()
+}
+
+/**
+ * 视频上传 = 三步：抽封面 → 传视频 → 传封面。
+ * 顺序刻意如此：封面只有几百 KB，先抽好等着，
+ * 视频传完封面立刻就能跟上，用户不用多等一个往返。
+ */
+async function uploadVideo() {
+  const item = videoItem.value
+  if (!item) return
+  item.status = 'uploading'
+  item.progress = 0
+  item.errorMsg = undefined
+
+  // 1. 抽帧（失败不阻塞：posterUrl 留 null，播放器黑底兜底）
+  if (!item.posterBlob) {
+    item.posterBlob = await captureVideoPoster(item.file).catch(() => null)
+  }
+
+  // 2. 传视频本体（独立端点：限额 50MB、魔数只认 MP4/WebM）
+  const uploaded = await xhrUpload(
+    `${apiBase()}/uploads/video`,
+    (fd) => {
+      fd.append('video', item.file)
+    },
+    VIDEO_UPLOAD_TIMEOUT_MS,
+    (p) => (item.progress = p)
+  )
+  if (!uploaded.ok) {
+    item.status = 'error'
+    item.errorMsg = uploaded.message
+    return
+  }
+  item.uploadedUrl = uploaded.url!
+
+  // 3. 封面走现有图片通道（compressImage 那套服务端校验原样生效）
+  if (item.posterBlob) {
+    const posterFile = new File([item.posterBlob], 'poster.jpg', { type: 'image/jpeg' })
+    const posterRes = await xhrUpload(
+      `${apiBase()}/uploads`,
+      (fd) => {
+        fd.append('files', posterFile)
+      },
+      UPLOAD_TIMEOUT_MS
+    )
+    item.posterUrl = posterRes.ok ? posterRes.url! : null
+  }
+
+  item.status = 'done'
+}
+
+function retryVideo() {
+  void uploadVideo()
+}
+
+function removeVideo() {
+  if (videoItem.value) URL.revokeObjectURL(videoItem.value.previewUrl)
+  videoItem.value = null
+}
+
+function apiBase(): string {
+  return (import.meta.env.VITE_API_BASE as string) || DEFAULT_API_BASE
+}
+
+/**
+ * 视频用的通用 XHR 上传。图片那套 xhrUpload 逻辑和 PendingImage 耦合太深
+ * （进度写回 img、缩略图配对），单独抽一个小的不动原函数 ——
+ * 原 uploader 是全仓库最经不起回归的一段（axios FormData 坑都在那）。
+ */
+function xhrUpload(
+  url: string,
+  fill: (fd: FormData) => void,
+  timeoutMs: number,
+  onProgress?: (pct: number) => void
+): Promise<{ ok: boolean; url?: string; message?: string }> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest()
+    xhr.timeout = timeoutMs
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && e.total > 0 && onProgress) {
+        onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)))
+      }
+    })
+    xhr.addEventListener('timeout', () =>
+      resolve({ ok: false, message: `上传超时（>${timeoutMs / 1000}s）` })
+    )
+    xhr.addEventListener('error', () => resolve({ ok: false, message: '网络错误' }))
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          const first = data.file?.url ?? data.files?.[0]?.url
+          if (first) return resolve({ ok: true, url: first })
+          return resolve({ ok: false, message: '服务器返回为空' })
+        } catch {
+          return resolve({ ok: false, message: '响应解析失败' })
+        }
+      }
+      let serverMsg = ''
+      try {
+        serverMsg = JSON.parse(xhr.responseText).message || ''
+      } catch {
+        /* ignore */
+      }
+      resolve({ ok: false, message: serverMsg || `HTTP ${xhr.status}` })
+    })
+    xhr.open('POST', url)
+    xhr.setRequestHeader('Authorization', `Bearer ${auth.token}`)
+    const fd = new FormData()
+    fill(fd)
+    xhr.send(fd)
+  })
+}
+
 // ===== 取消 =====
 async function onCancel() {
   // 有内容时给提示确认；否则直接返回
-  if (content.value.trim() || topicTag.value.trim() || images.value.length > 0) {
+  if (content.value.trim() || topicTag.value.trim() || images.value.length > 0 || videoItem.value) {
     try {
       await ElMessageBox.confirm('放弃当前编辑？已填写的内容将丢失。', '确认放弃', {
         confirmButtonText: '放弃',
@@ -365,9 +542,9 @@ async function handleSubmit() {
     errorMsg.value = `内容不能超过 ${POST_CONTENT_MAX_LENGTH} 字`
     return
   }
-  // 图全部上传完才能发布
-  if (!allUploaded.value) {
-    errorMsg.value = '请等待图片上传完成'
+  // 媒体都上传完才能发布
+  if (!canSubmit.value) {
+    errorMsg.value = mediaKind.value === 'video' ? '请等待视频上传完成' : '请等待图片上传完成'
     return
   }
 
@@ -387,10 +564,15 @@ async function handleSubmit() {
 
     await postsApi.createPost({
       content: text,
-      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-      imageThumbs: imageThumbs.length > 0 ? imageThumbs : undefined,
+      imageUrls: mediaKind.value === 'image' && imageUrls.length > 0 ? imageUrls : undefined,
+      imageThumbs: mediaKind.value === 'image' && imageThumbs.length > 0 ? imageThumbs : undefined,
       topicTag: topicTag.value.trim() || undefined,
-      visibility: visibility.value
+      visibility: visibility.value,
+      mediaType: mediaKind.value,
+      videoUrl:
+        mediaKind.value === 'video' ? (videoItem.value?.uploadedUrl ?? undefined) : undefined,
+      videoPoster:
+        mediaKind.value === 'video' ? (videoItem.value?.posterUrl ?? undefined) : undefined
     })
 
     toast.show('发布成功', 'success')
@@ -446,7 +628,19 @@ async function handleSubmit() {
             </div>
           </el-form-item>
 
-          <el-form-item>
+          <el-form-item label="媒体类型">
+            <el-radio-group
+              :model-value="mediaKind"
+              size="small"
+              @update:model-value="switchMediaKind($event as PostMediaType)"
+            >
+              <el-radio-button value="image">图文</el-radio-button>
+              <el-radio-button value="video">视频</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- ===== 图文上传（mediaKind=image）===== -->
+          <el-form-item v-if="mediaKind === 'image'">
             <div class="upload-label">
               <span>图片</span>
               <span class="upload-count">
@@ -550,6 +744,99 @@ async function handleSubmit() {
             </ul>
           </el-form-item>
 
+          <!-- ===== 视频上传（mediaKind=video）===== -->
+          <el-form-item v-else>
+            <div class="upload-label">
+              <span>视频</span>
+              <span class="upload-count">单个 ≤ {{ VIDEO_MAX_SIZE_MB }}MB，MP4 / WebM</span>
+            </div>
+
+            <el-upload
+              v-if="!videoItem"
+              class="upload-dragger"
+              drag
+              accept="video/mp4,video/webm"
+              :auto-upload="false"
+              :show-file-list="false"
+              :on-change="handleVideoChange"
+            >
+              <div class="upload-inner">
+                <el-icon class="upload-icon"><component :is="VideoCameraFilled" /></el-icon>
+                <p class="upload-text">把视频拖到这儿，或<em>点击选择</em></p>
+                <p class="upload-hint">封面会自动从视频里抽一帧</p>
+              </div>
+            </el-upload>
+
+            <!-- 已选视频：预览播放器 + 封面 + 状态 -->
+            <div v-else class="video-preview-box">
+              <video
+                class="video-preview"
+                :src="videoItem.previewUrl"
+                controls
+                preload="metadata"
+              ></video>
+
+              <div class="video-side">
+                <div class="poster-row">
+                  <img
+                    v-if="videoItem.posterUrl || videoItem.posterBlob"
+                    :src="videoItem.posterUrl ?? videoItem.previewUrl"
+                    class="poster-thumb"
+                    alt="视频封面"
+                  />
+                  <div v-else class="poster-thumb poster-empty">封面待生成</div>
+                  <div class="poster-meta">
+                    <span class="poster-label">封面（自动抽帧）</span>
+                    <span class="video-filename" :title="videoItem.file.name">
+                      {{ videoItem.file.name }}
+                    </span>
+                  </div>
+                </div>
+
+                <el-progress
+                  v-if="videoItem.status === 'uploading'"
+                  :percentage="videoItem.progress"
+                  :stroke-width="4"
+                  :show-text="false"
+                />
+
+                <div class="video-status-row">
+                  <el-tag
+                    v-if="videoItem.status === 'done'"
+                    type="success"
+                    size="small"
+                    effect="plain"
+                  >
+                    已上传
+                  </el-tag>
+                  <el-tag
+                    v-else-if="videoItem.status === 'error'"
+                    type="danger"
+                    size="small"
+                    effect="plain"
+                  >
+                    {{ videoItem.errorMsg || '上传失败' }}
+                  </el-tag>
+                  <el-tag v-else type="info" size="small" effect="plain">
+                    {{ videoItem.status === 'pending' ? '排队中' : `${videoItem.progress}%` }}
+                  </el-tag>
+
+                  <div class="video-actions">
+                    <el-button
+                      v-if="videoItem.status === 'error'"
+                      size="small"
+                      type="primary"
+                      plain
+                      @click="retryVideo"
+                    >
+                      重试
+                    </el-button>
+                    <el-button size="small" text @click="removeVideo">移除</el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-form-item>
           <!-- 可见性：两档，把后果直接写在下面 —— 用户点「仅自己可见」时
                最想知道的是「那它到底会不会出现在别人的首页」，不是这个开关叫什么 -->
           <el-form-item label="谁可以看">
@@ -860,5 +1147,82 @@ async function handleSubmit() {
   font-size: var(--fs-sm);
   line-height: 1.6;
   color: var(--muted-foreground);
+}
+
+/* ===== 视频预览区 ===== */
+.video-preview-box {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+}
+
+.video-preview {
+  width: 320px;
+  max-height: 240px;
+  flex-shrink: 0;
+  background: #000;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.video-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.poster-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.poster-thumb {
+  width: 96px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--muted);
+  flex-shrink: 0;
+}
+
+.poster-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2xs);
+  color: var(--muted-foreground);
+}
+
+.poster-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.poster-label {
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+}
+
+.video-filename {
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.video-actions {
+  margin-left: auto;
 }
 </style>

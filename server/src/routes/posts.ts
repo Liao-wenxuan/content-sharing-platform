@@ -9,10 +9,19 @@ import {
   isContentCategory,
   UPLOAD_MAX_FILES
 } from '../constants'
-import { thumbsFromRow, parseThumbs } from '../lib/postImages'
+import { thumbsFromRow, parseThumbs, mediaFromRow } from '../lib/postImages'
 import { parseVisibility, canViewPost, PUBLIC_ONLY } from '../lib/visibility'
 
 const router = Router()
+
+/**
+ * 媒体 URL 只认 /uploads/ 前缀。
+ * 放宽到任意字符串的话，一篇笔记的「视频地址」可以指向 /api/* 或外站，
+ * 要么 404，要么把站内媒体变成任意资源引用的口子。
+ */
+function asUploadPath(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.startsWith('/uploads/') && raw.length < 500 ? raw : null
+}
 
 router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
   try {
@@ -21,7 +30,16 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       return res.status(401).json({ message: '未登录' })
     }
 
-    const { content, imageUrls, imageThumbs, topicTag, visibility } = req.body
+    const {
+      content,
+      imageUrls,
+      imageThumbs,
+      topicTag,
+      visibility,
+      mediaType,
+      videoUrl,
+      videoPoster
+    } = req.body
 
     // 宽松写入、严格读取：认不出来的值一律按 public
     const postVisibility = parseVisibility(visibility)
@@ -31,6 +49,24 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
     }
     if (content.length > POST_CONTENT_MAX_LENGTH) {
       return res.status(400).json({ message: `内容不能超过 ${POST_CONTENT_MAX_LENGTH} 字` })
+    }
+
+    // ===== 媒体类型 =====
+    // 一条笔记要么是图文、要么是视频，**不允许两者混发**：
+    // 混发的封面逻辑（瀑布流第一张图 vs 视频海报）会变成每个列表页
+    // 都要写一遍「有视频且有图听谁的」，这种规则没有第二个人记得住。
+    const isVideo = mediaType === 'video'
+
+    // URL 必须以 /uploads/ 开头 —— 这个前缀是 express.static 挂出来的目录，
+    // 之外的路径（/api/*、http:// 外链、../../ 逃逸）要么打不开，要么是把
+    // 「笔记媒体」变成「任意资源引用」的口子。
+    const cleanVideoUrl = isVideo ? asUploadPath(videoUrl) : null
+    if (isVideo && !cleanVideoUrl) {
+      return res.status(400).json({ message: '视频笔记必须携带 /uploads/ 下的视频地址' })
+    }
+    const cleanVideoPoster = isVideo ? asUploadPath(videoPoster) : null
+    if (isVideo && videoPoster && !cleanVideoPoster) {
+      return res.status(400).json({ message: '视频封面必须指向 /uploads/ 下的图片' })
     }
 
     // 图片数量必须服务端也卡一道。
@@ -57,18 +93,28 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
     const result = db
       .prepare(
         `
-      INSERT INTO posts (user_id, content, image_urls, image_thumbs, topic_tag, visibility)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO posts (user_id, content, image_urls, image_thumbs, topic_tag, visibility, media_type, video_url, video_poster)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
       )
-      .run(userId, content.trim(), imageUrlsJson, imageThumbsJson, topicTag || null, postVisibility)
+      .run(
+        userId,
+        content.trim(),
+        imageUrlsJson,
+        imageThumbsJson,
+        topicTag || null,
+        postVisibility,
+        isVideo ? 'video' : 'image',
+        cleanVideoUrl,
+        cleanVideoPoster
+      )
 
     const postId = result.lastInsertRowid as number
 
     const newPost = db
       .prepare(
         `
-      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, created_at
+      SELECT id, user_id, content, image_urls, image_thumbs, topic_tag, visibility, media_type, video_url, video_poster, created_at
       FROM posts WHERE id = ?
     `
       )
@@ -82,6 +128,7 @@ router.post('/', writeLimiter, requireAuth, (req: Request, res: Response) => {
       imageThumbs: thumbsFromRow(newPost),
       topicTag: newPost.topic_tag,
       visibility: newPost.visibility,
+      ...mediaFromRow(newPost),
       createdAt: toISO(newPost.created_at)
     })
   } catch (err: any) {
@@ -157,7 +204,7 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -178,6 +225,7 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
       imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
       imageThumbs: thumbsFromRow(row),
       topicTag: row.topic_tag,
+      ...mediaFromRow(row),
       createdAt: toISO(row.created_at),
       likeCount: row.like_count,
       commentCount: row.comment_count,
@@ -254,7 +302,7 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -276,6 +324,7 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
         imageUrls: row.image_urls ? JSON.parse(row.image_urls) : [],
         imageThumbs: thumbsFromRow(row),
         topicTag: row.topic_tag,
+        ...mediaFromRow(row),
         createdAt: toISO(row.created_at),
         likeCount: row.like_count,
         commentCount: row.comment_count,
@@ -399,7 +448,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       .prepare(
         `
       SELECT
-        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.created_at,
+        p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
         (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
@@ -437,6 +486,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
       imageThumbs: thumbsFromRow(row),
       topicTag: row.topic_tag,
       visibility: row.visibility,
+      ...mediaFromRow(row),
       createdAt: toISO(row.created_at),
       likeCount: row.like_count,
       commentCount: row.comment_count,

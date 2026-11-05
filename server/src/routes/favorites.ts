@@ -5,7 +5,7 @@ import { writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { FOLDER_NAME_MAX_LENGTH, FOLDER_MAX_COUNT } from '../constants'
 import { createNotification } from '../lib/notify'
-import { thumbsFromRow } from '../lib/postImages'
+import { thumbsFromRow, mediaFromRow } from '../lib/postImages'
 
 /**
  * 收藏 / 收藏夹
@@ -171,7 +171,7 @@ router.get('/me/favorites', requireAuth, (req: Request, res: Response) => {
 
     const rows = db
       .prepare(
-        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.media_type, p.video_url, p.video_poster, p.created_at,
                 f.folder_id, f.created_at AS faved_at,
                 u.nickname AS author_nickname, u.avatar AS author_avatar,
                 (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
@@ -193,6 +193,7 @@ router.get('/me/favorites', requireAuth, (req: Request, res: Response) => {
         imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
         imageThumbs: thumbsFromRow(r),
         topicTag: r.topic_tag,
+        ...mediaFromRow(r),
         createdAt: toISO(r.created_at),
         favoritedAt: toISO(r.faved_at),
         folderId: r.folder_id,

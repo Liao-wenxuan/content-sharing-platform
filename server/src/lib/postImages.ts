@@ -74,3 +74,39 @@ export function parseThumbs(rawThumbs: unknown, rawUrls: unknown): string[] {
 export function thumbsFromRow(row: PostImageRow): string[] {
   return parseThumbs(row.image_thumbs, row.image_urls)
 }
+
+// ===== 视频笔记字段 =====
+//
+// 和 thumbsFromRow 同一个理由：media_type / video_url / video_poster 是
+// 可选列（老库 / 老笔记没有），各条查询链路的映射代码是分散的，
+// 兜底收敛到一处，前端就可以写 `post.videoUrl` 而不用 `?? null`。
+//
+// 注意：SELECT 里**没有带这三列**时也安全 —— 全部退回「图文笔记」默认值，
+// 所以给老查询加字段可以逐条来，不用一次改完。
+
+export type PostMediaRow = {
+  media_type?: unknown
+  video_url?: unknown
+  video_poster?: unknown
+}
+
+export interface PostMedia {
+  mediaType: 'image' | 'video'
+  videoUrl: string | null
+  videoPoster: string | null
+}
+
+function asUrl(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.startsWith('/uploads/') ? raw : null
+}
+
+export function mediaFromRow(row: PostMediaRow): PostMedia {
+  if (row.media_type === 'video') {
+    return {
+      mediaType: 'video',
+      videoUrl: asUrl(row.video_url),
+      videoPoster: asUrl(row.video_poster)
+    }
+  }
+  return { mediaType: 'image', videoUrl: null, videoPoster: null }
+}

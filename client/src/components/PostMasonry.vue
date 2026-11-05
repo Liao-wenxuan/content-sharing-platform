@@ -144,6 +144,11 @@ const columns = computed(() => {
  * 但仍留一个 `||`，因为它是零成本的，而断图不是。
  */
 function coverSrc(post: Post): string {
+  // 视频笔记的封面是前端抽帧上传的海报；没有海报时落到占位块，
+  // 而不是 <video> —— 瀑布流里嵌几十个视频解码器是性能灾难
+  if (post.mediaType === 'video') {
+    return post.videoPoster || ''
+  }
   return post.imageThumbs?.[0] || post.imageUrls[0]
 }
 
@@ -242,7 +247,7 @@ function markCoverBroken(postId: number) {
           <!-- 封面：有图显示图，无图也保留同尺寸占位，保证列高均匀 -->
           <div class="cover" :class="`ratio-${item.ratio}`">
             <img
-              v-if="item.post.imageUrls?.length && !brokenCovers.has(item.post.id)"
+              v-if="coverSrc(item.post) && !brokenCovers.has(item.post.id)"
               class="sg-img"
               :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
               :src="coverSrc(item.post)"
@@ -258,7 +263,8 @@ function markCoverBroken(postId: number) {
             <span v-if="item.post.imageUrls && item.post.imageUrls.length > 1" class="count-badge">
               +{{ item.post.imageUrls.length }}
             </span>
-            <span v-if="item.post.topicTag === '视频'" class="play-badge">
+            <!-- 视频角标：真正的 mediaType 判断，替代以前「话题 == 视频」的猜测 -->
+            <span v-if="item.post.mediaType === 'video'" class="play-badge">
               <el-icon><component :is="VideoPlay" /></el-icon>
             </span>
 
@@ -546,8 +552,23 @@ function markCoverBroken(postId: number) {
   position: absolute;
   right: 8px;
   top: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
   color: #fff;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+  backdrop-filter: blur(2px);
+  /* 卡片 hover 时角标跟着放大 —— 参考动效里「卡片被拿起来」的同一套手感，
+     封面 zoom 1.04、角标 1.1，差值让角标有浮出来的层次 */
+  transition: transform var(--dur-fast) var(--ease-out-expo);
+}
+
+.card:hover .play-badge,
+.card:focus-visible .play-badge {
+  transform: scale(1.1);
 }
 
 /* 推荐理由：贴底的小胶囊，不遮挡主体内容 */

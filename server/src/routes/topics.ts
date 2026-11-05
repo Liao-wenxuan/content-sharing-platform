@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import db from '../lib/db'
 import { optionalAuth } from '../middleware/auth'
 import { toISO } from '../lib/time'
-import { thumbsFromRow } from '../lib/postImages'
+import { thumbsFromRow, mediaFromRow } from '../lib/postImages'
 
 /**
  * 话题
@@ -136,7 +136,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
 
     const rows = db
       .prepare(
-        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.media_type, p.video_url, p.video_poster, p.created_at,
                 u.nickname AS author_nickname, u.avatar AS author_avatar,
                 (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS like_count,
                 (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
@@ -191,6 +191,7 @@ router.get('/:tag', optionalAuth, (req: Request, res: Response) => {
         imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
         imageThumbs: thumbsFromRow(r),
         topicTag: r.topic_tag,
+        ...mediaFromRow(r),
         createdAt: toISO(r.created_at),
         likeCount: r.like_count,
         commentCount: r.comment_count,

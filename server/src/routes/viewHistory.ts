@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth'
 import { viewLimiter, writeLimiter } from '../middleware/rateLimit'
 import { toISO } from '../lib/time'
 import { VIEW_HISTORY_LIMIT } from '../constants'
-import { thumbsFromRow } from '../lib/postImages'
+import { thumbsFromRow, mediaFromRow } from '../lib/postImages'
 
 /**
  * 浏览记录
@@ -113,7 +113,7 @@ router.get('/me/view-history', requireAuth, (req: Request, res: Response) => {
     // 全项目一致地「不维护冗余计数」（理由和 likes / favorites 一样）。
     const rows = db
       .prepare(
-        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.created_at,
+        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.media_type, p.video_url, p.video_poster, p.created_at,
                 v.viewed_at,
                 (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS like_count,
                 (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count,
@@ -136,6 +136,7 @@ router.get('/me/view-history', requireAuth, (req: Request, res: Response) => {
         imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
         imageThumbs: thumbsFromRow(r),
         topicTag: r.topic_tag,
+        ...mediaFromRow(r),
         createdAt: toISO(r.created_at),
         likeCount: r.like_count,
         commentCount: r.comment_count,

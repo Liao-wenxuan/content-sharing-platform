@@ -385,10 +385,9 @@ watch(
 
 <template>
   <div class="detail">
-    <header class="page-header">
-      <el-button link :icon="ArrowLeft" class="back-btn" @click="goBack">返回</el-button>
-      <h1 class="page-title">笔记详情</h1>
-    </header>
+    <!-- 阅读进度条：参考「顶部进度条动画」，纯 CSS scroll-timeline，
+         不支持的浏览器自动隐藏（@supports 包住），零 JS 开销 -->
+    <div class="reading-progress" aria-hidden="true"></div>
 
     <EmptyState v-if="loading" variant="loading" title="加载笔记..." hint="马上就好" />
 
@@ -403,8 +402,14 @@ watch(
     <div v-else-if="post" class="detail-grid">
       <!-- ================= 左栏：正文 ================= -->
       <article class="main-col">
-        <!-- 作者栏 -->
+        <!-- 作者栏：返回按钮收进这一行的行首。
+             之前它是独立的一行页头（‹ 返回 笔记详情）悬在卡片外，
+             和下面的卡片没有视觉连接，看起来像放错了地方；
+             「笔记详情」这个标题也没有任何信息量，删掉。 -->
         <header class="author-bar">
+          <button type="button" class="back-fab" aria-label="返回" @click="goBack">
+            <el-icon :size="16"><component :is="ArrowLeft" /></el-icon>
+          </button>
           <el-avatar :size="44" :src="post.author?.avatar || undefined" class="avatar" alt="">
             {{ avatarText(post.author?.nickname) }}
           </el-avatar>
@@ -425,8 +430,20 @@ watch(
           </el-button>
         </header>
 
-        <!-- 图片区：ElImage 自带灯箱预览，缩略图切换主图 -->
-        <section v-if="post.imageUrls?.length" class="image-section">
+        <!-- 媒体区：图文走 ElImage（自带灯箱），视频走原生播放器 -->
+        <section v-if="post.mediaType === 'video' && post.videoUrl" class="image-section">
+          <video
+            class="video-player"
+            :src="post.videoUrl"
+            :poster="post.videoPoster ?? undefined"
+            controls
+            preload="metadata"
+            playsinline
+            :aria-label="`${post.author?.nickname ?? '作者'} 的笔记视频`"
+          ></video>
+        </section>
+
+        <section v-else-if="post.imageUrls?.length" class="image-section">
           <el-image
             class="main-image"
             :src="post.imageUrls[currentImageIndex]"
@@ -667,36 +684,60 @@ watch(
 </template>
 
 <style scoped>
+/*
+ * 详情页要比通用内容区更宽 —— 这里的主角是一张大图/一个视频，
+ * 1080 的通用上限会让媒体缩成窗口中间一小块，两侧全是留白。
+ * 1200 配合下面的 1.7 : 1 双栏，媒体区拿到实打实的宽度。
+ */
 .detail {
-  max-width: var(--content-max-width);
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 20px;
+/* ===== 阅读进度条（参考「顶部进度条动画」）===== */
+/* scaleX 由 scroll-timeline 驱动：滚动到哪，条就到哪。
+   整个效果零 JS；不支持 animation-timeline 的浏览器（Firefox 旧版）
+   直接不渲染 —— @supports 保证它是纯增强。 */
+.reading-progress {
+  display: none;
 }
 
-.back-btn {
-  padding: 0;
-  height: auto;
-  font-size: var(--fs-base);
-}
+@supports (animation-timeline: scroll()) {
+  .reading-progress {
+    display: block;
+    position: fixed;
+    top: var(--top-bar-height);
+    left: 0;
+    z-index: 3;
+    width: 100%;
+    height: 3px;
+    background: var(--accent);
+    background: linear-gradient(
+      to right,
+      var(--accent),
+      color-mix(in srgb, var(--accent) 45%, transparent)
+    );
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+    animation: progress-grow auto linear;
+    animation-timeline: scroll(root);
+    pointer-events: none;
+  }
 
-.page-title {
-  font-size: var(--fs-lg);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0;
-  color: var(--foreground);
+  @keyframes progress-grow {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
 }
 
 /* ===== 双栏 ===== */
 .detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -743,6 +784,39 @@ watch(
   padding-bottom: 14px;
 }
 
+/* 返回钮：圆形、和头像同高，收在作者栏行首。
+   hover 时轻微放大 + 边框点亮 —— 抄「文章卡预览效果」的 scale 手感。 */
+.back-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    color 0.18s,
+    border-color 0.18s,
+    background 0.18s;
+}
+
+.back-fab:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 14%, var(--el-bg-color));
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+
+.back-fab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .avatar {
   background: var(--muted);
   color: var(--foreground);
@@ -770,21 +844,36 @@ watch(
   flex-shrink: 0;
 }
 
-/* ===== 图片区 ===== */
+/* ===== 媒体区 ===== */
 .image-section {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
 
+/* 16/10 比媒体区原来的 4/3 更接近真实照片构图，竖图 contain 两侧留黑也自然 */
 .main-image {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
+  max-height: 68vh;
   background: var(--muted);
 }
 
 .main-image :deep(.el-image__inner) {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+}
+
+/* 视频播放器：黑底是刻意的 —— 信箱模式（letterbox），
+   视频没铺满时黑边属于播放器而不是页面底色 */
+.video-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 68vh;
+  background: #000;
   object-fit: contain;
 }
 
