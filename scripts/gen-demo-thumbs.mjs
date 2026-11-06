@@ -34,7 +34,6 @@ async function makeThumb(page, file) {
         img.src = dataUrl
       })
 
-
       const long = Math.max(img.naturalWidth, img.naturalHeight)
       const ratio = long > maxEdge ? maxEdge / long : 1
       const w = Math.max(1, Math.round(img.naturalWidth * ratio))
