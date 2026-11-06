@@ -16,7 +16,7 @@
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
 import { readdirSync, existsSync, mkdirSync, writeFileSync, copyFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, basename } from 'node:path'
 
 const path = (p) => new URL(p, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')
 // DB_PATH 和 server/src/lib/db.ts 保持一致，容器里两者必须指向同一个库
@@ -92,6 +92,7 @@ function generatePlaceholders(count = 12) {
 }
 
 const photos = new Map()
+const thumbs = new Map()
 if (!existsSync(DEMO_DIR)) {
   const n = generatePlaceholders()
   console.log(`uploads/demo/ 不存在，已生成 ${n} 张占位图（npm run seed:photos 可换成真照片）`)
@@ -99,9 +100,17 @@ if (!existsSync(DEMO_DIR)) {
 if (existsSync(DEMO_DIR)) {
   for (const f of readdirSync(DEMO_DIR)) {
     const m = /^d(\d+)-/.exec(f)
-    if (m) photos.set(`d${m[1]}`, `/uploads/demo/${f}`)
+    if (!m) continue
+    photos.set(`d${m[1]}`, `/uploads/demo/${f}`)
+    // 缩略图可选：gen-demo-thumbs.mjs 生成过才有。缺了不强凑——
+    // image_thumbs 长度和 image_urls 对不上比 NULL 更糟（前端按位对齐），
+    // NULL 时服务端会回退到原图 URL，只是慢一点，不会错位。
+    const thumb = `/uploads/demo/${basename(f, '.jpg')}_thumb.webp`
+    if (existsSync(join(DEMO_DIR, basename(thumb)))) {
+      thumbs.set(`d${m[1]}`, thumb)
+    }
   }
-  console.log(`可用配图 ${photos.size} 张`)
+  console.log(`可用配图 ${photos.size} 张（缩略图 ${thumbs.size} 张）`)
 } else {
   console.log(
     `可用配图 0 张（${DEMO_DIR} 不存在）——\n` +
@@ -114,6 +123,14 @@ const img = (key) => photos.get(key) || null
 const imgs = (...keys) => {
   const list = keys.map(img).filter(Boolean)
   return list.length ? JSON.stringify(list) : null
+}
+// 缩略图数组和 image_urls 必须逐位对齐（同样的 key 过滤 + 顺序）；
+// 有任何一张缺缩略图就整体回 NULL——服务端/前端会回退原图，慢但不会错位
+const imgThumbs = (...keys) => {
+  const present = keys.filter((k) => photos.get(k))
+  if (!present.length) return null
+  const ts = present.map((k) => thumbs.get(k) ?? null)
+  return ts.every(Boolean) ? JSON.stringify(ts) : null
 }
 
 // ---------- 2. 清理 ----------
@@ -349,8 +366,8 @@ const POSTS = [
 ]
 
 const insertPost = db.prepare(
-  `INSERT INTO posts (user_id, content, image_urls, topic_tag, created_at)
-   VALUES (?, ?, ?, ?, datetime('now', ?))`
+  `INSERT INTO posts (user_id, content, image_urls, image_thumbs, topic_tag, created_at)
+   VALUES (?, ?, ?, ?, ?, datetime('now', ?))`
 )
 const lastId = db.prepare('SELECT last_insert_rowid() AS id')
 const like = db.prepare('INSERT OR IGNORE INTO likes (user_id, post_id) VALUES (?, ?)')
@@ -360,7 +377,7 @@ let noImage = 0
 for (const p of POSTS) {
   const urls = imgs(...p.i)
   if (!urls) noImage++
-  insertPost.run(userIds[p.u], p.c, urls, p.tag, `-${n * 41} minutes`)
+  insertPost.run(userIds[p.u], p.c, urls, imgThumbs(...p.i), p.tag, `-${n * 41} minutes`)
   n++
   const id = lastId.get().id
   // 给部分笔记补点赞，让首页数字不至于全是 0

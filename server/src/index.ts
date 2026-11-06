@@ -19,8 +19,17 @@ const corsOrigins =
   env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((s) => s.trim())
 app.use(cors({ origin: corsOrigins, credentials: true }))
 app.use(express.json()) // 自动解析 application/json 请求体
-// 静态资源：/uploads/* 由 uploadsRouter 上传后的图片可被浏览器直接访问
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
+// 静态资源：/uploads/* 由 uploadsRouter 上传后的图片可被浏览器直接访问。
+// 文件名带时间戳（上传）或是 seed 的固定演示素材，内容写定后不变 → 可以放心
+// immutable。线上慢的另一半原因：没有缓存头，每次刷新都把几百 KB 的封面
+// 重新拉一遍（2026-11-06 给 /uploads 加 30d，/assets 的 immutable 由 Caddy 配）。
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'uploads'), {
+    maxAge: '30d',
+    immutable: true
+  })
+)
 // 所有 API 路由（顺序要求见 lib/mount-routes.ts）
 mountApiRouters(app)
 
