@@ -40,14 +40,6 @@ html.dark {
   --el-color-error: #e5484d;
   --el-color-info: var(--text-3);
 
-  /*
-   * badge 的底色要单拉一档：badge 是 11px 常规字重（axe 按小字算，AA 要 4.5:1），
-   * 白字压 #e5484d 只有 3.91 —— 主题注释里写的「够按钮用」对按钮成立（大字 3:1），
-   * 对 badge 不成立。#cf3439 = 5.0:1，肉眼和 #e5484d 几乎无差。
-   * 不改 --el-color-danger 本身：按钮那些大字场景 3.91 就够，犯不着全局变暗。
-   */
-  --el-badge-bg-color: #cf3439;
-
   /* 背景层级：四级面，对应 token 的 surface-0..3 */
   --el-bg-color: #1e1e20; /* 卡片面 */
   --el-bg-color-page: #19191b; /* 页面底 */
@@ -431,6 +423,22 @@ html.dark .el-button--danger.is-plain,
   background: color-mix(in srgb, var(--destructive) 12%, transparent) !important;
   color: var(--destructive-text) !important;
   border-color: color-mix(in srgb, var(--destructive) 45%, transparent) !important;
+}
+
+/*
+ * badge 也是「小字压填充色」：11px 常规字重，AA 要 4.5:1，
+ * 白字压 #e5484d 只有 3.91 —— 按钮注释里那句「够按钮用」对 badge 不成立。
+ * #cf3439 = 5.0:1，肉眼和 #e5484d 几乎无差。
+ *
+ * ⚠️ 这条踩了两层坑才生效（2026-11-06）：
+ * 1. 写 `--el-badge-bg-color` 没用 —— danger 徽标的背景色**不走这个变量**，
+ *    Element Plus 的 `.el-badge__content--danger` 直接
+ *    `background-color: var(--el-color-danger)`，改变量是被绕过的路径。
+ * 2. 所以只能直接覆盖 background-color，且要带上 --danger 修饰类
+ *    （html.dark .el-badge 的特异度压不过它自己的单类选择器 + 变量路径）。
+ */
+html.dark .el-badge__content--danger {
+  background-color: #cf3439;
 }
 
 /*
