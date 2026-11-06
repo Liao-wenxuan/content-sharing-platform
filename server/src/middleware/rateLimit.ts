@@ -11,7 +11,9 @@ import { env } from '../lib/env'
  *
  * 注意：
  * - 默认按 IP 限（req.ip）；dev 环境下所有请求都是 127.0.0.1，本机测试会被一起限
- * - 生产部署到 nginx/cloudflare 后面时确保 `app.set('trust proxy', 1)` 才能正确拿真实 IP
+ * - 生产部署到 nginx/Caddy 后面时必须在 server/.env 设 TRUST_PROXY=1（见 lib/trust-proxy.ts）：
+ *   不设的话 req.ip 全是代理的 IP（所有访客共享一个桶），且 X-Forwarded-For
+ *   与 trust proxy 不一致会让 express-rate-limit 抛 ValidationError → 请求 500
  * - limit 数字是"经验值"，可以根据实际流量调整
  * - 测试环境（NODE_ENV=test）跳过限流，supertest 同一 IP 跑几百个 case 会撞墙
  */

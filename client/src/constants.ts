@@ -65,5 +65,12 @@ export const AVATAR_MAX_EDGE = 400
  */
 export const COVER_MAX_EDGE = 1600
 
-// API base（开发默认指向本地 Express + SQLite；生产会通过 VITE_API_BASE 覆盖）
-export const DEFAULT_API_BASE = 'http://localhost:3000/api'
+// API base 的**最后兜底**（优先级：VITE_API_BASE > 这个值）。
+//
+// 必须区分 dev/prod —— 2026-11-06 的线上事故：
+//   老回退写死 'http://localhost:3000/api'，生产构建依赖部署的人记得
+//   `VITE_API_BASE=/api npm run build`。忘一次，bundle 里就静态替换进
+//   一个 localhost:3000，整站 API 静默指向访客自己的机器（ERR_CONNECTION_REFUSED）。
+//   Vite 在构建期把 import.meta.env.PROD 烧进产物，于是裸 `npm run build`
+//   从此永远得到 '/api'（同源，Caddy/nginx 反代 /api 即可），dev 仍打 3000。
+export const DEFAULT_API_BASE = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api'

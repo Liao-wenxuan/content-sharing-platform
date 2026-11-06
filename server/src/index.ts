@@ -5,11 +5,15 @@ import { env } from './lib/env' // 必须在最前，加载 .env + 校验
 import { mountApiRouters } from './lib/mount-routes'
 import { attachWebSocketServer } from './ws/server'
 import { notFoundHandler, errorHandler } from './middleware/error'
+import { applyTrustProxy } from './lib/trust-proxy'
 import db from './lib/db'
 
 const app = express()
 
 // ===== 中间件 =====
+// 反代信任：Caddy/nginx 后面部署时设 TRUST_PROXY=1，否则限流器会拿代理 IP
+// 当客户端 IP（全部访客共享一个限流桶），还可能因 XFF 矛盾配置抛 500
+applyTrustProxy(app)
 // CORS：dev 默认全开（前端 localhost:5173 调后端 3000），prod 走白名单
 const corsOrigins =
   env.CORS_ORIGINS === '*' ? true : env.CORS_ORIGINS.split(',').map((s) => s.trim())

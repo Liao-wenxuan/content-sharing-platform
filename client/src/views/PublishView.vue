@@ -352,8 +352,9 @@ async function uploadImage(img: PendingImage) {
       resolve()
     })
 
-    // 用绝对 URL 而不是相对路径 — XHR 用相对路径会指向 5173（Vite dev），
-    // 必须直接打 3000 后端，否则 Vite SPA 会返 404 index.html
+    // API base 用 DEFAULT_API_BASE：dev 下是绝对 URL http://localhost:3000/api
+    // （XHR 相对路径会指向 5173，被 Vite SPA fallback 返 404）；
+    // prod 下是同源相对路径 /api（见 constants.ts 的事故注释）。
     const API_BASE = (import.meta.env.VITE_API_BASE as string) || DEFAULT_API_BASE
 
     xhr.open('POST', `${API_BASE}/uploads`)

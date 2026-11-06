@@ -6,10 +6,12 @@
  * 只在 Node 端可用），而这个功能的核心就是流式吐字。
  * 所以只有这一个文件绕开 axios，其余接口照旧。
  *
- * 代价是 baseURL 和错误处理要自己维护一份 —— 所以常量从 request.ts 抄过来，
- * 改的时候记得两边一起改（下面有注释标出）。
+ * 代价是 baseURL 和错误处理要自己维护一份 —— 兜底值统一用 constants.ts 的
+ * DEFAULT_API_BASE（dev 打 3000、prod 同源 /api，见那里的注释）。
  */
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000/api'
+import { DEFAULT_API_BASE } from '@/constants'
+
+const API_BASE = import.meta.env.VITE_API_BASE || DEFAULT_API_BASE
 
 export interface AiPostSource {
   type: 'post'

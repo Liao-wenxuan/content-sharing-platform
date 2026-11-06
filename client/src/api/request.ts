@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { DEFAULT_API_BASE } from '@/constants'
 
 // 创建 axios 实例
 // 注意：不要在 headers 里设 Content-Type — 否则 axios 1.x 会保留这个默认值，
@@ -8,7 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 // Content-Type 应该由 axios 根据请求数据自动决定（JSON → application/json，
 // FormData → multipart/form-data; boundary=xxx）。
 const http: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_BASE || DEFAULT_API_BASE,
   timeout: 15000
 })
 

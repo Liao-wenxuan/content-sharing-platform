@@ -49,7 +49,13 @@ export const env = {
   TOKEN_EXPIRES_IN: optional('TOKEN_EXPIRES_IN', '7d') as string,
 
   // CORS 白名单（多个 origin 用逗号分隔）
-  CORS_ORIGINS: optional('CORS_ORIGINS', '*') as string
+  CORS_ORIGINS: optional('CORS_ORIGINS', '*') as string,
+
+  // 反向代理跳数（nginx/Caddy 后面部署时设 1）。
+  // 不设 = 不信任任何代理头（本地直跑的默认，X-Forwarded-For 被无视）。
+  // 必须显式配置而不是「NODE_ENV=production 就自动开」：
+  // 信任层级是部署拓扑的属性，只有部署的人知道前面挂了几层代理。
+  TRUST_PROXY: process.env.TRUST_PROXY || ''
 }
 
 // 启动时打印一份非敏感摘要，方便确认配置生效
