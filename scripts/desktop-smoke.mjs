@@ -130,7 +130,7 @@ await page.locator('.comment-card').waitFor({ state: 'visible' })
 check('详情页作者栏', await page.locator('.author-bar').isVisible())
 check('评论输入框存在', await page.locator('.comment-editor textarea').isVisible())
 
-const likeBtn = page.locator('.actions .el-button').first()
+const likeBtn = page.locator('.actions .action-btn').first()
 const before = Number((await likeBtn.innerText()).replace(/\D/g, '') || 0)
 await likeBtn.click()
 await page.waitForTimeout(600)
@@ -172,7 +172,10 @@ check('昵称已更新', (await page.locator('.nickname').innerText()) === newNi
 // 所以必须是真 PNG 字节，不能随便塞几个字节。
 await page.locator('.edit-btn').click()
 await page.locator('.el-dialog').waitFor({ state: 'visible' })
-check('编辑弹窗里有头像 / 封面两个上传入口', (await page.locator('.el-dialog .el-upload').count()) === 2)
+check(
+  '编辑弹窗里有头像 / 封面两个上传入口',
+  (await page.locator('.el-dialog .el-upload').count()) === 2
+)
 
 const pngBuffer = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',

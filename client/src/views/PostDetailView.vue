@@ -2,15 +2,28 @@
 /**
  * 笔记详情页（桌面端）
  *
- * 布局改造：从移动端「单列上下堆叠」改成 PC 经典双栏 ——
- *   左栏：作者栏 + 图片轮播 + 正文
- *   右栏：评论区（sticky，跟随滚动）
- * 图片轮播从手写 dot 指示器换成 Element Plus 的 ElImage + preview 灯箱。
+ * 2026-11-07 第二次布局重做 —— 用户对上一版（浮卡 + 独立评论侧栏）的原话是
+ * 「布局太丑了，全部重新自己设计」。这一版改成「一张纸」：
+ *
+ *   ┌─────────────────────────────────┐
+ *   │ 媒体（占满左栏全高）  │ 作者栏           │
+ *   │                       │ 正文 / 话题       │
+ *   │                       │ ……评论区滚动……   │
+ *   │                       │ 操作栏（吸底）    │
+ *   └─────────────────────────────────┘
+ *
+ * 上一版的三个病灶都出在「左栏一张白纸、右栏一块板子」——两边不是同一种东西。
+ * 现在整页是一张带描边和投影的纸，媒体和内容共处一格，
+ * 评论不再是被挤出去的孤岛，短正文也不会留下一大片死白。
+ *
+ * ⚠️ 15 套 e2e 冒烟脚本钉住了这批类名（scripts/*-smoke.mjs）：
+ * .detail / .author-bar / .comment-section 的语义钩子全部保留 ——
+ * 布局随便改，这些名字别动，动了 CI 里的 15 套 e2e 会一起陪葬。
  */
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/utils/element'
-import { Star, ChatDotRound, Collection, ArrowLeft, Plus } from '@element-plus/icons-vue'
+import { Star, ChatDotRound, Collection, ArrowLeft } from '@element-plus/icons-vue'
 import { postsApi, type Post } from '@/api/posts'
 import { commentsApi, type Comment } from '@/api/comments'
 import { viewHistoryApi } from '@/api/viewHistory'
@@ -66,6 +79,12 @@ const canFollowAuthor = computed(() => authorId.value !== null && authorId.value
 
 /** 是否是当前笔记的作者 —— 决定评论区要不要给置顶入口 */
 const isPostAuthor = computed(() => post.value !== null && post.value.userId === auth.user?.id)
+
+/** 这条笔记有没有媒体。决定「一张纸」是双栏还是退化成单栏 */
+const hasMedia = computed(
+  () =>
+    (post.value?.mediaType === 'video' && !!post.value?.videoUrl) || !!post.value?.imageUrls?.length
+)
 
 /** 没登录时点收藏要跳登录页（跟点赞保持一致的处理） */
 async function toggleFavorite() {
@@ -270,10 +289,19 @@ function startReply(item: Comment) {
   }
   commentError.value = ''
   replyingTo.value = item
+  focusCommentEditor()
 }
 
 function cancelReply() {
   replyingTo.value = null
+}
+
+/**
+ * 操作栏的「评论」按钮：把焦点交还给输入框。
+ * 比滚动强 —— 焦点过去的同时读屏和键盘用户也直接到了可输入的位置。
+ */
+function focusCommentEditor() {
+  document.querySelector<HTMLTextAreaElement>('.comment-editor textarea')?.focus()
 }
 
 // ===== 评论点赞 =====
@@ -385,7 +413,7 @@ watch(
 
 <template>
   <div class="detail">
-    <!-- 阅读进度条：参考「顶部进度条动画」，纯 CSS scroll-timeline，
+    <!-- 阅读进度条：纯 CSS scroll-timeline，
          不支持的浏览器自动隐藏（@supports 包住），零 JS 开销 -->
     <div class="reading-progress" aria-hidden="true"></div>
 
@@ -399,18 +427,70 @@ watch(
       @action="goBack"
     />
 
-    <div v-else-if="post" class="detail-grid">
-      <!-- ================= 左栏：正文 ================= -->
-      <article class="main-col">
-        <!-- 作者栏：返回按钮收进这一行的行首。
-             之前它是独立的一行页头（‹ 返回 笔记详情）悬在卡片外，
-             和下面的卡片没有视觉连接，看起来像放错了地方；
-             「笔记详情」这个标题也没有任何信息量，删掉。 -->
-        <header class="author-bar">
-          <button type="button" class="back-fab" aria-label="返回" @click="goBack">
-            <el-icon :size="16"><component :is="ArrowLeft" /></el-icon>
+    <article v-else-if="post" class="note-sheet" :class="{ 'note-sheet--text': !hasMedia }">
+      <!-- ================= 左栏：媒体（占满全高） ================= -->
+      <section class="media-pane">
+        <!-- 返回钮悬浮在媒体左上角 —— 照片墙的「✕」惯例，
+             比塞在作者栏里更能表达「离开这张纸」 -->
+        <button type="button" class="back-fab" aria-label="返回" @click="goBack">
+          <el-icon :size="16"><component :is="ArrowLeft" /></el-icon>
+        </button>
+
+        <div v-if="post.mediaType === 'video' && post.videoUrl" class="media-stage">
+          <video
+            class="video-player"
+            :src="post.videoUrl"
+            :poster="post.videoPoster ?? undefined"
+            controls
+            preload="metadata"
+            playsinline
+            :aria-label="`${post.author?.nickname ?? '作者'} 的笔记视频`"
+          ></video>
+        </div>
+
+        <div v-else-if="post.imageUrls?.length" class="media-stage">
+          <el-image
+            class="main-image"
+            :src="post.imageUrls[currentImageIndex]"
+            :preview-src-list="post.imageUrls"
+            :initial-index="currentImageIndex"
+            :alt="`${post.author?.nickname ?? '作者'} 的笔记配图`"
+            preview-teleported
+            hide-on-click-modal
+            fit="contain"
+          />
+          <!-- 张数指示：图片多的时候用户得知道还能往后翻 -->
+          <span v-if="post.imageUrls.length > 1" class="image-counter" aria-hidden="true">
+            {{ currentImageIndex + 1 }} / {{ post.imageUrls.length }}
+          </span>
+        </div>
+
+        <!-- 纯文字笔记：左栏退化成一块带话题的展示面，而不是消失 -->
+        <div v-else class="media-stage media-stage--text">
+          <span class="text-mark" aria-hidden="true">#</span>
+          <span class="text-topic">{{ post.topicTag || '纯文字笔记' }}</span>
+        </div>
+
+        <!-- 缩略图条：多图时放在媒体区底部 -->
+        <div v-if="post.imageUrls && post.imageUrls.length > 1" class="thumbs">
+          <button
+            v-for="(url, i) in post.imageUrls"
+            :key="url"
+            type="button"
+            class="thumb"
+            :class="{ active: i === currentImageIndex }"
+            :aria-label="`查看第 ${i + 1} 张图`"
+            @click="currentImageIndex = i"
+          >
+            <img :src="url" :alt="`缩略图 ${i + 1}`" loading="lazy" />
           </button>
-          <el-avatar :size="44" :src="post.author?.avatar || undefined" class="avatar" alt="">
+        </div>
+      </section>
+
+      <!-- ================= 右栏：作者 + 正文 + 评论 + 操作 ================= -->
+      <aside class="side-pane">
+        <header class="author-bar">
+          <el-avatar :size="40" :src="post.author?.avatar || undefined" class="avatar" alt="">
             {{ avatarText(post.author?.nickname) }}
           </el-avatar>
           <div class="author-meta">
@@ -430,271 +510,245 @@ watch(
           </el-button>
         </header>
 
-        <!-- 媒体区：图文走 ElImage（自带灯箱），视频走原生播放器 -->
-        <section v-if="post.mediaType === 'video' && post.videoUrl" class="image-section">
-          <video
-            class="video-player"
-            :src="post.videoUrl"
-            :poster="post.videoPoster ?? undefined"
-            controls
-            preload="metadata"
-            playsinline
-            :aria-label="`${post.author?.nickname ?? '作者'} 的笔记视频`"
-          ></video>
-        </section>
+        <!-- 中段可滚动：正文 + 评论区共用一条滚动轨道，
+             评论不再是「右边一块孤立的板子」 -->
+        <div class="side-scroll">
+          <section class="content-section">
+            <p class="content">{{ post.content }}</p>
 
-        <section v-else-if="post.imageUrls?.length" class="image-section">
-          <el-image
-            class="main-image"
-            :src="post.imageUrls[currentImageIndex]"
-            :preview-src-list="post.imageUrls"
-            :initial-index="currentImageIndex"
-            :alt="`${post.author?.nickname ?? '作者'} 的笔记配图`"
-            preview-teleported
-            hide-on-click-modal
-            fit="contain"
-          />
-          <div v-if="post.imageUrls.length > 1" class="thumbs">
-            <button
-              v-for="(url, i) in post.imageUrls"
-              :key="url"
-              type="button"
-              class="thumb"
-              :class="{ active: i === currentImageIndex }"
-              :aria-label="`查看第 ${i + 1} 张图`"
-              @click="currentImageIndex = i"
-            >
-              <img :src="url" :alt="`缩略图 ${i + 1}`" loading="lazy" />
-            </button>
-          </div>
-        </section>
-
-        <!-- 正文 -->
-        <section class="content-section">
-          <p class="content">{{ post.content }}</p>
-
-          <!-- 话题标签可点：这是笔记详情通往话题页的主入口 -->
-          <el-tag
-            v-if="post.topicTag"
-            type="danger"
-            effect="plain"
-            round
-            class="topic-tag"
-            @click="router.push(topicPath(post.topicTag))"
-          >
-            # {{ post.topicTag }}
-          </el-tag>
-
-          <div class="actions">
-            <el-button
-              class="action-btn"
-              :type="liked ? 'danger' : 'default'"
-              :plain="!liked"
+            <!-- 话题标签可点：这是笔记详情通往话题页的主入口 -->
+            <el-tag
+              v-if="post.topicTag"
+              type="danger"
+              effect="plain"
               round
-              :loading="liking"
-              @click="toggleLike"
+              class="topic-tag"
+              @click="router.push(topicPath(post.topicTag))"
             >
-              <el-icon><component :is="Star" /></el-icon>
-              {{ liked ? '已赞' : '点赞' }} {{ likeCount }}
-            </el-button>
+              # {{ post.topicTag }}
+            </el-tag>
+          </section>
 
-            <el-button
-              class="action-btn"
-              :type="favorited ? 'warning' : 'default'"
-              :plain="!favorited"
-              round
-              :loading="favoriting"
-              @click="toggleFavorite"
-            >
-              <el-icon><component :is="Collection" /></el-icon>
-              {{ favorited ? '已收藏' : '收藏' }} {{ favoriteCount }}
-            </el-button>
+          <!-- ⚠️ .comment-section（comment-smoke 等待）和 .comment-card
+               （desktop-smoke / notification-smoke 定位）必须同时挂着 -->
+          <section class="comment-section comment-card">
+            <h2 class="comment-title">评论 · {{ comments.length }}</h2>
 
-            <el-button
-              v-if="canFollowAuthor"
-              class="action-btn"
-              :type="isFollowing ? 'info' : 'default'"
-              :plain="!isFollowing"
-              round
-              :loading="followingLoading"
-              @click="toggleFollow"
-            >
-              <el-icon><component :is="Plus" /></el-icon>
-              {{ isFollowing ? '已关注' : '关注作者' }}
-            </el-button>
-
-            <span class="stat-hint">
-              <el-icon><component :is="ChatDotRound" /></el-icon>
-              {{ post.commentCount }} 条评论
-            </span>
-          </div>
-        </section>
-      </article>
-
-      <!-- ================= 右栏：评论区 ================= -->
-      <aside class="comment-section">
-        <el-card shadow="never" class="comment-card" body-class="comment-body">
-          <h2 class="comment-title">评论 · {{ comments.length }}</h2>
-
-          <!-- 输入区：只有一个框，点「回复」时切到回复态 -->
-          <div class="comment-editor">
-            <div v-if="replyingTo" class="replying-hint">
-              回复
-              <span class="replying-nick">{{ replyingTo.author?.nickname }}</span>
-              <el-button size="small" text @click="cancelReply">取消</el-button>
-            </div>
-            <el-input
-              v-model="newComment"
-              type="textarea"
-              :rows="3"
-              :maxlength="COMMENT_MAX_LENGTH"
-              show-word-limit
-              resize="none"
-              :placeholder="replyingTo ? `回复 ${replyingTo.author?.nickname}...` : '说点什么...'"
-              @input="onCommentInput"
-              @keydown.ctrl.enter="submitComment"
-            />
-            <div class="editor-actions">
-              <el-button
-                type="primary"
-                :loading="submittingComment"
-                :disabled="!newComment.trim()"
-                @click="submitComment"
-              >
-                {{ replyingTo ? '回复' : '发表评论' }}
-              </el-button>
-            </div>
-            <p v-if="commentError" class="comment-error">{{ commentError }}</p>
-          </div>
-
-          <!-- 列表 -->
-          <el-divider />
-
-          <EmptyState v-if="loadingComments" variant="loading" title="加载评论中..." compact />
-
-          <el-empty
-            v-else-if="comments.length === 0"
-            description="还没有评论，来抢第一条"
-            :image-size="60"
-          />
-
-          <ul v-else class="comment-list">
-            <li v-for="item in comments" :key="item.id" class="comment-item">
-              <el-avatar
-                :size="32"
-                :src="item.author?.avatar || undefined"
-                class="avatar-sm"
-                alt=""
-              >
-                {{ avatarText(item.author?.nickname) }}
-              </el-avatar>
-              <div class="comment-main">
-                <div class="comment-head">
-                  <span class="comment-author">{{ item.author?.nickname || '未知用户' }}</span>
-                  <!-- 置顶是笔记作者对评论的表态，所以要给一个明确的标记，
-                       否则用户只会奇怪为什么这条排在最前面 -->
-                  <span v-if="item.pinnedAt" class="pinned-tag">作者置顶</span>
-                  <span class="comment-time">{{ formatTime(item.createdAt) }}</span>
-                </div>
-                <p class="comment-text">{{ item.content }}</p>
-
-                <div class="comment-actions">
-                  <button
-                    type="button"
-                    class="mini-action"
-                    :class="{ liked: item.liked }"
-                    :disabled="likingCommentId === item.id"
-                    @click="toggleCommentLike(item)"
-                  >
-                    <el-icon><component :is="Star" /></el-icon>
-                    {{ item.likeCount > 0 ? item.likeCount : '赞' }}
-                  </button>
-
-                  <button type="button" class="mini-action" @click="startReply(item)">
-                    <el-icon><component :is="ChatDotRound" /></el-icon>
-                    回复
-                  </button>
-
-                  <!-- 后端只允许笔记作者置顶自己写的评论，前端只负责不给别人入口 -->
-                  <button
-                    v-if="isPostAuthor"
-                    type="button"
-                    class="mini-action"
-                    :disabled="pinningId === item.id"
-                    @click="togglePin(item)"
-                  >
-                    {{ item.pinnedAt ? '取消置顶' : '置顶' }}
-                  </button>
-                </div>
-
-                <!-- 回复：默认展开，用户可以手动收起 -->
-                <div v-if="repliesOf(item.id).length > 0" class="reply-box">
-                  <button type="button" class="reply-toggle" @click="toggleReplies(item.id)">
-                    {{
-                      isRepliesCollapsed(item.id)
-                        ? `展开 ${repliesOf(item.id).length} 条回复`
-                        : '收起回复'
-                    }}
-                  </button>
-
-                  <ul v-if="!isRepliesCollapsed(item.id)" class="reply-list">
-                    <li v-for="r in repliesOf(item.id)" :key="r.id" class="reply-item">
-                      <el-avatar
-                        :size="24"
-                        :src="r.author?.avatar || undefined"
-                        class="avatar-xs"
-                        alt=""
-                      >
-                        {{ avatarText(r.author?.nickname) }}
-                      </el-avatar>
-                      <div class="reply-main">
-                        <div class="reply-head">
-                          <span class="comment-author">{{ r.author?.nickname }}</span>
-                          <span class="comment-time">{{ formatTime(r.createdAt) }}</span>
-                        </div>
-                        <p class="comment-text">{{ r.content }}</p>
-                        <div class="comment-actions">
-                          <button
-                            type="button"
-                            class="mini-action"
-                            :class="{ liked: r.liked }"
-                            :disabled="likingCommentId === r.id"
-                            @click="toggleCommentLike(r)"
-                          >
-                            <el-icon><component :is="Star" /></el-icon>
-                            {{ r.likeCount > 0 ? r.likeCount : '赞' }}
-                          </button>
-                          <!-- 只支持两级：回复区的回复按钮回到「对同一条的补充」，
-                               这里给的是「回复这条一级评论」，避免做出第三层 -->
-                          <button type="button" class="mini-action" @click="startReply(item)">
-                            回复
-                          </button>
-                        </div>
-                      </div>
-                    </li>
-                  </ul>
-                </div>
+            <!-- 输入区：只有一个框，点「回复」时切到回复态 -->
+            <div class="comment-editor">
+              <div v-if="replyingTo" class="replying-hint">
+                回复
+                <span class="replying-nick">{{ replyingTo.author?.nickname }}</span>
+                <el-button size="small" text @click="cancelReply">取消</el-button>
               </div>
-            </li>
-          </ul>
-        </el-card>
+              <el-input
+                v-model="newComment"
+                type="textarea"
+                :rows="3"
+                :maxlength="COMMENT_MAX_LENGTH"
+                show-word-limit
+                resize="none"
+                :placeholder="replyingTo ? `回复 ${replyingTo.author?.nickname}...` : '说点什么...'"
+                @input="onCommentInput"
+                @keydown.ctrl.enter="submitComment"
+              />
+              <div class="editor-actions">
+                <el-button
+                  type="primary"
+                  :loading="submittingComment"
+                  :disabled="!newComment.trim()"
+                  @click="submitComment"
+                >
+                  {{ replyingTo ? '回复' : '发表评论' }}
+                </el-button>
+              </div>
+              <p v-if="commentError" class="comment-error">{{ commentError }}</p>
+            </div>
+
+            <!-- 列表 -->
+            <div class="comment-divider" aria-hidden="true"></div>
+
+            <EmptyState v-if="loadingComments" variant="loading" title="加载评论中..." compact />
+
+            <el-empty
+              v-else-if="comments.length === 0"
+              description="还没有评论，来抢第一条"
+              :image-size="60"
+            />
+
+            <ul v-else class="comment-list">
+              <li v-for="item in comments" :key="item.id" class="comment-item">
+                <el-avatar
+                  :size="32"
+                  :src="item.author?.avatar || undefined"
+                  class="avatar-sm"
+                  alt=""
+                >
+                  {{ avatarText(item.author?.nickname) }}
+                </el-avatar>
+                <div class="comment-main">
+                  <div class="comment-head">
+                    <span class="comment-author">{{ item.author?.nickname || '未知用户' }}</span>
+                    <!-- 置顶是笔记作者对评论的表态，所以要给一个明确的标记，
+                         否则用户只会奇怪为什么这条排在最前面 -->
+                    <span v-if="item.pinnedAt" class="pinned-tag">作者置顶</span>
+                    <span class="comment-time">{{ formatTime(item.createdAt) }}</span>
+                  </div>
+                  <p class="comment-text">{{ item.content }}</p>
+
+                  <div class="comment-actions">
+                    <button
+                      type="button"
+                      class="mini-action"
+                      :class="{ liked: item.liked }"
+                      :disabled="likingCommentId === item.id"
+                      @click="toggleCommentLike(item)"
+                    >
+                      <el-icon><component :is="Star" /></el-icon>
+                      {{ item.likeCount > 0 ? item.likeCount : '赞' }}
+                    </button>
+
+                    <button type="button" class="mini-action" @click="startReply(item)">
+                      <el-icon><component :is="ChatDotRound" /></el-icon>
+                      回复
+                    </button>
+
+                    <!-- 后端只允许笔记作者置顶自己写的评论，前端只负责不给别人入口 -->
+                    <button
+                      v-if="isPostAuthor"
+                      type="button"
+                      class="mini-action"
+                      :disabled="pinningId === item.id"
+                      @click="togglePin(item)"
+                    >
+                      {{ item.pinnedAt ? '取消置顶' : '置顶' }}
+                    </button>
+                  </div>
+
+                  <!-- 回复：默认展开，用户可以手动收起 -->
+                  <div v-if="repliesOf(item.id).length > 0" class="reply-box">
+                    <button type="button" class="reply-toggle" @click="toggleReplies(item.id)">
+                      {{
+                        isRepliesCollapsed(item.id)
+                          ? `展开 ${repliesOf(item.id).length} 条回复`
+                          : '收起回复'
+                      }}
+                    </button>
+
+                    <ul v-if="!isRepliesCollapsed(item.id)" class="reply-list">
+                      <li v-for="r in repliesOf(item.id)" :key="r.id" class="reply-item">
+                        <el-avatar
+                          :size="24"
+                          :src="r.author?.avatar || undefined"
+                          class="avatar-xs"
+                          alt=""
+                        >
+                          {{ avatarText(r.author?.nickname) }}
+                        </el-avatar>
+                        <div class="reply-main">
+                          <div class="reply-head">
+                            <span class="comment-author">{{ r.author?.nickname }}</span>
+                            <span class="comment-time">{{ formatTime(r.createdAt) }}</span>
+                          </div>
+                          <p class="comment-text">{{ r.content }}</p>
+                          <div class="comment-actions">
+                            <button
+                              type="button"
+                              class="mini-action"
+                              :class="{ liked: r.liked }"
+                              :disabled="likingCommentId === r.id"
+                              @click="toggleCommentLike(r)"
+                            >
+                              <el-icon><component :is="Star" /></el-icon>
+                              {{ r.likeCount > 0 ? r.likeCount : '赞' }}
+                            </button>
+                            <!-- 只支持两级：回复区的回复按钮回到「对同一条的补充」，
+                                 这里给的是「回复这条一级评论」，避免做出第三层 -->
+                            <button type="button" class="mini-action" @click="startReply(item)">
+                              回复
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <!-- 操作栏吸底：不管评论滚到哪里，赞/收藏永远在够得着的地方 -->
+        <div class="actions">
+          <button
+            type="button"
+            class="action-btn"
+            :class="{ 'is-active': liked }"
+            :disabled="liking"
+            @click="toggleLike"
+          >
+            <el-icon><component :is="Star" /></el-icon>
+            {{ liked ? '已赞' : '点赞' }} {{ likeCount }}
+          </button>
+
+          <button
+            type="button"
+            class="action-btn"
+            :class="{ 'is-active': favorited }"
+            :disabled="favoriting"
+            @click="toggleFavorite"
+          >
+            <el-icon><component :is="Collection" /></el-icon>
+            {{ favorited ? '已收藏' : '收藏' }} {{ favoriteCount }}
+          </button>
+
+          <button type="button" class="action-btn" @click="focusCommentEditor">
+            <el-icon><component :is="ChatDotRound" /></el-icon>
+            评论 {{ post.commentCount }}
+          </button>
+        </div>
       </aside>
-    </div>
+    </article>
   </div>
 </template>
 
 <style scoped>
 /*
- * 详情页要比通用内容区更宽 —— 这里的主角是一张大图/一个视频，
- * 1080 的通用上限会让媒体缩成窗口中间一小块，两侧全是留白。
- * 1200 配合下面的 1.7 : 1 双栏，媒体区拿到实打实的宽度。
+ * ===== 「一张纸」布局 =====
+ *
+ * 整页就是一张卡：媒体占左栏全高，右栏从上到下依次是
+ * 作者栏 → 可滚动中段（正文 + 评论） → 吸底操作栏。
+ * 上一版「左白纸 + 右板子」的分家问题从结构上不存在了。
  */
 .detail {
-  max-width: 1200px;
+  max-width: 1120px;
   margin: 0 auto;
 }
 
-/* ===== 阅读进度条（参考「顶部进度条动画」）===== */
+.note-sheet {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 400px);
+  /*
+   * 纸的高度 = 视口减去顶栏和上下留白。
+   * 这是一次刻意的「反常规」：内容页通常让高度自由生长，
+   * 但笔记详情的主角是一张图，图的高度被视口钉死后，
+   * 右栏内部滚动才成立 —— 这正是小红书网页版的解法。
+   */
+  height: calc(100vh - var(--top-bar-height) - 48px);
+  min-height: 540px;
+  background: var(--card, var(--el-bg-color));
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.16);
+}
+
+/* 纯文字笔记没有媒体：左栏退场，纸变成单栏 */
+.note-sheet--text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ===== 阅读进度条 ===== */
 /* scaleX 由 scroll-timeline 驱动：滚动到哪，条就到哪。
    整个效果零 JS；不支持 animation-timeline 的浏览器（Firefox 旧版）
    直接不渲染 —— @supports 保证它是纯增强。 */
@@ -711,7 +765,6 @@ watch(
     z-index: 3;
     width: 100%;
     height: 3px;
-    background: var(--accent);
     background: linear-gradient(
       to right,
       var(--accent),
@@ -734,87 +787,184 @@ watch(
   }
 }
 
-/* ===== 双栏 ===== */
-.detail-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-/*
- * 视口不够宽时（侧栏 216 + 内容区 + 360 右栏 + 间距）左栏会被压到
- * 几乎没有宽度，两栏直接叠在一起。所以这里降级成单栏。
- */
-@media (max-width: 1100px) {
-  .detail-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .comment-card {
-    position: static;
-    max-height: none;
-  }
-}
-
-/*
- * 左栏和右栏必须是**同一种东西**。
- *
- * 右栏是 el-card（有面、有描边），左栏之前直接铺在页面底色上，
- * 于是同一个 `.detail-grid` 里右边是块面板、左边是一张白纸 ——
- * 短正文时尤其明显：右边一块板子孤零零立着，左边一大片空。
- *
- * 这里的取值逐条抄自 element-theme.css 里 `.el-card` 的定义，
- * 用同样的变量，将来改主题时两边会一起变，不会又分家。
- */
-.main-col {
-  min-width: 0;
-  padding: var(--sp-5);
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
-  border-radius: var(--radius-md);
-}
-
-/* ===== 作者栏 ===== */
-.author-bar {
+/* ===== 左栏：媒体 ===== */
+.media-pane {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  /* 底部分隔线与外层卡片的 padding 一起构成留白，这里只留一条线的呼吸 */
-  padding-bottom: 14px;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  /* 摄影棚底：图片 contain 之后没铺满的部分属于「展示面」，
+     用一档比纸面更深的中性色，图的边界才读得出来 */
+  background: var(--muted);
 }
 
-/* 返回钮：圆形、和头像同高，收在作者栏行首。
-   hover 时轻微放大 + 边框点亮 —— 抄「文章卡预览效果」的 scale 手感。 */
+/* 返回钮：悬浮在媒体左上角的半透明圆钮，压在图上也能看清 */
 .back-fab {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  color: var(--muted-foreground);
-  background: var(--muted);
-  border: 1px solid transparent;
+  width: 38px;
+  height: 38px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: none;
   border-radius: 50%;
+  backdrop-filter: blur(4px);
   cursor: pointer;
   transition:
-    transform 0.18s ease,
-    color 0.18s,
-    border-color 0.18s,
+    transform 0.18s var(--ease-out-expo, ease),
     background 0.18s;
 }
 
 .back-fab:hover {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--accent) 14%, var(--el-bg-color));
-  border-color: var(--accent);
+  background: rgba(0, 0, 0, 0.62);
   transform: scale(1.08);
 }
 
 .back-fab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.media-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.main-image :deep(.el-image__inner) {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+}
+
+/* 视频播放器：黑底是刻意的 —— 信箱模式（letterbox），
+   视频没铺满时黑边属于播放器而不是页面底色 */
+.video-player {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+/* 纯文字笔记的展示面 */
+.media-stage--text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(150deg, var(--muted), var(--secondary));
+}
+
+.text-mark {
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.75;
+}
+
+.text-topic {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--muted-foreground);
+  padding: 0 24px;
+  text-align: center;
+}
+
+/* 张数指示：小胶囊贴在舞台右下角 */
+.image-counter {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+/* 缩略图条 */
+.thumbs {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--el-border-color);
+  overflow-x: auto;
+}
+
+.thumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--muted);
+  opacity: 0.55;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
+}
+
+.thumb:hover {
+  opacity: 0.9;
+}
+
+.thumb.active {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+.thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* ===== 右栏 ===== */
+.side-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--el-border-color);
+  background: var(--el-bg-color);
+}
+
+/* --- 作者栏 --- */
+.author-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border);
 }
 
 .avatar {
@@ -844,130 +994,40 @@ watch(
   flex-shrink: 0;
 }
 
-/* ===== 媒体区 ===== */
-.image-section {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+/* --- 可滚动中段 --- */
+.side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-5);
+  /* 内容不长时也要能一眼看出「到这里就没了」 */
+  overscroll-behavior: contain;
 }
 
-/* 16/10 比媒体区原来的 4/3 更接近真实照片构图，竖图 contain 两侧留黑也自然 */
-.main-image {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  max-height: 68vh;
-  background: var(--muted);
-}
-
-.main-image :deep(.el-image__inner) {
-  object-fit: contain;
-  width: 100%;
-  height: 100%;
-}
-
-/* 视频播放器：黑底是刻意的 —— 信箱模式（letterbox），
-   视频没铺满时黑边属于播放器而不是页面底色 */
-.video-player {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 68vh;
-  background: #000;
-  object-fit: contain;
-}
-
-/* 缩略图条 */
-.thumbs {
-  display: flex;
-  gap: 8px;
-  padding: 10px;
-  border-top: 1px solid var(--border);
-  overflow-x: auto;
-}
-
-.thumb {
-  width: 64px;
-  height: 64px;
-  flex-shrink: 0;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  cursor: pointer;
-  background: var(--muted);
-  opacity: 0.6;
-  transition:
-    opacity 0.15s,
-    border-color 0.15s;
-}
-
-.thumb:hover {
-  opacity: 0.9;
-}
-
-.thumb.active {
-  opacity: 1;
-  border-color: var(--accent);
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* ===== 正文 ===== */
+/* --- 正文 --- */
 .content-section {
-  padding: 20px 0 8px;
+  padding-bottom: var(--sp-4);
 }
 
 .content {
   margin: 0;
   font-size: var(--fs-md);
-  line-height: 1.8;
+  line-height: 1.85;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .topic-tag {
-  margin-top: 14px;
+  margin-top: 12px;
   cursor: pointer;
 }
 
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
-}
-
-.stat-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-left: auto;
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-}
-
-/* ===== 评论侧栏 ===== */
+/* --- 评论区 --- */
 .comment-card {
-  position: sticky;
-  top: calc(var(--top-bar-height) + 24px);
-  max-height: calc(100vh - var(--top-bar-height) - 48px);
-  display: flex;
-  flex-direction: column;
-}
-
-.comment-body {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  padding: 16px;
+  /* e2e（notification-smoke 等）靠 .comment-card 定位输入框和提交按钮，
+     类名保留，视觉从 el-card 换成轻量分区 */
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
 }
 
 .comment-title {
@@ -1007,13 +1067,17 @@ watch(
   color: var(--destructive);
 }
 
+.comment-divider {
+  height: 1px;
+  margin: var(--sp-4) 0 4px;
+  background: var(--border);
+}
+
 .comment-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  /* 滚动交给 .side-scroll：嵌套滚动轨道是滚轮的噩梦 */
 }
 
 .comment-item {
@@ -1160,5 +1224,100 @@ watch(
   display: flex;
   align-items: baseline;
   gap: 8px;
+}
+
+/* ===== 吸底操作栏 ===== */
+.actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px var(--sp-5);
+  border-top: 1px solid var(--border);
+  background: var(--el-bg-color);
+}
+
+.action-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 10px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2, var(--muted-foreground));
+  background: var(--muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.action-btn:hover:not(:disabled) {
+  color: var(--foreground);
+  border-color: var(--border-strong);
+}
+
+.action-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/*
+ * 激活态：强调色整块填充。
+ * 字色必须用 --accent-foreground —— 它就是「压在强调色块上」的字色，
+ * 深浅两套主题各自配好了对比（2026-11-07 标题悬停事故的正解用法）。
+ */
+.action-btn.is-active {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ===== 窄屏降级：单列堆叠 ===== */
+@media (max-width: 920px) {
+  .note-sheet {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+
+  .media-pane {
+    min-height: 0;
+  }
+
+  .media-stage {
+    flex: none;
+    height: min(48vh, 440px);
+  }
+
+  .side-pane {
+    border-left: none;
+    border-top: 1px solid var(--el-border-color);
+  }
+
+  .side-scroll {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .actions {
+    position: static;
+  }
 }
 </style>

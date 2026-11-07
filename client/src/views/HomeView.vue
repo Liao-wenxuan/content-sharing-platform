@@ -103,7 +103,7 @@ async function loadFeed(reset: boolean) {
   try {
     const data = await postsApi.getFeed({
       page: page.value,
-      pageSize: 12,
+      pageSize: 30,
       // 关注流只传 channel，不传 category：订阅流按时间排，再按话题筛没有意义
       ...(isFollowFeed.value ? { channel: 'follow' } : { category: homeTabs.category })
     })

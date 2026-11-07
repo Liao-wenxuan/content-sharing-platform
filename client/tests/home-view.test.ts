@@ -178,7 +178,7 @@ beforeEach(() => {
   useAuthStore().login({ id: 7, nickname: '我', avatar: null, cover: null }, 'tok')
   getFeed.mockResolvedValue({
     list: [mkPost(1), mkPost(2)],
-    pagination: { page: 1, pageSize: 12, total: 2, hasMore: false }
+    pagination: { page: 1, pageSize: 30, total: 2, hasMore: false }
   } as any)
   getReco.mockResolvedValue(recoOf([1, 2]))
 })
@@ -197,7 +197,7 @@ describe('HomeView 发现流（时间序频道）', () => {
     const w = mountView()
     await flushPromises()
 
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'food' })
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 30, category: 'food' })
     expect(w.find('.channel-tabs').exists()).toBe(true)
     expect(w.findAll('.card')).toHaveLength(2)
   })
@@ -210,7 +210,7 @@ describe('HomeView 发现流（时间序频道）', () => {
     useHomeTabsStore().category = 'travel'
     await flushPromises()
 
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'travel' })
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 30, category: 'travel' })
     // 换频道是换一批内容，不是往后追加
     expect(w.findAll('.card')).toHaveLength(2)
   })
@@ -218,14 +218,14 @@ describe('HomeView 发现流（时间序频道）', () => {
   it('加载更多是追加，页码跟着走', async () => {
     getFeed.mockResolvedValueOnce({
       list: [mkPost(1)],
-      pagination: { page: 1, pageSize: 12, total: 2, hasMore: true }
+      pagination: { page: 1, pageSize: 30, total: 2, hasMore: true }
     } as any)
     const w = mountView()
     await flushPromises()
 
     getFeed.mockResolvedValueOnce({
       list: [mkPost(2)],
-      pagination: { page: 2, pageSize: 12, total: 2, hasMore: false }
+      pagination: { page: 2, pageSize: 30, total: 2, hasMore: false }
     } as any)
     await w
       .findAll('.btn-stub')
@@ -233,7 +233,7 @@ describe('HomeView 发现流（时间序频道）', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(getFeed).toHaveBeenLastCalledWith({ page: 2, pageSize: 12, category: 'food' })
+    expect(getFeed).toHaveBeenLastCalledWith({ page: 2, pageSize: 30, category: 'food' })
     expect(w.findAll('.card')).toHaveLength(2)
   })
 
@@ -246,7 +246,7 @@ describe('HomeView 发现流（时间序频道）', () => {
 
     getFeed.mockResolvedValue({
       list: [mkPost(9)],
-      pagination: { page: 1, pageSize: 12, total: 1, hasMore: false }
+      pagination: { page: 1, pageSize: 30, total: 1, hasMore: false }
     } as any)
     await w
       .findAll('button')
@@ -303,7 +303,7 @@ describe('HomeView 推荐流', () => {
 
     useHomeTabsStore().category = 'food'
     await flushPromises()
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, category: 'food' })
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 30, category: 'food' })
 
     useHomeTabsStore().category = 'recommend'
     await flushPromises()
@@ -338,7 +338,7 @@ describe('HomeView 关注流', () => {
     await flushPromises()
 
     // 关注流里传 category 就是订阅流再按话题筛一遍，没有意义
-    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 12, channel: 'follow' })
+    expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 30, channel: 'follow' })
     expect(getFeed.mock.calls[0][0]).not.toHaveProperty('category')
   })
 

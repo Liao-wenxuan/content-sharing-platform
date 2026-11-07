@@ -49,7 +49,7 @@ export function useFeed(category: () => string) {
     try {
       const data = await feedApi.get({
         category: category(),
-        limit: 12,
+        limit: 30,
         sessionId: sessionId.value,
         cursor: reset ? 0 : nextCursor.value
       })

@@ -306,10 +306,12 @@ function markCoverBroken(postId: number) {
             </span>
             <div class="peek-scrim" aria-hidden="true"></div>
             <div class="peek">
-              <span class="pill">
-                <el-icon><component :is="Star" /></el-icon>
-                {{ item.post.likeCount }}
-              </span>
+              <!--
+                ⚠️ 这里**不放点赞数**。作者行末尾已经有一个常驻的星标数字，
+                预览层再给一份，同一张卡上就出现两个相同的星标 ——
+                用户 2026-11-07 的原话是「收藏标识重复了」。
+                预览层只补作者行没说的那两项：评论数、图片数。
+              -->
               <span class="pill">
                 <el-icon><component :is="ChatDotRound" /></el-icon>
                 {{ item.post.commentCount }}
@@ -336,16 +338,25 @@ function markCoverBroken(postId: number) {
           不感兴趣。hover 才显形：常驻会变成视觉噪声，
           而且它是个**破坏性**操作，不该和「点进去看」抢同等的视觉权重。
           定位挂在 .card-wrap 上（封面和 wrap 顶边对齐，所以偏移量不变）。
+
+          × 图标被用户理解成了「删除」—— 这不是用户的错，是图标的锅。
+          tooltip 把它真正的意思写在悬停的那半秒里。
         -->
-        <button
+        <el-tooltip
           v-if="dismissable"
-          type="button"
-          class="dismiss-btn"
-          :aria-label="`不感兴趣：${item.post.content.slice(0, 20)}`"
-          @click="emit('dismiss', item.post.id)"
+          content="不感兴趣，少推这类内容"
+          placement="top"
+          :show-after="300"
         >
-          <el-icon><component :is="Close" /></el-icon>
-        </button>
+          <button
+            type="button"
+            class="dismiss-btn"
+            :aria-label="`不感兴趣：${item.post.content.slice(0, 20)}`"
+            @click="emit('dismiss', item.post.id)"
+          >
+            <el-icon><component :is="Close" /></el-icon>
+          </button>
+        </el-tooltip>
 
         <!-- 作者 + 时间 + 点赞：挤在一行里 -->
         <div class="foot">
@@ -651,7 +662,18 @@ function markCoverBroken(postId: number) {
   transform: scale(1.1);
 }
 
-/* 推荐理由：贴底的小胶囊，不遮挡主体内容 */
+/*
+ * 推荐理由：贴底的小胶囊。
+ *
+ * ⚠️ 默认不显示，悬停才浮出来。
+ *
+ * 之前是常驻的 —— 结果用户一眼看过去，满屏左下角都是「刚刚发布」
+ * 「你常看这位作者」：推荐系统给每一条候选都会算出一个最大贡献项当理由
+ * （feed-score.ts 的 topReason），而新鲜度和作者亲和度几乎总是赢，
+ * 于是这两句话铺满了整个首屏，信息量被重复次数稀释成了噪声。
+ * 保留信息、去掉噪声的办法不是删掉理由，而是让它按需出现：
+ * 想知道为什么推这条，鼠标停一下就能看到。
+ */
 .reason-badge {
   position: absolute;
   left: 8px;
@@ -668,6 +690,11 @@ function markCoverBroken(postId: number) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
 }
 
 /* ===== 悬停预览层 ===== */
@@ -769,17 +796,15 @@ function markCoverBroken(postId: number) {
 .card:focus-visible .peek .pill:nth-child(2) {
   transition-delay: 45ms;
 }
-.card-wrap:hover .peek .pill:nth-child(3),
-.card:focus-visible .peek .pill:nth-child(3) {
-  transition-delay: 90ms;
-}
 
 /*
- * 推荐理由和胶囊共用封面底边（一个左一个右）。
- * hover 时把理由的最大宽度收窄，窄卡上两者相遇也不会叠字。
+ * 推荐理由和胶囊共用封面底边（一个左一个右），都在悬停时出现。
+ * 理由的最大宽度收窄到 52%，窄卡上两者相遇也不会叠字。
  */
 .card-wrap:hover .reason-badge,
 .card:focus-visible .reason-badge {
+  opacity: 1;
+  transform: none;
   max-width: 52%;
 }
 
@@ -855,7 +880,17 @@ function markCoverBroken(postId: number) {
 
 .card:hover .title,
 .card:focus-visible .title {
-  color: var(--accent-foreground);
+  /*
+   * ⚠️ 这里曾经是 `var(--accent-foreground)`，2026-11-07 被用户当场抓到：
+   * 悬停后标题直接消失。
+   *
+   * 原因：那个令牌的语义是「压在强调色**块**上的字色」——
+   * 深色主题下是 #19191b（近黑），因为要压在 #c6ca4c 的黄绿块上才读得清。
+   * 而标题底下是页面背景（同样是近黑），于是字被涂成了背景色。
+   * 要表达「强调色**文字**」，用的应该是 --accent 本身：
+   * 深色主题 #c6ca4c / 浅色主题 #5f6417，两个方向都过 AA。
+   */
+  color: var(--accent);
 }
 
 .title .hit {
