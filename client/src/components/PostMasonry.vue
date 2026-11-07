@@ -8,7 +8,7 @@
  * 这个组件只做两件事：ResizeObserver 监听宽度 → 按结果渲染 DOM。
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Star, VideoPlay, Close } from '@element-plus/icons-vue'
+import { Star, VideoPlay, Close, ChatDotRound, Picture } from '@element-plus/icons-vue'
 import type { Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import {
@@ -283,6 +283,42 @@ function markCoverBroken(postId: number) {
             <span v-if="props.reasons?.[item.post.id]" class="reason-badge">
               {{ props.reasons[item.post.id] }}
             </span>
+
+            <!--
+              悬停预览层（学习自 参考/15.文章卡预览效果）。
+
+              参考的原始版本靠「垫纸向下滑 + margin 过渡」把数据胶囊放行到卡片
+              外面 —— 在瀑布流里行不通：胶囊会压到下一行卡片上，margin 过渡
+              还会抖动整列布局。所以这里做的是「意译」而不是「照抄」：
+
+              1. 垫纸   → .card::before，整卡背后浮起一层 surface（含投影）
+              2. 分类徽章 → .topic-peek，hover 才显形（搜索命中时 tag-badge
+                          已经占了左上角，所以排除掉避免叠罗汉）
+              3. 数据胶囊 → .peek，贴着封面底边错峰浮出（赞 / 评 / 图数），
+                          底部渐变保证白字可读
+
+              三个胶囊的出场节奏沿用参考的错峰设计（0 / 45 / 90ms delay），
+              但只动 transform 和 opacity —— 封面有 overflow:hidden，
+              渐变和胶囊都关在里面，绝不越界碰下一张卡。
+            -->
+            <span v-if="item.post.topicTag && !tagMatched(item.post)" class="topic-peek">
+              # {{ item.post.topicTag }}
+            </span>
+            <div class="peek-scrim" aria-hidden="true"></div>
+            <div class="peek">
+              <span class="pill">
+                <el-icon><component :is="Star" /></el-icon>
+                {{ item.post.likeCount }}
+              </span>
+              <span class="pill">
+                <el-icon><component :is="ChatDotRound" /></el-icon>
+                {{ item.post.commentCount }}
+              </span>
+              <span v-if="item.post.imageUrls.length" class="pill">
+                <el-icon><component :is="Picture" /></el-icon>
+                {{ item.post.imageUrls.length }}
+              </span>
+            </div>
           </div>
 
           <!-- 标题：两行截断，命中关键词高亮 -->
@@ -444,13 +480,57 @@ function markCoverBroken(postId: number) {
   display: block;
   color: inherit;
   border-radius: var(--radius-md);
+  /*
+   * position + z-index:0 是给下面的「垫纸」（.card::before, z-index:-1）
+   * 圈出一个层叠上下文用的 —— 没有它，-1 会试图钻到页面背景底下，
+   * 垫纸直接消失。transform 也会创建上下文，但那只存在于 hover 态，
+   * 静止态必须有稳定的兜底。
+   */
+  position: relative;
+  z-index: 0;
   /* 键盘用户也要看到「这里能点进去」的邀请，和 hover 同一套反馈 */
-  transition: background-color var(--dur-fast) var(--ease-out-expo);
+  transition:
+    background-color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-standard) var(--ease-out-expo);
 }
 
 .card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
+}
+
+/*
+ * 悬停「垫纸」+ 抬升 —— 参考/15.文章卡预览效果的核心意象。
+ *
+ * 参考的实现是 margin-top + scale 过渡（会触发 layout），这里改成
+ * 纯 transform：垫纸从「藏在卡片正后方」平移到位，卡片整体上浮 4px。
+ * 垫纸比内容大一圈（inset 负值），四边各露出约 8-10px ——
+ * 列间距 18px / 行间距 26px，都容得下，不会碰到邻居。
+ */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: -8px -10px -10px;
+  z-index: -1;
+  border-radius: calc(var(--radius-md) + 4px);
+  background: var(--surface-2);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+  opacity: 0;
+  transform: translateY(6px) scale(0.985);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-standard) var(--ease-out-expo);
+}
+
+.card-wrap:hover .card,
+.card:focus-visible {
+  transform: translateY(-4px);
+}
+
+.card-wrap:hover .card::before,
+.card:focus-visible::before {
+  opacity: 1;
+  transform: none;
 }
 
 /* 封面：圆角、无边框，卡片本身没有背景和描边 */
@@ -590,6 +670,119 @@ function markCoverBroken(postId: number) {
   text-overflow: ellipsis;
 }
 
+/* ===== 悬停预览层 ===== */
+
+/*
+ * 话题徽章（hover 显形）—— 对应参考动效里右上角的分类标签。
+ * 和搜索命中的 .tag-badge 是同一套视觉，但出场时机不同：
+ * tag-badge 是「搜索命中」的常驻信息，这个是浏览时的补充说明。
+ * 左上角已被 tag-badge 占用的情况在模板里排除了（!tagMatched）。
+ */
+.topic-peek {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+
+/*
+ * 底部渐变：胶囊是白字，直接压在浅色封面（雪景、白墙）上看不见。
+ * 渐变和胶囊同步显形，hover 离开时一起退场。
+ * aria-hidden 已在模板标出 —— 纯装饰，读屏不该念。
+ */
+.peek-scrim {
+  position: absolute;
+  inset: auto 0 0;
+  height: 56px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out-expo);
+}
+
+/* 胶囊行：贴右下角，避开左下角的推荐理由徽章 */
+.peek {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  font-variant-numeric: tabular-nums;
+  /* 出场前的隐藏态：藏进封面底边下面 */
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+
+.pill .el-icon {
+  font-size: 11px;
+}
+
+/*
+ * 错峰出场：沿用参考动效 0.2 / 0.24 / 0.28s 的节奏思路，
+ * 但用 delay 而不是拉长 duration —— 三张胶囊步幅一致、先后有别，
+ * delay 只写在 hover 态，离开时全部归零（胶囊一起退场，不拖泥带水）。
+ * 键盘聚焦（:focus-visible）走同一套，读屏和鼠标用户看到的东西一致。
+ */
+.card-wrap:hover .topic-peek,
+.card:focus-visible .topic-peek,
+.card-wrap:hover .peek-scrim,
+.card:focus-visible .peek-scrim {
+  opacity: 1;
+  transform: none;
+}
+
+.card-wrap:hover .pill,
+.card:focus-visible .pill {
+  opacity: 1;
+  transform: none;
+}
+
+.card-wrap:hover .peek .pill:nth-child(1),
+.card:focus-visible .peek .pill:nth-child(1) {
+  transition-delay: 0ms;
+}
+.card-wrap:hover .peek .pill:nth-child(2),
+.card:focus-visible .peek .pill:nth-child(2) {
+  transition-delay: 45ms;
+}
+.card-wrap:hover .peek .pill:nth-child(3),
+.card:focus-visible .peek .pill:nth-child(3) {
+  transition-delay: 90ms;
+}
+
+/*
+ * 推荐理由和胶囊共用封面底边（一个左一个右）。
+ * hover 时把理由的最大宽度收窄，窄卡上两者相遇也不会叠字。
+ */
+.card-wrap:hover .reason-badge,
+.card:focus-visible .reason-badge {
+  max-width: 52%;
+}
+
 /*
   不感兴趣按钮：
   - 默认 opacity 0，hover 卡片才显形
@@ -621,6 +814,8 @@ function markCoverBroken(postId: number) {
 .card-wrap:hover .dismiss-btn,
 .dismiss-btn:focus-visible {
   opacity: 1;
+  /* 卡片抬升（.card 的 translateY(-4px)）时按钮跟着走，否则悬停瞬间它悬在原位 */
+  transform: translateY(-4px);
 }
 
 .dismiss-btn:hover {
@@ -629,7 +824,7 @@ function markCoverBroken(postId: number) {
 
 /* 只动 transform / opacity / color / border-color，不碰 layout 属性 */
 .dismiss-btn:hover {
-  transform: scale(1.08);
+  transform: translateY(-4px) scale(1.08);
 }
 
 /* ===== 标题 ===== */
