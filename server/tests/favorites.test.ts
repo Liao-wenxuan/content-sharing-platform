@@ -16,13 +16,14 @@ import { createTestApp, teardownTestDb } from './app'
 import type { Express } from 'express'
 
 let app: Express
+let db: any
 let meToken: string
 let otherToken: string
 let myPostId: number
 let otherPostId: number
 
 beforeAll(async () => {
-  ;({ app } = createTestApp())
+  ;({ app, db } = createTestApp())
 
   const a = await request(app)
     .post('/api/auth/register')
@@ -334,5 +335,86 @@ describe('DELETE /api/posts/:id/favorite', () => {
     expect(res.status).toBe(200)
     expect(res.body.favorited).toBe(false)
     expect(res.body.favoriteCount).toBe(1)
+  })
+})
+
+/**
+ * 边界：看不见的笔记不能进收藏
+ *
+ * 这两条不是「锦上添花」：收藏是私密数据，一旦允许把别人的私密笔记收进来，
+ * 「我的收藏」就成了一条绕过可见性的后门 —— 你收藏一下就能在列表里读到正文。
+ * 另一半是数字一致性：计数和列表必须用同一条可见性条件，
+ * 否则用户看到「3 篇」点进去只有 2 篇，只会以为功能坏了。
+ */
+describe('边界：看不见的笔记', () => {
+  it('别人的私密笔记收不了（404，不是 403）', async () => {
+    const p = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ content: '别人的私密笔记', visibility: 'private' })
+
+    const res = await request(app)
+      .post(`/api/posts/${p.body.id}/favorite`)
+      .set('Authorization', `Bearer ${meToken}`)
+
+    // 403 等于确认「这条存在但你没权限」，「不存在」和「看不到」应该同一种感觉
+    expect(res.status).toBe(404)
+
+    const state = await request(app)
+      .get(`/api/posts/${p.body.id}/favorite`)
+      .set('Authorization', `Bearer ${meToken}`)
+    expect(state.body.favoriteCount).toBe(0)
+  })
+
+  it('自己的私密笔记可以收藏（「我的收藏」是我的视角）', async () => {
+    const p = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${meToken}`)
+      .send({ content: '我的私密笔记', visibility: 'private' })
+
+    const res = await request(app)
+      .post(`/api/posts/${p.body.id}/favorite`)
+      .set('Authorization', `Bearer ${meToken}`)
+    expect(res.status).toBe(200)
+    expect(res.body.favorited).toBe(true)
+  })
+
+  it('别人的笔记转成私密后：夹计数和列表一起减，数字对得上', async () => {
+    const p = await request(app)
+      .post('/api/posts')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ content: '先公开后私密' })
+
+    await request(app)
+      .post(`/api/posts/${p.body.id}/favorite`)
+      .set('Authorization', `Bearer ${meToken}`)
+
+    const folder = await request(app)
+      .post('/api/posts/me/folders')
+      .set('Authorization', `Bearer ${meToken}`)
+      .send({ name: '一致性检查' })
+    await request(app)
+      .post(`/api/posts/me/folders/${folder.body.id}/move`)
+      .set('Authorization', `Bearer ${meToken}`)
+      .send({ postIds: [p.body.id] })
+
+    const before = await request(app)
+      .get('/api/posts/me/folders')
+      .set('Authorization', `Bearer ${meToken}`)
+    expect(before.body.list.find((f: any) => f.id === folder.body.id).postCount).toBe(1)
+
+    // 没有「改可见性」的接口，直接改库模拟「对方的笔记变私密了」
+    db.prepare(`UPDATE posts SET visibility = 'private' WHERE id = ?`).run(p.body.id)
+
+    const after = await request(app)
+      .get('/api/posts/me/folders')
+      .set('Authorization', `Bearer ${meToken}`)
+    expect(after.body.list.find((f: any) => f.id === folder.body.id).postCount).toBe(0)
+
+    const list = await request(app)
+      .get(`/api/posts/me/favorites?folderId=${folder.body.id}`)
+      .set('Authorization', `Bearer ${meToken}`)
+    expect(list.body.list).toHaveLength(0)
+    expect(list.body.pagination.total).toBe(0)
   })
 })

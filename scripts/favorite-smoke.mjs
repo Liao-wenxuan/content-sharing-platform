@@ -176,13 +176,13 @@ console.log('\n[4] 主页「收藏」tab 能看到刚收藏的笔记')
   await page.screenshot({ path: 'shots/fav-profile-tab.png' })
 }
 
-console.log('\n[5] 建收藏夹 → 批量移入 → 未分类清空')
+console.log('\n[5] 建收藏夹 → 整理移入 → 未分类清空')
 {
   await page.goto(`${BASE}/favorites`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)
-  check('收藏夹管理页可达', await page.locator('.fav-manage').isVisible())
+  check('收藏页可达', await page.locator('.fav-manage').isVisible())
   check('初始没有收藏夹', (await page.locator('.folder-row').count()) === 0)
-  check('未分类里能看到刚收藏的那条', (await page.locator('.post-row').count()) === 1)
+  check('「全部收藏」里能看到刚收藏的那条', (await page.locator('.fav-card').count()) === 1)
 
   // 建夹
   await page.locator('.create-row input').fill(FOLDER_NAME)
@@ -191,23 +191,34 @@ console.log('\n[5] 建收藏夹 → 批量移入 → 未分类清空')
   check('收藏夹建好了', (await page.locator('.folder-row').count()) === 1)
   check(
     '新夹计数是 0',
-    (await page.locator('.folder-row .folder-count').first().innerText()).includes('0')
-  )
-
-  // 勾选未分类里那条，然后移入
-  await page.locator('.post-row .el-checkbox').first().click()
-  await page.waitForTimeout(400)
-  const moveBtn = page.locator('.folder-row .el-button').filter({ hasText: '移入' })
-  check('勾选后出现「移入」按钮', await moveBtn.isVisible(), (await moveBtn.innerText()).trim())
-  await moveBtn.click()
-  await page.waitForTimeout(1000)
-
-  check('未分类清空了', (await page.locator('.post-row').count()) === 0)
-  check(
-    '夹计数变成 1',
-    (await page.locator('.folder-row .folder-count').first().innerText()).includes('1'),
+    (await page.locator('.folder-row .folder-count').first().innerText()).trim() === '0',
     await page.locator('.folder-row .folder-count').first().innerText()
   )
+
+  // 整理：进整理模式 → 勾一条 → 点夹名移进去
+  await page.locator('.main-tools .el-button').filter({ hasText: '整理' }).click()
+  await page.waitForTimeout(300)
+  await page.locator('.fav-check .el-checkbox').first().click()
+  await page.waitForTimeout(300)
+  check('整理条显示已选数量', (await page.locator('.organize-count').innerText()).includes('1'))
+
+  await page.locator('.organize-target').filter({ hasText: FOLDER_NAME }).click()
+  await page.waitForTimeout(1000)
+
+  check(
+    '夹计数变成 1',
+    (await page.locator('.folder-row .folder-count').first().innerText()).trim() === '1',
+    await page.locator('.folder-row .folder-count').first().innerText()
+  )
+
+  // 切到「未分类」应该是空的；切到那个夹应该看得见 —— 这才是「浏览」真的通了
+  await page.locator('.side-item').filter({ hasText: '未分类' }).click()
+  await page.waitForTimeout(800)
+  check('未分类清空了', (await page.locator('.fav-card').count()) === 0)
+
+  await page.locator('.folder-row').first().click()
+  await page.waitForTimeout(800)
+  check('点进夹能看到那篇', (await page.locator('.fav-card').count()) === 1)
   await page.screenshot({ path: 'shots/fav-folders.png' })
 }
 
@@ -232,9 +243,13 @@ console.log('\n[7] 删收藏夹 → 笔记退回未分类，不消失')
 {
   await page.goto(`${BASE}/favorites`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)
-  check('删之前未分类是空的', (await page.locator('.post-row').count()) === 0)
 
-  await page.locator('.folder-row .el-button').last().click() // 最后一个是删除
+  // 先选中那个夹，管理按钮才会出现在右栏顶部
+  await page.locator('.folder-row').first().click()
+  await page.waitForTimeout(700)
+  check('删之前夹里有 1 篇', (await page.locator('.fav-card').count()) === 1)
+
+  await page.locator('.main-tools .el-button').filter({ hasText: '删除' }).click()
   await page.waitForTimeout(600)
   // 弹窗必须写明「不会删掉里面的笔记」，否则用户不敢点
   const confirmText = await page.locator('.el-message-box').innerText()
@@ -243,7 +258,13 @@ console.log('\n[7] 删收藏夹 → 笔记退回未分类，不消失')
   await page.waitForTimeout(1000)
 
   check('收藏夹删掉了', (await page.locator('.folder-row').count()) === 0)
-  check('笔记退回未分类而不是消失', (await page.locator('.post-row').count()) === 1)
+  check('删除后自动退回「全部收藏」', (await page.locator('.main-title').innerText()) === '全部收藏')
+  check('笔记没跟着消失', (await page.locator('.fav-card').count()) === 1)
+
+  // 它现在应该躺在「未分类」里
+  await page.locator('.side-item').filter({ hasText: '未分类' }).click()
+  await page.waitForTimeout(800)
+  check('笔记退回未分类', (await page.locator('.fav-card').count()) === 1)
   await page.screenshot({ path: 'shots/fav-after-delete.png' })
 }
 
@@ -261,18 +282,28 @@ console.log('\n[8] 别人的主页：收藏 tab 是私密的，不是空列表')
   await page.screenshot({ path: 'shots/fav-private.png' })
 }
 
-console.log('\n[9] 侧栏「收藏」入口 + 取消收藏')
+console.log('\n[9] 侧栏入口 + 在列表里直接取消收藏（不用点进详情）')
 {
   await page.goto(`${BASE}/favorites`, { waitUntil: 'networkidle' })
   await page.waitForTimeout(700)
   const navActive = await page.locator('.el-menu-item.is-active').innerText()
   check('侧栏高亮「收藏」', navActive.includes('收藏'), navActive.trim())
 
+  check('取消前列表里有 1 篇', (await page.locator('.fav-card').count()) === 1)
+  await page.locator('.fav-remove').first().click()
+  await page.waitForTimeout(900)
+
+  check('取消后卡片立刻消失', (await page.locator('.fav-card').count()) === 0)
+  check(
+    '空态给出的是「还没有收藏任何笔记」而不是「暂无数据」',
+    (await page.locator('.empty-state').innerText()).includes('还没有收藏任何笔记'),
+    (await page.locator('.empty-state').innerText()).replace(/\s+/g, ' ')
+  )
+
+  // 关键：列表里取消要真的落库，不能只是从界面上摘掉
   await page.goto(postUrl, { waitUntil: 'networkidle' })
   await page.waitForTimeout(800)
-  await favBtn().click()
-  await page.waitForTimeout(900)
-  check('取消后变回「收藏」', (await favBtn().innerText()).includes('收藏'))
+  check('详情页变回「收藏」', (await favBtn().innerText()).includes('收藏'))
   check('收藏数回到基线', (await favCountOnBtn()) === baseline, `${baseline} -> ${await favCountOnBtn()}`)
 
   await page.goto(myProfile, { waitUntil: 'networkidle' })

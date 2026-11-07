@@ -21,7 +21,6 @@ declare module 'vue' {
     ElCheckbox: typeof import('element-plus/es/components/checkbox/index')['ElCheckbox']
     ElConfigProvider: typeof import('element-plus/es/components/config-provider/index')['ElConfigProvider']
     ElDialog: typeof import('element-plus/es/components/dialog/index')['ElDialog']
-    ElDivider: typeof import('element-plus/es/components/divider/index')['ElDivider']
     ElDrawer: typeof import('element-plus/es/components/drawer/index')['ElDrawer']
     ElDropdown: typeof import('element-plus/es/components/dropdown/index')['ElDropdown']
     ElDropdownItem: typeof import('element-plus/es/components/dropdown/index')['ElDropdownItem']

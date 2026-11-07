@@ -6,6 +6,7 @@ import { toISO } from '../lib/time'
 import { FOLDER_NAME_MAX_LENGTH, FOLDER_MAX_COUNT } from '../constants'
 import { createNotification } from '../lib/notify'
 import { thumbsFromRow, mediaFromRow } from '../lib/postImages'
+import { canViewPost } from '../lib/visibility'
 
 /**
  * 收藏 / 收藏夹
@@ -40,8 +41,15 @@ router.post('/:postId/favorite', writeLimiter, requireAuth, (req: Request, res: 
       .prepare('SELECT 1 FROM favorites WHERE user_id = ? AND post_id = ?')
       .get(userId, postId)
 
-    const post = db.prepare('SELECT id, user_id FROM posts WHERE id = ?').get(postId) as any
+    const post = db
+      .prepare('SELECT id, user_id, visibility FROM posts WHERE id = ?')
+      .get(postId) as any
     if (!post) return res.status(404).json({ message: '笔记不存在' })
+    // 别人的私密笔记看不到也收不了。返回 404 而不是 403：
+    // 403 等于确认「这条存在但你没权限」，而「不存在」和「看不到」应该是同一种感觉
+    if (!canViewPost(post.visibility, post.user_id, userId)) {
+      return res.status(404).json({ message: '笔记不存在' })
+    }
 
     // body.folderId 可选：传了就归进那个夹，不传就是未分类。
     // 必须是「自己的」夹，否则能把别人的收藏塞进你的夹里。
@@ -225,10 +233,16 @@ router.get('/me/folders', requireAuth, (req: Request, res: Response) => {
     const userId = req.userId
     if (typeof userId !== 'number') return res.status(401).json({ message: '未登录' })
 
+    // 夹计数必须和列表用同一条可见性条件：
+    // 别人的笔记转私密之后，列表里已经不显示了，但计数还留着的话，
+    // 用户会看到「这个夹有 3 篇」点进去只有 2 篇 —— 数字对不上比数字为 0 更让人怀疑功能坏了
     const rows = db
       .prepare(
         `SELECT f.id, f.name, f.created_at,
-                (SELECT COUNT(*) FROM favorites fa WHERE fa.folder_id = f.id) AS post_count
+                (SELECT COUNT(*) FROM favorites fa
+                   JOIN posts p ON p.id = fa.post_id
+                  WHERE fa.folder_id = f.id
+                    AND (p.visibility <> 'private' OR p.user_id = f.user_id)) AS post_count
          FROM favorite_folders f
          WHERE f.user_id = ?
          ORDER BY f.created_at ASC, f.id ASC`
@@ -237,11 +251,7 @@ router.get('/me/folders', requireAuth, (req: Request, res: Response) => {
 
     // 未分类不是一个真实收藏夹，但它必须能被看到和筛出来，
     // 否则用户会以为收藏丢了（「我明明收藏了，怎么夹里没有」）
-    const unclassified = (
-      db
-        .prepare('SELECT COUNT(*) AS c FROM favorites WHERE user_id = ? AND folder_id IS NULL')
-        .get(userId) as any
-    ).c
+    const unclassified = getUnclassifiedCount(userId)
 
     res.json({
       list: rows.map((r) => ({
@@ -358,8 +368,13 @@ router.delete('/me/folders/:folderId', writeLimiter, requireAuth, (req: Request,
 function getUnclassifiedCount(userId: number): number {
   return (
     db
-      .prepare('SELECT COUNT(*) AS c FROM favorites WHERE user_id = ? AND folder_id IS NULL')
-      .get(userId) as any
+      .prepare(
+        `SELECT COUNT(*) AS c FROM favorites fa
+           JOIN posts p ON p.id = fa.post_id
+          WHERE fa.user_id = ? AND fa.folder_id IS NULL
+            AND (p.visibility <> 'private' OR p.user_id = ?)`
+      )
+      .get(userId, userId) as any
   ).c
 }
 
