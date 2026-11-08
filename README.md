@@ -18,7 +18,7 @@ docker compose --profile seed run --rm seed    # 39 篇笔记 / 6 个能登录�
 # 浏览器打开 http://localhost:8080，用上面那组账号登录
 ```
 
-**体量**：1027 条单测（后端 477 / 前端 550，两端都卡覆盖率门禁）· 15 套 Playwright e2e · 5 个并行 CI job · 17 张表 · **零 ORM**，SQL 全手写。
+**体量**：1038 条单测（后端 477 / 前端 561，两端都卡覆盖率门禁）· 15 套 Playwright e2e · 5 个并行 CI job · 17 张表 · **零 ORM**，SQL 全手写。
 
 功能形态参考小红书，视觉层是自建的工业 HUD 风格；**桌面三栏布局，≤768px 自动切成底部导航**（左栏隐藏、顶栏动作区收敛、内容区留设备安全区），组件层使用 Element Plus（完全接管其主题变量），本地 SQLite 存储；除 Express / ws / multer / better-sqlite3 这类基础库外没有别的运行时依赖。目标是展示一个完整的前后端分离项目该有的工程能力。
 
@@ -266,7 +266,7 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，36 文件 550 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，37 文件 561 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components，语句 87%）
 cd server && npm test        # 后端单测（vitest + supertest，27 文件 477 条）
 cd server && npm run test:coverage   # 同上 + 覆盖率报告（src 全部，语句 78%）
@@ -306,6 +306,9 @@ npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配�
 >
 > ```bash
 > npm run perf               # 生产构建 + Slow 4G 限速首屏实测：FCP/LCP/CLS + 首屏流量构成
+> npm run perf:live          # 同一把尺子直接打线上（含 TLS / Caddy / 缓存头，本地测不到）
+> npm run perf:check         # 上面那份实测 + 结构性预算，超线非零退出
+> npm run perf:budget        # entry chunk 的 gzip / raw 体积预算
 > npm run perf:bundle        # entry chunk 字节归因：vue / element-plus / axios / 业务代码各占多少
 > npm run perf:bundle -- --why dayjs   # 打印「这个包为什么会进首屏」的最短依赖链
 > npm run audit:images       # uploads 目录体检：每张图的像素尺寸与「字节/像素」
@@ -363,7 +366,7 @@ content-sharing-platform/
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
 │  │  ├─ router/                 # Vue Router 配置（20 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，36 文件 550 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，37 文件 561 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
 │  │  ├─ ai-chat-view.test.ts    # AI 对话页：来源先于答案 / 流式是追加不是替换 / 三类来源 tab
 │  │  ├─ image.test.ts           # 图片纯函数（41 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
@@ -526,20 +529,58 @@ LCP 图片传输完成   3038 ms
 > 症状是「映射加了、列没取」—— 类型不报错、单测也绿，只有跑 perf 看流量才发现。
 > 判据因此定成：**任何「给 N 处查询加同一列」的改动，最后必须逐条复核 SELECT 列表**。
 
+### 第二轮：首屏下了根本看不见的图（2026-11-08）
+
+首屏从 12 条改成 30 条之后，用 `npm run perf:live` 直接打线上重测了一次 Slow 4G：
+
+| 指标        | 线上复测       | 诊断                                        |
+| ----------- | -------------- | ------------------------------------------- |
+| TTFB / FCP  | 779 / 2532 ms  | 连接 + 100KB entry                          |
+| LCP         | **5512 ms**    | LCP 是封面图，且「传输完成」与 LCP 几乎同时 |
+| 首屏图片    | 433 KB / 22 个 | **视口内只有 8 张**                         |
+| `/api/feed` | 2516 ms 发起   | 要等 entry 下载执行完，是一次纯串行往返     |
+
+图片占首屏流量 69%，其中 **14 张（约 60% 字节）用户根本看不到**。
+
+原因不是忘了写 `loading="lazy"` —— 它写了。是 **Chrome 原生 lazy 的阈值会按有效连接类型动态放大**：
+弱网下阈值能到 1250px 甚至 2500px，也就是**网越慢，预取越激进**，恰好和想要的相反。
+这个阈值不可配置，所以只能自己拿回来。
+
+| 改动                      | 做法                                                                                                                                                      | 本地同源 A/B                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| **封面可见性闸门**        | 用 `IntersectionObserver(rootMargin: 300px)` 决定「给不给 src」，前两行直放避免等 IO 首帧拖晚 LCP；保留 `loading="lazy"` 作第二道保险；无 IO 环境全量降级 | 图片 7 张 / 375 KB → **4 张 / 191 KB** |
+| **HTML 阶段预取首页数据** | `index.html` head 里一段零依赖 inline script 在解析时就发 `/api/feed`，结果自带参数描述，由 `useFeed` 按参数认领（一次性、失败静默退回正常请求）          | feed 发起 1337 → **188 ms**            |
+| **AI 面板不再首屏预热**   | 原来的 `onMounted` 预热把 3 个 chunk 塞进首屏；改成 hover / focus 才预热，点击时按需加载                                                                  | 首屏再少 3 个请求 / 约 4 KB            |
+
+> 为什么预取写成 inline script 而不是 `main.ts` 里一行 import，或第二个 `<script type="module">`：
+> 放进 main.ts 就得等 100KB 下载完；Vite 实测会把两个 module script **合并进同一个 entry**，
+> 两种写法都等于没优化。零依赖的普通 script 在 head 里就能跑，才是真正和 entry 下载重叠。
+
+同一台机器、同一限速档的本地对照：**LCP 4304 → 约 3300 ms（-23%）**，
+首屏总流量 **573 → 385 KB**、请求 **16 → 10**、CLS 仍为 0。
+
+配套加了两把尺子：`perf:live` 让本地 preview 之外的真实链路（TLS / 反代 / 缓存头）也能量；
+`perf:check` 把结构性指标写成会红灯的预算 —— **只卡「首屏图片请求数 ≤ 视口内 + 8 / 图片 ≤ 320 KiB /
+总流量 ≤ 560 KiB / feed 必须在 HTML 阶段发起 / CLS ≤ 0.1」**，不卡 LCP 绝对值：
+LCP 会随机器负载和跨地域 RTT 抖几百毫秒，拿它当硬门槛只会训练人把红线往后挪。
+
 ### 刻意没做的部分（以及为什么）
 
-- **换掉 axios（`entry` 里占 115KB 未压缩）**：
+- **换掉 axios（单独 chunk 51KB raw / 19.5KB gzip）**：
   它撑起 27 个文件的调用和整套拦截器（401 处理、上传进度、mock 短路）。
-  收益是真的，但要重写 API 层并连带改一批测试。这轮先把它量出来、记下来，不硬塞。
+  收益是真的（Slow 4G 下约 100ms），但要重写 API 层并连带改一批测试；
+  第二轮从图片和水串行里拿到的 1s+ 之后，这 100ms 的性价比排最后。先量出来、记下来，不硬塞。
 - **`srcset` 多档响应式**：
   现在是「列表 480px / 详情 2000px」两档，两处都够用。再细分收益递减，
   而服务端要生成三档变体会把上传链路复杂度抬上去。
-- **预加载 / `fetchpriority`**：
+- **图片的 `preload` / `fetchpriority`**（注意和上面的**数据预取**不是一回事）：
   优化前限速实测里首屏图就绪 ≈ 传输时间（2.5MB ÷ 1.6Mbps = 12.5s），
-  **瓶颈在带宽而非调度**。现在图片降到 229 KB，这一项更没必要做了。
+  **瓶颈在带宽而非调度**；之前把首屏图全改成 eager 试过，LCP 纹丝不动、流量反涨 46KB。
+  第二轮把请求数从 22 降到约 10 之后带宽竞争已经很小，这一项仍没必要做。
+  数据预取消掉的是「等 JS 才能发接口」的**串行往返**，不是提前抢带宽。
 
-> 四个数字工具都在仓库里，结论可以自己复现：`npm run perf` / `perf:bundle` /
-> `audit:images` / `seed:thumbs`（给存量图片补缩略图）。
+> 六个数字工具都在仓库里，结论可以自己复现：`npm run perf` / `perf:live` / `perf:check` /
+> `perf:budget` / `audit:images` / `seed:thumbs`（给存量图片补缩略图）。
 > 其中 `perf:bundle` 的归因显示 **entry chunk 里业务代码只占 6%，94% 是依赖** ——
 > 这也是为什么「优化业务代码」在这个项目里是无效努力，必须从依赖和图片下手。
 
@@ -825,7 +866,7 @@ mock canvas 有两种用法：
 并以 exit 1 结束。门禁不是写在那儿好看的。
 
 **结果**：后端语句覆盖 **77.36%**、前端 **86.27%**，
-1027 条单测（后端 477 / 前端 550），两端都是 CI 门禁。
+1038 条单测（后端 477 / 前端 561），两端都是 CI 门禁。
 
 > 顺带发现并删掉了一段死代码：`SideNav.vue` 里有一条 `handleCommand('logout')`，
 > 模板里从来没调用过它 —— 退出登录在顶栏和设置页各有一处。
@@ -1239,7 +1280,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest **覆盖率** 477 例）/ `client`（vue-tsc + vitest 覆盖率 550 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier + **README 配图过期检查**）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）单独放在 `browser.yml`，用 **`paths-ignore`** 让纯文档提交整体跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。`ci.yml` 里的三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。**过滤必须放在工作流级而不是 job 级** —— `paths-ignore` 不是 job 的合法键，写上去整个工作流会被判为非法，而本地 YAML 解析器完全无感；现在 `npm run lint` 里有一道对着 GitHub 官方 schema 的校验，`scripts/check-workflow-schema.mjs`。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22） |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest **覆盖率** 477 例）/ `client`（vue-tsc + vitest 覆盖率 561 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier + **README 配图过期检查**）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）单独放在 `browser.yml`，用 **`paths-ignore`** 让纯文档提交整体跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。`ci.yml` 里的三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。**过滤必须放在工作流级而不是 job 级** —— `paths-ignore` 不是 job 的合法键，写上去整个工作流会被判为非法，而本地 YAML 解析器完全无感；现在 `npm run lint` 里有一道对着 GitHub 官方 schema 的校验，`scripts/check-workflow-schema.mjs`。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22） |
 | **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：485 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 84/75/81/85），跌破直接让 CI 红                                                                                                                                                                                                             |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -1323,7 +1364,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 ---
 
-**验证基线**：前端 550 条单测（36 文件）/ 后端 477 条（27 文件）/ 15 套 Playwright e2e（约 430 个断言点）/
+**验证基线**：前端 561 条单测（37 文件）/ 后端 477 条（27 文件）/ 15 套 Playwright e2e（约 430 个断言点）/
 lint 0 error / 覆盖率：后端 statements 78.08%（门槛 75）、前端 statements 87.29%（门槛 84）/
 CI 两个工作流五个 job 全绿
 （纯文档提交时 `browser.yml` 整体跳过，另外三个 job 照跑）。

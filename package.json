@@ -32,6 +32,8 @@
     "test:ai": "node scripts/ai-smoke.mjs",
     "test:motion": "node scripts/motion-check.mjs",
     "perf": "node scripts/perf-smoke.mjs",
+    "perf:live": "node scripts/perf-smoke.mjs --live",
+    "perf:check": "node scripts/perf-smoke.mjs --budget",
     "perf:bundle": "node scripts/analyze-bundle.mjs",
     "audit:images": "node scripts/image-audit.mjs",
     "a11y": "node scripts/a11y-audit.mjs",

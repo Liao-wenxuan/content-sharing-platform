@@ -7,7 +7,7 @@
  * 分列、高度估算、关键词切分都在 utils/masonry.ts 里（纯函数，可单测），
  * 这个组件只做两件事：ResizeObserver 监听宽度 → 按结果渲染 DOM。
  */
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Star, VideoPlay, Close, ChatDotRound, Picture } from '@element-plus/icons-vue'
 import type { Post } from '@/api/posts'
 import { useRelativeTime } from '@/composables/useRelativeTime'
@@ -43,6 +43,24 @@ const { settings } = useUserSettings()
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
+  if (lazySupported()) {
+    imageObserver = new IntersectionObserver(
+      (entries) => {
+        if (!imageObserver) return
+        const ids: number[] = []
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          const id = Number((entry.target as HTMLElement).dataset.coverId)
+          if (Number.isFinite(id)) ids.push(id)
+          imageObserver.unobserve(entry.target)
+          observedEls.delete(entry.target)
+        }
+        activateCovers(ids)
+      },
+      { rootMargin: IMAGE_ROOT_MARGIN }
+    )
+    scanCovers()
+  }
   if (!gridRef.value) return
   resizeObserver = new ResizeObserver((entries) => {
     const w = entries[0].contentRect.width
@@ -52,7 +70,12 @@ onMounted(() => {
   resizeObserver.observe(gridRef.value)
 })
 
-onBeforeUnmount(() => resizeObserver?.disconnect())
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  imageObserver?.disconnect()
+  imageObserver = null
+  observedEls.clear()
+})
 
 /**
  * 卡片错峰入场。
@@ -119,6 +142,73 @@ const columns = computed(() => {
   const buckets = distributeToColumns(visiblePosts.value, colCount.value, colWidth.value)
   return buckets
 })
+
+/**
+ * 封面图片的可见性闸门。
+ *
+ * 为什么不能只靠 `loading="lazy"`：Chrome 的原生阈值是**动态**的，
+ * 会根据有效连接类型放大。Slow 4G 下阈值能到 1250px 甚至 2500px，
+ * 于是 30 张卡的瀑布流在首屏就把 22 张封面全拉了下来，
+ * 而视口里其实只有 8 张（线上实测 433KB 图片，占首屏流量 69%）。
+ * 换句话说，原生 lazy 在弱网下**恰好反着来**：网越慢，预取越激进。
+ *
+ * 这里自己用一个小 rootMargin 观察 .cover，把「提前量」握在手里：
+ * 视口内 + 300px 才发请求，滚动时仍有缓冲，但不会一次吃掉两屏带宽。
+ * 前两行直接放行，是为了不等 IO 的首次回调（约一帧）才发起 LCP 图。
+ *
+ * 没有 IntersectionObserver 的环境（jsdom / 老浏览器）一律全量加载 ——
+ * 降级必须是「功能照常」，不能是「图全没了」。
+ */
+const IMAGE_ROOT_MARGIN = '300px 0px'
+const EARLY_ROWS = 2
+/** 运行时判断而不是模块级常量：无 IO 的环境一律全量加载，降级不能让图全没了 */
+function lazySupported(): boolean {
+  return typeof IntersectionObserver !== 'undefined'
+}
+const activated = ref(new Set<number>())
+const observedEls = new Set<Element>()
+let imageObserver: IntersectionObserver | null = null
+
+function activateCovers(ids: number[]) {
+  const next = new Set(activated.value)
+  let changed = false
+  for (const id of ids) {
+    if (!next.has(id)) {
+      next.add(id)
+      changed = true
+    }
+  }
+  if (changed) activated.value = next
+}
+
+/** 没被 IO 放行的卡片仍渲染 <img>（保持占位与 alt），但不给 src，浏览器不会发请求 */
+function shouldLoadCover(postId: number): boolean {
+  return !lazySupported() || activated.value.has(postId)
+}
+
+function scanCovers() {
+  if (!gridRef.value || !imageObserver) return
+  for (const el of gridRef.value.querySelectorAll<HTMLElement>('[data-cover-id]')) {
+    if (observedEls.has(el)) continue
+    observedEls.add(el)
+    imageObserver.observe(el)
+  }
+}
+
+// 列会随窗口宽度、新一页数据、屏蔽偏好重排，重排后新出现的 .cover 要补观察。
+// 只 observe 没见过的元素，所以 resize 连发也不会重复挂监听。
+watch(
+  columns,
+  async (cols) => {
+    if (!lazySupported()) return
+    const early: number[] = []
+    for (const col of cols) for (const item of col.slice(0, EARLY_ROWS)) early.push(item.post.id)
+    activateCovers(early)
+    await nextTick()
+    scanCovers()
+  },
+  { immediate: true }
+)
 
 /**
  * 点作者跳到他的主页。
@@ -250,8 +340,9 @@ function markCoverBroken(postId: number) {
               v-if="coverSrc(item.post) && !brokenCovers.has(item.post.id)"
               class="sg-img"
               :class="{ 'is-loaded': loadedImages.has(item.post.id) }"
-              :src="coverSrc(item.post)"
+              :src="shouldLoadCover(item.post.id) ? coverSrc(item.post) : undefined"
               :alt="`${item.post.author?.nickname} 的笔记封面`"
+              :data-cover-id="item.post.id"
               loading="lazy"
               @load="markImageLoaded(item.post.id)"
               @error="markCoverBroken(item.post.id)"

@@ -10,10 +10,17 @@
  * 这个项目一贯的主张是「首页不加载用户不会点的功能的代码」
  * （首页本来就不加载 el-upload / el-dialog），所以这里保持一致。
  *
- * 异步的代价是第一次点开可能等一下 chunk 下载，所以 onMounted 里**预热**一次 ——
- * 顶栏渲染时就开始下载，等用户真的去点，通常已经就绪。
+ * 异步本来配了一句 onMounted 预热（顶栏一挂载就下载），但首屏性能实测里
+ * 它稳定出现在「视口图片就绪」之前：AiPanel + ai + CSS 共 3 个请求，
+ * 和 entry / CSS / 封面抢同一条 1.6Mbps 的管道。用户还没表示要点，
+ * 首页却为它付了 3 次往返 —— 这和上面「首页不加载不会点的功能」自相矛盾。
+ *
+ * 现在改成**只按意图**预热：鼠标移到按钮 / 键盘聚焦时立刻下载；
+ * 点击时 defineAsyncComponent 自己会加载，4KB 的 chunk 不构成等待。
+ * 不再设「页面加载完过几秒自动预热」的兜底 —— 实测它总会落进
+ * 首屏关键资源的下载窗口，等于又把那 3 个请求请回来了。
  */
-import { ref, defineAsyncComponent, onMounted } from 'vue'
+import { ref, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { MagicStick } from '@element-plus/icons-vue'
 
@@ -23,10 +30,12 @@ const open = ref(false)
 const loadPanel = () => import('@/components/AiPanel.vue')
 const AiPanel = defineAsyncComponent(loadPanel)
 
-// 预热：不等用户点才去下载
-onMounted(() => {
+let warmed = false
+function warmPanel() {
+  if (warmed) return
+  warmed = true
   void loadPanel()
-})
+}
 
 function ask(text: string) {
   open.value = false
@@ -42,6 +51,8 @@ function ask(text: string) {
       :icon="MagicStick"
       aria-label="站内 AI 问答"
       @click="open = true"
+      @pointerenter="warmPanel"
+      @focus="warmPanel"
     />
   </el-tooltip>
 

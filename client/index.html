@@ -24,6 +24,53 @@
       })()
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      /**
+       * 首屏数据预取：把最早能发的那个请求提前到 HTML 解析阶段。
+       *
+       * SPA 的串行是 HTML → 下载 entry(100KB) → 执行 → Vue 挂载 → 才发 /api/feed。
+       * 线上 Slow 4G 实测这一发直到 2516ms 才发起、2777ms 才完成，
+       * 而前面那一秒多浏览器只是在等 JS，网络是闲着的。
+       *
+       * 必须是普通 <script> 而不是 module：module 会 defer 到 HTML 解析完，
+       * 还要等自己那个 chunk 下载完（Vite 甚至会把多个 module script 合并进
+       * 同一个 entry）。这段零依赖代码在 head 里就能跑，让接口往返和
+       * entry 下载完全重叠。结果由 useFeed 按参数认领，不会重复请求。
+       *
+       * 失败静默 resolve null，useFeed 会退回正常请求；
+       * 绝不留 unhandled rejection 去污染「零 console error」门禁。
+       */
+      ;(function () {
+        try {
+          if (location.pathname !== '/' || typeof fetch !== 'function') return
+          var token = null
+          try {
+            var raw = localStorage.getItem('auth')
+            if (raw) token = JSON.parse(raw).token || null
+          } catch (e) {
+            /* 存储被禁用时按游客处理 */
+          }
+          var headers = token ? { Authorization: 'Bearer ' + token } : {}
+          window.__sgFeedPrefetch = {
+            category: 'recommend',
+            limit: 30,
+            cursor: 0,
+            promise: fetch('/api/feed?category=recommend&limit=30&cursor=0', {
+              headers: headers,
+              credentials: 'same-origin'
+            })
+              .then(function (r) {
+                return r.ok ? r.json() : null
+              })
+              .catch(function () {
+                return null
+              })
+          }
+        } catch (e) {
+          /* 预取只是加速，主流程照常发请求 */
+        }
+      })()
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>内容社区</title>
   </head>

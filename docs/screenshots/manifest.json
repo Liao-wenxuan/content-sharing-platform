@@ -1,10 +1,10 @@
 {
-  "capturedAt": "2026-11-08T02:32:43.667Z",
-  "clientSrcHash": "89160ab00d3f6ab5ef6d276a636367b34b275326b5aa1c95fec0571f654d1805",
+  "capturedAt": "2026-11-08T03:36:40.819Z",
+  "clientSrcHash": "f281338bc71df974a7b8b2a7f2cda1348b29324dea7aa8f3e31d7093f9e3af52",
   "shots": [
     {
       "file": "01-home.jpeg",
-      "bytes": 433368
+      "bytes": 286673
     },
     {
       "file": "02-search.jpeg",
@@ -12,7 +12,7 @@
     },
     {
       "file": "03-detail.jpeg",
-      "bytes": 158291
+      "bytes": 66131
     },
     {
       "file": "04-login.png",
@@ -20,67 +20,67 @@
     },
     {
       "file": "06-home-logged-in.jpeg",
-      "bytes": 435940
+      "bytes": 270954
     },
     {
       "file": "07-publish.png",
-      "bytes": 80349
+      "bytes": 83152
     },
     {
       "file": "08-profile.jpeg",
-      "bytes": 190288
+      "bytes": 127249
     },
     {
       "file": "09-messages.png",
-      "bytes": 77365
+      "bytes": 80399
     },
     {
       "file": "10-settings.png",
-      "bytes": 78946
+      "bytes": 81408
     },
     {
       "file": "12-search-suggest.jpeg",
-      "bytes": 434847
+      "bytes": 273524
     },
     {
       "file": "13-favorites.jpeg",
-      "bytes": 196351
+      "bytes": 180017
     },
     {
       "file": "14-topic.jpeg",
-      "bytes": 254560
+      "bytes": 170504
     },
     {
       "file": "15-follows.jpeg",
-      "bytes": 65779
+      "bytes": 65628
     },
     {
       "file": "16-detail-comments.jpeg",
-      "bytes": 174566
+      "bytes": 81672
     },
     {
       "file": "26-feed-recommend.jpeg",
-      "bytes": 451893
+      "bytes": 258452
     },
     {
       "file": "27-interest.jpeg",
-      "bytes": 109950
+      "bytes": 104933
     },
     {
       "file": "28-image-compress.png",
-      "bytes": 91815
+      "bytes": 92155
     },
     {
       "file": "29-reveal-stagger.png",
-      "bytes": 1334129
+      "bytes": 785261
     },
     {
       "file": "30-reveal-done.png",
-      "bytes": 1350612
+      "bytes": 805730
     },
     {
       "file": "31-reveal-reduced.png",
-      "bytes": 1350678
+      "bytes": 805774
     },
     {
       "file": "32-settings.png",

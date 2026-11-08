@@ -77,6 +77,9 @@ const ElementPlusDeepResolver = ElementPlusResolver({ importStyle: 'css' }).map(
     : resolver
 )
 
+/** dev / preview 共用：性能测量必须打在真实 Express 上，不能是静态兜底 */
+const upstream = { target: 'http://localhost:3000', changeOrigin: true }
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -145,12 +148,26 @@ export default defineConfig({
   // server 返回的 url 字段是相对路径（/uploads/xxx.png），如果不在这里配，
   // 浏览器请求会落到 Vite SPA fallback 返 text/html，<img> 加载失败。
   // 生产环境是单源，nginx/同源静态服务直接处理，无需配置。
+  //
+  // preview 是另一回事：它服务的是**生产构建**，此时 API_BASE 已被静态替换成
+  // 相对路径 /api（见 constants.ts），/uploads 也仍是相对路径。没有代理的话
+  // 两者都会命中 SPA fallback 拿到 index.html —— 首页渲染成空态，
+  // `npm run perf` 就会量到一组「快得离谱但一张图都没加载」的假数字。
+  // 所以性能测量用的 preview 必须把同源三类请求转给真实后端。
   server: {
     proxy: {
-      '/uploads': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
-      }
+      // dev 下 API 客户端打的是绝对地址 http://localhost:3000/api，
+      // 但 index.html 里的首屏预取用的是同源相对路径 /api（生产也是这个），
+      // 没有这条代理它就会命中 SPA fallback 拿到 index.html。
+      '/api': upstream,
+      '/uploads': upstream
+    }
+  },
+  preview: {
+    proxy: {
+      '/api': upstream,
+      '/uploads': upstream,
+      '/ws': { ...upstream, ws: true }
     }
   },
   build: {

@@ -47,7 +47,7 @@ export const FEATURE_GROUPS: { title: string; items: string[] }[] = [
   {
     title: '工程',
     items: [
-      '1027 条单元测试，覆盖率门槛写进 CI',
+      '1038 条单元测试，覆盖率门槛写进 CI',
       '15 套 Playwright 回归脚本，每个功能模块一套',
       '三 job 并行 CI（typecheck / test / lint）',
       '零依赖动效层：纯 CSS + IntersectionObserver，不引动画库'

@@ -32,6 +32,18 @@ const CLIENT = path.join(ROOT, 'client')
 const PREVIEW_PORT = 4173
 const PREVIEW_URL = `http://localhost:${PREVIEW_PORT}/`
 
+/**
+ * 线上模式：SG_PERF_URL=https://... npm run perf（或 npm run perf -- --live）。
+ *
+ * 为什么必须支持线上：
+ * 本地库是开发/冒烟反复写过的，演示图的 image_thumbs 可能是 NULL，
+ * 首页于是拉 2000px 原图；线上 seed 是干净的 WebP 缩略图。
+ * 两边差一个数量级，拿本地数字判断线上快慢会得出完全相反的结论。
+ * 更关键的是 CDN/反代/缓存头只存在于线上，本地 preview 永远测不到。
+ */
+const LIVE_URL = process.env.SG_PERF_URL || (process.argv.includes('--live') ? 'https://csp.bscjs.top/' : null)
+const BUDGET_MODE = process.argv.includes('--budget') || process.env.SG_PERF_BUDGET === '1'
+
 // Slow 4G：Chrome DevTools 的经典档位。
 // 选它而不是 3G，是因为 3G 下图片下载会淹没 JS 的差异，
 // 而我们要回答的恰恰是「代码体积对首屏的影响」。
@@ -61,7 +73,7 @@ async function waitForServer(url, timeoutMs = 30000) {
   throw new Error(`preview server 30s 内没起来：${url}`)
 }
 
-async function measure() {
+async function measure(url = PREVIEW_URL) {
   const browser = await chromium.launch()
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
@@ -72,14 +84,19 @@ async function measure() {
   // 输出一堆漂亮的数字：LCP 1876ms、图片 0.0KB。
   // 那组数字读起来像「优化到极致」，实际上一张图都没加载 ——
   // **测错对象比测不出来危险得多**，因为它会让人把性能问题「优化」没了。
+  const healthUrl = LIVE_URL
+    ? `${new URL(url).origin}/api/health`
+    : 'http://localhost:3000/api/health'
   try {
-    const health = await fetch('http://localhost:3000/api/health', { signal: AbortSignal.timeout(5000) })
+    const health = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) })
     if (!health.ok) throw new Error(`status ${health.status}`)
   } catch (e) {
     throw new Error(
-      `后端没起来（http://localhost:3000/api/health → ${e.message}）。\n` +
-        '  perf 跑的是生产构建 + 真实后端，两者缺一测出来的数字都是假的。\n' +
-        '  先在另一个窗口跑： cd server; npx tsx watch src/index.ts'
+      `后端没起来（${healthUrl} → ${e.message}）。\n` +
+        (LIVE_URL
+          ? '  线上模式需要站点和它的 API 都在线。\n'
+          : '  perf 跑的是生产构建 + 真实后端，两者缺一测出来的数字都是假的。\n' +
+            '  先在另一个窗口跑： cd server; npx tsx watch src/index.ts\n')
     )
   }
 
@@ -126,7 +143,7 @@ async function measure() {
     }
   })
 
-  await page.goto(PREVIEW_URL, { waitUntil: 'domcontentloaded' })
+  await page.goto(url, { waitUntil: 'domcontentloaded' })
 
   // 等 LCP 稳定：浏览器会在最后一个候选元素出现后 finalize LCP。
   // 这里不能等 networkidle —— 站内常驻 WebSocket，网络永不空闲，
@@ -281,12 +298,16 @@ function report(metrics, distBytes) {
   // LCP 只证明内容开始可见，图片落地才是这块页面真正可用的时刻。
   const cutoff = metrics.imagesReadyAt
   const beforeLcp = resources.filter((r) => r.end <= cutoff)
-  const sum = (list, kind) => list.filter((r) => (kind ? r.kind === kind : true)).reduce((a, b) => a + b.bytes, 0)
+  // CSS 的 initiatorType 在 Chromium 里是 'link' 而不是 'stylesheet'。
+  // 只认后者的话首屏 CSS 会显示成「0.0 KB / 0 个请求」，
+  // 可明细里明明躺着那个 18KB 的 link —— 统计和明细互相打架。
+  const isCss = (r) => r.kind === 'stylesheet' || (r.kind === 'link' && /\.css/.test(r.name))
+  const sum = (list, test) => list.filter(test).reduce((a, b) => a + b.bytes, 0)
 
-  const firstScreenJs = sum(beforeLcp, 'script')
-  const firstScreenCss = sum(beforeLcp, 'stylesheet')
-  const firstScreenImg = sum(beforeLcp, 'img')
-  const firstScreenAll = sum(beforeLcp)
+  const firstScreenJs = sum(beforeLcp, (r) => r.kind === 'script')
+  const firstScreenCss = sum(beforeLcp, isCss)
+  const firstScreenImg = sum(beforeLcp, (r) => r.kind === 'img')
+  const firstScreenAll = sum(beforeLcp, () => true)
 
   console.log('\n=== 首屏关键指标（Slow 4G：1.6Mbps / 150ms RTT）===')
   console.log(`  TTFB            ${metrics.ttfb.toFixed(0).padStart(6)} ms`)
@@ -309,7 +330,7 @@ function report(metrics, distBytes) {
 
   console.log('\n=== 首屏下载构成（到「视口图片就绪」为止）===')
   console.log(`  JS      ${kb(firstScreenJs).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'script').length} 个请求`)
-  console.log(`  CSS     ${kb(firstScreenCss).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'stylesheet').length} 个请求`)
+  console.log(`  CSS     ${kb(firstScreenCss).padStart(8)} KB   ${beforeLcp.filter(isCss).length} 个请求`)
   console.log(`  图片    ${kb(firstScreenImg).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'img').length} 个请求`)
   console.log(`  合计    ${kb(firstScreenAll).padStart(8)} KB   ${beforeLcp.length} 个请求`)
 
@@ -365,6 +386,85 @@ function report(metrics, distBytes) {
       )
     }
   }
+
+  return { firstScreenJs, firstScreenCss, firstScreenImg, firstScreenAll, beforeLcp }
+}
+
+/**
+ * 性能预算：只卡**结构性**指标，不卡绝对时间。
+ *
+ * LCP 会随机器负载、跨地域 RTT、甚至 CI runner 的 CPU 抖动几百毫秒，
+ * 拿它当硬门槛只会训练大家把红线往后挪。真正该守住的是那些
+ * 「改回去就一定会变慢、但不受环境影响」的量：
+ * 首屏下了几张图、一共多少字节、数据请求有没有在 HTML 阶段就发出去。
+ *
+ * 阈值来自线上 Slow 4G 实测（优化前 22 张 / 433KB / 627KB），
+ * 在优化后的数值上留约 30% 余量。
+ */
+function checkBudget(metrics, sums, dataDirty = false) {
+  const imageRequests = sums.beforeLcp.filter((r) => r.kind === 'img').length
+  const feed = metrics.resources.find(
+    (r) => (r.kind === 'fetch' || r.kind === 'xmlhttprequest') && r.name.includes('/feed')
+  )
+  const KiB = 1024
+
+  // 字节类门槛的前提是「列表拉的是 480px WebP」。本地库混进 e2e 上传的
+  // 原图时，再拿它卡 320 KiB 只会报一个和线上无关的假红灯。
+  // 脏数据就明说 SKIP，不假装通过也不假装失败。
+  const avgImg = imageRequests ? sums.firstScreenImg / imageRequests : 0
+  const byteBudgetUsable = !dataDirty && avgImg <= 120 * KiB
+  const byte = (ok) => (byteBudgetUsable ? ok : 'skip')
+
+  const checks = [
+    [
+      `首屏图片请求 ${imageRequests} 张（视口内 ${metrics.viewportImageCount} 张）`,
+      imageRequests <= metrics.viewportImageCount + 8,
+      '视口外的图不能被原生 lazy 的动态阈值拖进首屏'
+    ],
+    [
+      `首屏图片 ${(sums.firstScreenImg / KiB).toFixed(1)} KiB`,
+      byte(sums.firstScreenImg <= 320 * KiB),
+      '上限 320 KiB'
+    ],
+    [
+      `首屏总流量 ${(sums.firstScreenAll / KiB).toFixed(1)} KiB`,
+      byte(sums.firstScreenAll <= 560 * KiB),
+      '上限 560 KiB'
+    ],
+    [
+      `首屏 JS ${(sums.firstScreenJs / KiB).toFixed(1)} KiB`,
+      sums.firstScreenJs <= 115 * KiB,
+      '上限 115 KiB（与 perf:budget 的 entry 体积门一起看）'
+    ],
+    [
+      feed ? `/api/feed 在 ${feed.start.toFixed(0)}ms 发起` : '没有找到 /api/feed 请求',
+      !!feed && feed.start <= metrics.ttfb + 800,
+      '预取必须在 HTML 阶段发起，不能等 entry 执行完'
+    ],
+    [`CLS ${metrics.cls.toFixed(4)}`, metrics.cls <= 0.1, '上限 0.1']
+  ]
+
+  console.log('\n=== 性能预算 ===')
+  let failed = 0
+  for (const [label, status, why] of checks) {
+    const mark = status === 'skip' ? '–' : status ? '✓' : '✗'
+    console.log(
+      `  ${mark} ${label}` +
+        (status === 'skip' ? '  ← SKIP：本地库混入了原图，字节不可比' : status ? '' : `  ← ${why}`)
+    )
+    if (status === false) failed++
+  }
+  if (!byteBudgetUsable) {
+    console.log(
+      `  （单图平均 ${(avgImg / KiB).toFixed(1)} KiB；跑 cleanup-test-data.mjs --yes 后重测，或用 perf:live）`
+    )
+  }
+  if (failed) {
+    console.error(`\n✗ ${failed} 项超出预算。`)
+    process.exitCode = 1
+  } else {
+    console.log('  ✓ 全部在预算内')
+  }
 }
 
 async function distTotals() {
@@ -381,7 +481,48 @@ async function distTotals() {
   return { js, css }
 }
 
+/**
+ * 本地库和线上 seed 不是同一份数据：开发/冒烟反复写过的库里，
+ * 演示图的 image_thumbs 可能是 NULL，首页于是拉 2000px 原图。
+ * 这时 perf 会量到一组「慢得离谱」的数字，而线上根本没有这个问题 ——
+ * 测错对象比测不出来危险得多。数字照给，但必须把这句话写在数字前面。
+ */
+async function warnIfLocalDataIsDirty() {
+  try {
+    const res = await fetch('http://localhost:3000/api/feed?category=recommend&limit=30&cursor=0', {
+      signal: AbortSignal.timeout(5000)
+    })
+    const data = await res.json()
+    const thumbs = (data.items ?? [])
+      .map((i) => i.post?.imageThumbs?.[0])
+      .filter((t) => typeof t === 'string')
+    if (!thumbs.length) return false
+    const webp = thumbs.filter((t) => t.endsWith('.webp')).length
+    if (webp >= thumbs.length * 0.9) return false
+
+    console.log(
+      `\n⚠️ 本地库 ${thumbs.length} 张封面里只有 ${webp} 张是 WebP 缩略图。` +
+        '\n   下面这组数字测的是「本地脏数据」，字节预算不适用（会标 SKIP）。' +
+        '\n   先跑 npm run seed:thumbs + node server/cleanup-test-data.mjs --yes，' +
+        '或者直接 npm run perf:live -- --budget 打线上。\n'
+    )
+    return true
+  } catch {
+    // 采样失败不影响主流程；健康检查已经在 measure() 里把过关了
+    return false
+  }
+}
+
 async function main() {
+  if (LIVE_URL) {
+    console.log(`线上实测 ${LIVE_URL}（不构建、不起 preview，直接打真实链路）`)
+    const metrics = await measure(LIVE_URL)
+    const sums = report(metrics, await distTotals())
+    if (BUDGET_MODE) checkBudget(metrics, sums)
+    console.log('\n注：全站 JS 取本地 client/dist 的体积；线上产物不同时这一行仅作参考。')
+    return
+  }
+
   console.log('生产构建中…')
   const build = spawnSync(process.execPath, [path.join(CLIENT, 'node_modules/vite/bin/vite.js'), 'build'], {
     cwd: CLIENT,
@@ -405,8 +546,10 @@ async function main() {
 
   try {
     await waitForServer(PREVIEW_URL)
+    const dataDirty = await warnIfLocalDataIsDirty()
     const metrics = await measure()
-    report(metrics, await distTotals())
+    const sums = report(metrics, await distTotals())
+    if (BUDGET_MODE) checkBudget(metrics, sums, dataDirty)
     console.log('\n提示：preview 只服务静态产物，/api 与 /uploads 仍由 3000 端口的 Express 提供。')
   } finally {
     preview.kill()

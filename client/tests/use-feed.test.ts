@@ -64,6 +64,7 @@ function pageOf(ids: number[], over: Partial<FeedResponse> = {}): FeedResponse {
 beforeEach(() => {
   vi.mocked(feedApi.get).mockReset()
   vi.mocked(feedApi.feedback).mockReset().mockResolvedValue({ ok: true, postId: 1 })
+  delete (window as any).__sgFeedPrefetch
 })
 
 describe('useFeed 会话与翻页', () => {
@@ -246,5 +247,93 @@ describe('useFeed 不感兴趣', () => {
 
     await feed.dismiss(999)
     expect(feedApi.feedback).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 首屏预取（index.html 在 HTML 解析阶段发出的那一发）。
+ *
+ * 这里要钉住的不是「快了多少」，而是**不会拿错数据**：
+ * 频道/条数/游标对不上就绝不能复用，失败要能安静退回正常请求，
+ * 而且一份结果只能被吃一次 —— 反复复用同一份快照会让「换一批」永远没反应。
+ */
+describe('useFeed 首屏预取', () => {
+  function setPrefetch(over: Record<string, unknown> = {}, value: unknown = pageOf([7, 8])) {
+    ;(window as any).__sgFeedPrefetch = {
+      category: 'recommend',
+      limit: 30,
+      cursor: 0,
+      promise: Promise.resolve(value),
+      ...over
+    }
+  }
+
+  it('参数匹配时直接用预取结果，不再发一次重复请求', async () => {
+    setPrefetch()
+    const feed = useFeed(() => 'recommend')
+    await feed.reload()
+
+    expect(feed.posts.value.map((p) => p.id)).toEqual([7, 8])
+    expect(feedApi.get).not.toHaveBeenCalled()
+    expect((window as any).__sgFeedPrefetch).toBeUndefined()
+  })
+
+  it('预取结果只能用一次，第二次刷新走正常请求', async () => {
+    setPrefetch()
+    vi.mocked(feedApi.get).mockResolvedValue(pageOf([1]))
+    const feed = useFeed(() => 'recommend')
+    await feed.reload()
+    await feed.reload()
+
+    expect(feedApi.get).toHaveBeenCalledTimes(1)
+    expect(feed.posts.value.map((p) => p.id)).toEqual([1])
+  })
+
+  it('频道对不上就不复用（预取的是推荐，用户要看美食）', async () => {
+    setPrefetch()
+    vi.mocked(feedApi.get).mockResolvedValue(pageOf([3]))
+    const feed = useFeed(() => 'food')
+    await feed.reload()
+
+    expect(feedApi.get).toHaveBeenCalledWith(expect.objectContaining({ category: 'food' }))
+    expect(feed.posts.value.map((p) => p.id)).toEqual([3])
+  })
+
+  it('条数或游标对不上就退回正常请求', async () => {
+    setPrefetch({ limit: 12 })
+    vi.mocked(feedApi.get).mockResolvedValue(pageOf([4]))
+    const feed = useFeed(() => 'recommend')
+    await feed.reload()
+    expect(feedApi.get).toHaveBeenCalledTimes(1)
+
+    setPrefetch({ cursor: 30 })
+    vi.mocked(feedApi.get).mockResolvedValue(pageOf([5]))
+    const feed2 = useFeed(() => 'recommend')
+    await feed2.reload()
+    expect(feedApi.get).toHaveBeenCalledTimes(2)
+  })
+
+  it('预取失败（resolve null）安静退回正常请求，不把页面卡在报错态', async () => {
+    setPrefetch({}, null)
+    vi.mocked(feedApi.get).mockResolvedValue(pageOf([6]))
+    const feed = useFeed(() => 'recommend')
+    await feed.reload()
+
+    expect(feedApi.get).toHaveBeenCalledTimes(1)
+    expect(feed.errorMsg.value).toBe('')
+    expect(feed.posts.value.map((p) => p.id)).toEqual([6])
+  })
+
+  it('翻页永远不用预取结果', async () => {
+    setPrefetch({}, pageOf([1, 2], { nextCursor: 2, hasMore: true }))
+    vi.mocked(feedApi.get).mockResolvedValueOnce(pageOf([3]))
+    const feed = useFeed(() => 'recommend')
+    await feed.reload()
+    // 翻页前故意再塞一份预取：fetchPage(false) 必须无视它
+    setPrefetch({}, pageOf([99]))
+    await feed.loadMore()
+
+    expect(feed.posts.value.map((p) => p.id)).toEqual([1, 2, 3])
+    expect(feedApi.get).toHaveBeenCalledTimes(1)
   })
 })

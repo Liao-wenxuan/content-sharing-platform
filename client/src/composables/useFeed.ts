@@ -1,7 +1,39 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from '@/utils/element'
-import { feedApi, type FeedbackAction, type FeedItem } from '@/api/feed'
+import { feedApi, type FeedbackAction, type FeedItem, type FeedResponse } from '@/api/feed'
 import type { Post } from '@/api/posts'
+
+declare global {
+  interface Window {
+    /** index.html 在 HTML 解析阶段发出的首屏预取，参数自带描述以免两边常量漂移 */
+    __sgFeedPrefetch?: {
+      category: string
+      limit: number
+      cursor: number
+      promise: Promise<unknown>
+    }
+  }
+}
+
+/**
+ * 认领 HTML 阶段预取的那一份首页数据（一次性）。
+ *
+ * 按**参数**比对而不是共用一个魔法 key：预取脚本把请求长什么样一起挂在
+ * window 上，将来改了频道/条数，这边会自动认不出来并退回正常请求，
+ * 不会出现「一边改了参数，另一边还在吃旧快照」。
+ *
+ * delete 是刻意的：预取只对首次首屏有效，之后的刷新 / 换一批 / 切分类
+ * 都该走正常请求，不能反复吃同一份可能已经过期的结果。
+ */
+function takePrefetch(categoryName: string, reset: boolean): Promise<unknown> | null {
+  if (!reset || typeof window === 'undefined') return null
+  const entry = window.__sgFeedPrefetch
+  if (!entry || entry.category !== categoryName || entry.limit !== 30 || entry.cursor !== 0) {
+    return null
+  }
+  delete window.__sgFeedPrefetch
+  return entry.promise
+}
 
 /**
  * 推荐流的会话状态
@@ -47,12 +79,18 @@ export function useFeed(category: () => string) {
     errorMsg.value = ''
 
     try {
-      const data = await feedApi.get({
-        category: category(),
-        limit: 30,
-        sessionId: sessionId.value,
-        cursor: reset ? 0 : nextCursor.value
-      })
+      // 预取失败（网络/500/解析异常）时 boot 脚本会 resolve null，
+      // 这里就安静地退回正常请求 —— 不能让「优化」变成一个新的失败路径。
+      const prefetch = takePrefetch(category(), reset)
+      const prefetched = prefetch ? ((await prefetch) as FeedResponse | null) : null
+      const data: FeedResponse =
+        prefetched ??
+        (await feedApi.get({
+          category: category(),
+          limit: 30,
+          sessionId: sessionId.value,
+          cursor: reset ? 0 : nextCursor.value
+        }))
       // 防御性去重：服务端已经保证不重，但这里是「唯一一份已经渲染出来的列表」，
       // 万一哪天服务端改出重叠，页面上出现两张一样的卡片比重复请求更难解释
       const known = new Set(items.value.map((i) => i.post.id))
