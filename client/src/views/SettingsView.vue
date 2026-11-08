@@ -15,7 +15,7 @@
  * 让用户为了改一个开关而换一整个页面，代价大于收益。
  * 而「帮助 / 关于」是纯阅读内容，走抽屉同样合适。
  */
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from '@/utils/element'
 import {
@@ -70,6 +70,34 @@ function open(key: string) {
 function close() {
   openPanel.value = null
 }
+
+/**
+ * 抽屉宽度：桌面端按面板内容给固定宽，窄屏必须铺满整个视口。
+ *
+ * Element Plus 会把 size 直接写成 inline `width`，而 480/520/560px 在 390px
+ * 视口下会左溢出（rtl 右对齐后 left 实测 -90 / -130 / -170）：标题缺字、
+ * 表单左半被裁掉，连 header 上的关闭按钮都点不到，用户会被困在抽屉里。
+ * 用 matchMedia 跟随旋转/分屏，比只在 onMounted 读一次 innerWidth 更可靠。
+ */
+const narrowViewport = ref(false)
+let viewportQuery: MediaQueryList | null = null
+
+function syncViewport(source: MediaQueryList | MediaQueryListEvent) {
+  narrowViewport.value = source.matches
+}
+
+onMounted(() => {
+  viewportQuery = window.matchMedia('(max-width: 768px)')
+  syncViewport(viewportQuery)
+  viewportQuery.addEventListener('change', syncViewport)
+})
+
+onUnmounted(() => {
+  viewportQuery?.removeEventListener('change', syncViewport)
+})
+
+/** 模板里每处 size 都走这里，避免逐个抽屉漏改 */
+const drawerSize = (desktopPx: number) => (narrowViewport.value ? '100%' : `${desktopPx}px`)
 
 // ===== 菜单分组 =====
 //
@@ -450,7 +478,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'account'"
       title="账号与安全"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelAccount />
@@ -459,7 +487,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'switch'"
       title="切换账号"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelSwitchAccount />
@@ -468,7 +496,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'appearance'"
       title="外观与主题"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelAppearance />
@@ -477,7 +505,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'general'"
       title="通用设置"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelGeneral />
@@ -486,7 +514,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'notify'"
       title="通知设置"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelNotify />
@@ -495,7 +523,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'language'"
       title="内容偏好"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelLanguage />
@@ -504,7 +532,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'privacy'"
       title="隐私设置"
-      size="520px"
+      :size="drawerSize(520)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelPrivacy />
@@ -513,7 +541,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'storage'"
       title="存储空间"
-      size="480px"
+      :size="drawerSize(480)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelStorage />
@@ -522,7 +550,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'widget'"
       title="添加小组件"
-      size="520px"
+      :size="drawerSize(520)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelWidget />
@@ -531,7 +559,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'help'"
       title="帮助与客服"
-      size="560px"
+      :size="drawerSize(560)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelHelp />
@@ -540,7 +568,7 @@ onMounted(async () => {
     <el-drawer
       :model-value="openPanel === 'about'"
       title="关于内容社区"
-      size="520px"
+      :size="drawerSize(520)"
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelAbout />

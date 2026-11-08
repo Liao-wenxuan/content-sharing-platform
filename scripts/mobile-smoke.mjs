@@ -103,6 +103,21 @@ await guest.waitForTimeout(1000)
     parseFloat(getComputedStyle(document.querySelector('.content')).paddingBottom)
   )
   check('内容区给底栏留了安全区', pad >= 70, `${pad}px`)
+
+  // 频道栏曾经把 nav-wrap 改成 flex:center：12 个 tab 总宽 952px 被整体居中，
+  // 选中的「推荐」跑到 -261px，scrollLeft 还是 0 —— 用户看不到当前频道也滚不回去。
+  const tab = await guest.evaluate(() => {
+    const active = document.querySelector('.el-tabs__item.is-active')
+    if (!active) return null
+    const r = active.getBoundingClientRect()
+    return {
+      text: active.textContent.trim(),
+      left: Math.round(r.left),
+      right: Math.round(r.right),
+      inView: r.left >= -1 && r.right <= innerWidth + 1
+    }
+  })
+  check('选中的频道在可视区内', tab?.inView === true, JSON.stringify(tab))
 }
 
 console.log('\n[2] 游客点「发布」→ 登录页带回跳')
@@ -112,6 +127,14 @@ console.log('\n[2] 游客点「发布」→ 登录页带回跳')
   check('跳到了登录页', guest.url().includes('/login'), guest.url())
   check('redirect 指回发布页', guest.url().includes('redirect'), guest.url().split('?')[1] ?? '')
   await noOverflow(guest, '登录页无横向溢出')
+
+  // 登录页是独立全屏布局，窄屏既没侧栏也没底栏；不给出口的话，
+  // 从底栏跳进来的游客只能靠浏览器返回键，等于被困住。
+  check('登录页有返回出口', await guest.locator('.auth-back').isVisible())
+  check('登录页有免登录入口', await guest.locator('.guest-skip').isVisible())
+  await guest.locator('.guest-skip').click()
+  await guest.waitForTimeout(800)
+  check('「不登录先去逛逛」能回首页', !guest.url().includes('/login'), guest.url())
 }
 
 console.log('\n[3] 已登录：五个格子都能跳，高亮跟着走')
@@ -170,6 +193,41 @@ console.log('\n[5] 详情页 / 收藏页在手机上不横溢')
   await auth.goto(`${BASE}/favorites`, { waitUntil: 'networkidle' })
   await auth.waitForTimeout(900)
   await noOverflow(auth, '收藏页无横向溢出')
+
+  // 抽屉原本写死 size="480px/520px/560px"，rtl 右对齐后在 375 宽下
+  // left 是负数：标题缺字、表单左半被裁、关闭按钮点不到。
+  await auth.goto(`${BASE}/settings`, { waitUntil: 'networkidle' })
+  await auth.waitForTimeout(900)
+  for (const name of ['账号与安全', '外观与主题', '隐私设置']) {
+    await auth.locator('main button').filter({ hasText: name }).first().click()
+    await auth.waitForTimeout(700)
+    const box = await auth.evaluate(() => {
+      const d = [...document.querySelectorAll('.el-drawer')].find(
+        (e) => e.getBoundingClientRect().width > 0
+      )
+      if (!d) return null
+      const r = d.getBoundingClientRect()
+      return {
+        left: Math.round(r.left),
+        right: Math.round(r.right),
+        w: Math.round(r.width),
+        iw: innerWidth
+      }
+    })
+    check(
+      `设置面板「${name}」不溢出`,
+      !!box && box.left >= -1 && box.right <= box.iw + 1,
+      JSON.stringify(box)
+    )
+    // 用 DOM click 关掉可见的那个抽屉，避免被 overlay 挡住影响下一轮
+    await auth.evaluate(() => {
+      const d = [...document.querySelectorAll('.el-drawer')].find(
+        (e) => e.getBoundingClientRect().width > 0
+      )
+      d?.querySelector('.el-drawer__close-btn')?.click()
+    })
+    await auth.waitForTimeout(500)
+  }
 }
 
 console.log('\n[6] 浅色主题下底栏仍然可读')
@@ -185,12 +243,14 @@ console.log('\n[6] 浅色主题下底栏仍然可读')
   const after = await auth.evaluate(() => ({
     isDark: document.documentElement.classList.contains('dark'),
     navColor: getComputedStyle(document.querySelector('.nav-item')).color,
-    publishFg: getComputedStyle(
-      document.querySelector('.nav-item.is-publish .nav-icon-wrap')
-    ).color
+    publishFg: getComputedStyle(document.querySelector('.nav-item.is-publish .nav-icon-wrap')).color
   }))
   check('主题真的切了', after.isDark !== before.isDark, `dark: ${before.isDark} -> ${after.isDark}`)
-  check('底栏文字色跟着主题变', after.navColor !== before.navColor, `${before.navColor} -> ${after.navColor}`)
+  check(
+    '底栏文字色跟着主题变',
+    after.navColor !== before.navColor,
+    `${before.navColor} -> ${after.navColor}`
+  )
   check('发布圆钮用了强调色的前景字', after.publishFg.length > 0, after.publishFg)
   // 鼠标从主题按钮上挪开：tooltip 会浮在顶栏中间，把截图弄得像布局错位
   await auth.mouse.move(4, 4)

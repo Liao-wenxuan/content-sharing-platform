@@ -303,16 +303,23 @@ watch(isFollowFeed, () => loadFeed(true))
 }
 
 /* ===== 频道栏 ===== */
+/*
+ * 这里**不能**把 nav-wrap / nav-scroll 改成 flex 居中。
+ * Element Plus 靠这两个容器做横向滚动：频道有 12 个，nav 实测 952px，
+ * 390px 视口下靠 ‹ › 箭头翻页。改成 flex:center 后整个 nav 被居中，
+ * 选中的第一项「推荐」被推到 -261px，而 scrollLeft 仍是 0 ——
+ * 用户既看不到自己在哪个频道，也滚不回去（窄屏下等于「分类栏是坏的」）。
+ * 只有宽屏（nav 放得下）才需要居中，且只作用在 header 上。
+ */
 .channel-tabs :deep(.el-tabs__header) {
-  display: flex;
-  justify-content: center;
   margin-bottom: 22px;
 }
 
-.channel-tabs :deep(.el-tabs__nav-wrap),
-.channel-tabs :deep(.el-tabs__nav-scroll) {
-  display: flex;
-  justify-content: center;
+@media (min-width: 1100px) {
+  .channel-tabs :deep(.el-tabs__header) {
+    display: flex;
+    justify-content: center;
+  }
 }
 
 .channel-tabs :deep(.el-tabs__nav) {

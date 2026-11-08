@@ -82,7 +82,7 @@ describe('MobileNav', () => {
     ['/favorites', {}, '我的'],
     ['/settings', {}, '我的'],
     ['/interest', {}, '我的'],
-    ['/view-history', {}, '我的'],
+    ['/history', {}, '我的'],
     ['/post/12', {}, '发现'],
     ['/search?q=x', {}, '发现'],
     ['/topic/穿搭', {}, '发现']

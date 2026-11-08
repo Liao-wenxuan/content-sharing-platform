@@ -63,7 +63,7 @@ const activeKey = computed(() => {
     p.startsWith('/favorites') ||
     p.startsWith('/settings') ||
     p.startsWith('/interest') ||
-    p.startsWith('/view-history') ||
+    p.startsWith('/history') ||
     p.startsWith('/switch-account')
   ) {
     return 'me'

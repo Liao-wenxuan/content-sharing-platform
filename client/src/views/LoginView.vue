@@ -9,7 +9,7 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/utils/element'
-import { User, Message, Lock, EditPen } from '@element-plus/icons-vue'
+import { User, Message, Lock, EditPen, ArrowLeft } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 
@@ -25,6 +25,21 @@ function resolveRedirect(): string {
     return r
   }
   return '/'
+}
+
+/**
+ * 登录页是独立全屏布局（App.vue 不套三栏壳），窄屏下连底栏都没有。
+ * 从底栏「发布 / 消息 / 关注」跳进来的游客如果没有账号又不给出口，
+ * 就只能靠浏览器返回键 —— 手机上这一步几乎不可发现。
+ * 所以给一条明确的「返回」，再给一条不用登录也能继续逛的入口。
+ */
+function goBack() {
+  if (window.history.length > 1) router.back()
+  else router.push('/')
+}
+
+function skipLogin() {
+  router.push('/')
 }
 
 const mode = ref<'login' | 'register'>('login')
@@ -82,6 +97,10 @@ async function handleSubmit() {
 
 <template>
   <div class="login-page">
+    <button type="button" class="auth-back" @click="goBack">
+      <el-icon><ArrowLeft /></el-icon>
+      <span>返回</span>
+    </button>
     <el-card shadow="never" class="login-card">
       <!-- 品牌 -->
       <div class="brand">
@@ -144,6 +163,8 @@ async function handleSubmit() {
           {{ submitText }}
         </el-button>
       </el-form>
+
+      <button type="button" class="guest-skip" @click="skipLogin">不登录，先去逛逛</button>
     </el-card>
   </div>
 </template>
@@ -224,5 +245,48 @@ async function handleSubmit() {
   width: 100%;
   margin-top: 8px;
   font-weight: 600;
+}
+
+/*
+ * 这两个出口只在窄屏出现：桌面端登录页保持原来的整屏构图，
+ * 不动截图门禁里的桌面截图。窄屏没有侧栏也没有底栏，必须有显式出口。
+ */
+.auth-back,
+.guest-skip {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .auth-back {
+    position: fixed;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: 14px;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--background);
+    color: var(--foreground);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .guest-skip {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-2);
+    font-family: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
 }
 </style>
