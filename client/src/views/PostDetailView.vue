@@ -22,7 +22,7 @@
  */
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from '@/utils/element'
+import { ElMessage, ElMessageBox } from '@/utils/element'
 import { Star, ChatDotRound, Collection, ArrowLeft } from '@element-plus/icons-vue'
 import { postsApi, type Post } from '@/api/posts'
 import { commentsApi, type Comment } from '@/api/comments'
@@ -110,6 +110,7 @@ const replies = ref<Comment[]>([])
 const replyingTo = ref<Comment | null>(null)
 const likingCommentId = ref<number | null>(null)
 const pinningId = ref<number | null>(null)
+const deletingCommentId = ref<number | null>(null)
 
 /**
  * 把平铺的 replies 按 parentId 分组。
@@ -373,6 +374,58 @@ async function togglePin(item: Comment) {
   }
 }
 
+/**
+ * 删除评论（自己的，或自己笔记下别人的）
+ *
+ * 删除前必须确认，且文案要说明后果：
+ * 删的是带回复的父评论时，回复会一起进回收站 ——
+ * 不写明白的话，「回复怎么也没了」会是评论区的头号投诉。
+ * 失败时本地不动：列表由下一次进页面重新拉取兜底。
+ */
+async function deleteComment(item: Comment) {
+  if (deletingCommentId.value !== null) return
+
+  const replyCount = item.parentId === null ? repliesOf(item.id).length : 0
+  const tip =
+    replyCount > 0
+      ? `删除这条评论会连下面的 ${replyCount} 条回复一起删除，确定吗？`
+      : '删除后无法恢复，确定删除这条评论吗？'
+
+  try {
+    await ElMessageBox.confirm(tip, '删除评论', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return // 用户点了取消，不发请求
+  }
+
+  deletingCommentId.value = item.id
+  try {
+    const res = await commentsApi.remove(currentPostId.value, item.id)
+    if (item.parentId === null) {
+      comments.value = comments.value.filter((c) => c.id !== item.id)
+      // 父评论删了，它的回复在界面上也跟着消失（后端已一并软删）
+      replies.value = replies.value.filter((r) => r.parentId !== item.id)
+    } else {
+      replies.value = replies.value.filter((r) => r.id !== item.id)
+    }
+    // 服务端把计数和列表用同一个过滤条件算出来，这里按返回的条数对齐
+    if (post.value) post.value.commentCount = Math.max(0, post.value.commentCount - res.removed)
+    ElMessage.success('评论已删除')
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '删除失败，请重试')
+  } finally {
+    deletingCommentId.value = null
+  }
+}
+
+/** 删除入口：自己的评论，或者自己笔记下的任何评论 */
+function canDeleteComment(item: Comment): boolean {
+  return auth.user?.id === item.userId || isPostAuthor.value
+}
+
 function onCommentInput() {
   // 输入时清掉旧错误
   if (commentError.value) commentError.value = ''
@@ -623,6 +676,17 @@ watch(
                     >
                       {{ item.pinnedAt ? '取消置顶' : '置顶' }}
                     </button>
+
+                    <!-- 删除：自己的评论，或自己笔记下的任何评论 -->
+                    <button
+                      v-if="canDeleteComment(item)"
+                      type="button"
+                      class="mini-action is-danger"
+                      :disabled="deletingCommentId === item.id"
+                      @click="deleteComment(item)"
+                    >
+                      删除
+                    </button>
                   </div>
 
                   <!-- 回复：默认展开，用户可以手动收起 -->
@@ -666,6 +730,16 @@ watch(
                                  这里给的是「回复这条一级评论」，避免做出第三层 -->
                             <button type="button" class="mini-action" @click="startReply(item)">
                               回复
+                            </button>
+
+                            <button
+                              v-if="canDeleteComment(r)"
+                              type="button"
+                              class="mini-action is-danger"
+                              :disabled="deletingCommentId === r.id"
+                              @click="deleteComment(r)"
+                            >
+                              删除
                             </button>
                           </div>
                         </div>
@@ -1163,6 +1237,12 @@ watch(
 .mini-action:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* 删除是破坏性动作：默认和其它操作一样低调，hover 才亮红 ——
+   常年红色会让评论区看起来到处是警告 */
+.mini-action.is-danger:hover:not(:disabled) {
+  color: var(--destructive-text);
 }
 
 .mini-action.liked {

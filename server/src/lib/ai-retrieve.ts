@@ -277,7 +277,7 @@ export function retrieve(query: string, limit = 6): RetrieveResult {
           p.id, p.user_id, p.content, p.topic_tag, p.created_at,
           u.nickname, u.avatar,
           (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
-          (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
+          (SELECT COUNT(*) FROM comments WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count
         FROM posts p
         JOIN users u ON p.user_id = u.id
         WHERE (${ors}) AND p.visibility = 'public'
@@ -301,9 +301,16 @@ export function retrieve(query: string, limit = 6): RetrieveResult {
       for (const t of terms) {
         if (!hay.includes(t)) continue
         hitTerms.add(t)
-        if (t.length >= 3) strongHits++
+        /*
+         * 话题标签是站内自己维护的词表，不是随手切出来的二元组：
+         * 「通勤穿搭怎么搭」这种自然问句，全文命中往往只有「穿搭」一个二元组，
+         * 按弱信号算就永远过不了召回门槛 —— 可明明有 #穿搭 的笔记。
+         * 所以命中话题的词一律按强信号算，权重也额外抬一档。
+         */
+        const isTopic = !!r.topic_tag && (r.topic_tag.includes(t) || t.includes(r.topic_tag))
+        if (t.length >= 3 || isTopic) strongHits++
         else weakHits++
-        score += termWeight(t)
+        score += termWeight(t) + (isTopic ? 4 : 0)
       }
       // 整段命中是强信号：用户很可能直接复制了一个话题名或标题
       const phraseHit = hay.includes(phrase)

@@ -156,7 +156,7 @@ function loadCandidates(
               p.topic_tag,
               p.created_at,
               (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS like_count,
-              (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count,
+              (SELECT COUNT(*) FROM comments WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count,
               (SELECT COUNT(*) FROM favorites WHERE post_id = p.id) AS favorite_count
          FROM posts p
          ${whereClause(conditions)}
@@ -345,7 +345,7 @@ function loadPostsByIds(ids: number[]) {
       `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
               u.nickname, u.avatar,
               (SELECT COUNT(*) FROM likes     WHERE post_id = p.id) AS like_count,
-              (SELECT COUNT(*) FROM comments  WHERE post_id = p.id) AS comment_count
+              (SELECT COUNT(*) FROM comments  WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count
          FROM posts p
          JOIN users u ON u.id = p.user_id
         WHERE p.id IN (${placeholders}) AND p.visibility = 'public'`

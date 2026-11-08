@@ -186,7 +186,9 @@ router.get('/export', requireAuth, (req: Request, res: Response) => {
       .prepare('SELECT id, email, nickname, avatar, cover, created_at FROM users WHERE id = ?')
       .get(userId)
     const posts = db.prepare('SELECT * FROM posts WHERE user_id = ?').all(userId)
-    const comments = db.prepare('SELECT * FROM comments WHERE user_id = ?').all(userId)
+    const comments = db
+      .prepare('SELECT * FROM comments WHERE user_id = ? AND deleted_at IS NULL')
+      .all(userId)
     const likes = db.prepare('SELECT post_id, created_at FROM likes WHERE user_id = ?').all(userId)
     const follows = db
       .prepare('SELECT followee_id, created_at FROM follows WHERE follower_id = ?')

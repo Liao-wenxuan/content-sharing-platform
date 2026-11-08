@@ -93,6 +93,16 @@ export interface UserPostsResponse {
   total: number
 }
 
+/** 我赞过的笔记：比 Post 多一个「什么时候赞的」，列表排序按它来 */
+export interface LikedPost extends Post {
+  likedAt: string
+}
+
+export interface LikesPage {
+  list: LikedPost[]
+  pagination: { page: number; pageSize: number; total: number; hasMore: boolean }
+}
+
 // 评论相关的类型和接口已经搬到 api/comments.ts：
 // 评论现在是独立资源（有自己的点赞 / 置顶 / 二级回复），再挂在 posts 下面不合适。
 
@@ -171,6 +181,11 @@ export const postsApi = {
   // 获取当前用户的帖子列表（需要 Bearer token）
   getMyPosts(scope: PostScope = 'public'): Promise<UserPostsResponse> {
     return request.get<UserPostsResponse>('/users/me/posts', { params: { scope } })
+  },
+
+  // 我赞过的笔记（主页「赞过」tab 用，服务端会滤掉已不可见的笔记）
+  getMyLikes(params: { page?: number; pageSize?: number } = {}): Promise<LikesPage> {
+    return request.get<LikesPage>('/users/me/likes', { params })
   },
 
   // 获取指定用户的帖子列表。scope=private 只有本人能查（服务端 403）

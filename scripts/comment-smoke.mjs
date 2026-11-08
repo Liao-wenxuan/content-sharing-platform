@@ -264,7 +264,76 @@ try {
     )
   }
 
-  console.log('\n[9] 控制台干净')
+  console.log('\n[9] 删除评论：自己的能删，别人的连入口都没有')
+  {
+    await openPost(pageV)
+    // 路人视角：别人的评论上没有「删除」按钮
+    const visitorDelBtns = await pageV
+      .locator('.comment-item')
+      .filter({ hasText: '作者的第二条评论' })
+      .locator('.mini-action.is-danger')
+      .count()
+    check('路人看不到别人的「删除」按钮', visitorDelBtns === 0)
+
+    // 路人删自己的：确认框写明后果，删完立刻消失
+    await pageV
+      .locator('.comment-item')
+      .filter({ hasText: '路人来评论一条' })
+      .locator('.mini-action.is-danger')
+      .click()
+    await pageV.waitForTimeout(500)
+    const boxText = await pageV.locator('.el-message-box').innerText()
+    // 这条评论挂了作者的回复，所以文案可能是「连回复一起删」；
+    // 没挂回复时是「无法恢复」——两种都算把后果讲清楚了
+    check(
+      '确认框说明后果（无法恢复 / 连回复一起删）',
+      boxText.includes('无法恢复') || boxText.includes('回复一起删除'),
+      boxText.replace(/\s+/g, ' ')
+    )
+    await pageV.locator('.el-message-box__btns .el-button--primary').click()
+    await pageV.waitForTimeout(1300)
+    check('自己的评论删掉了', !(await pageV.locator('body').innerText()).includes('路人来评论一条'))
+
+    // 笔记作者能删别人在自己笔记下的评论（版主权限）
+    await openPost(pageA)
+    check(
+      '作者看得到别人评论的「删除」入口',
+      (await pageA.locator('.comment-item .mini-action.is-danger').count()) > 0
+    )
+  }
+
+  console.log('\n[10] 主页「评论」「赞过」tab 是真数据，不再是占位')
+  {
+    await pageA.goto(`${BASE}/profile/me`, { waitUntil: 'networkidle' })
+    await pageA.waitForTimeout(1200)
+    await pageA.locator('.el-tabs__item').filter({ hasText: '评论' }).click()
+    await pageA.waitForTimeout(1400)
+    const t = await pageA.locator('body').innerText()
+    check('评论 tab 不再显示「正在开发中」', !t.includes('正在开发中'))
+    check(
+      '评论 tab 列出带笔记上下文的评论',
+      (await pageA.locator('.my-comment-row').count()) >= 1,
+      (await pageA.locator('.my-comment-row').count()) + ' 条'
+    )
+
+    await pageV.goto(`${BASE}/profile/me`, { waitUntil: 'networkidle' })
+    await pageV.waitForTimeout(1200)
+    // 先赞一篇，保证「赞过」tab 从空态变成有内容的状态
+    await pageV.goto(postUrl, { waitUntil: 'networkidle' })
+    await pageV.waitForTimeout(900)
+    await pageV.locator('.actions .action-btn').filter({ hasText: '点赞' }).first().click()
+    await pageV.waitForTimeout(900)
+    await pageV.goto(`${BASE}/profile/me`, { waitUntil: 'networkidle' })
+    await pageV.waitForTimeout(1200)
+    await pageV.locator('.el-tabs__item').filter({ hasText: '赞过' }).click()
+    await pageV.waitForTimeout(1400)
+    const tv = await pageV.locator('body').innerText()
+    check('赞过 tab 不再显示「正在开发中」', !tv.includes('正在开发中'))
+    check('赞过 tab 有卡片', (await pageV.locator('.post-grid .post-link').count()) >= 1)
+    await pageV.screenshot({ path: 'shots/cmt-profile-likes.png' })
+  }
+
+  console.log('\n[11] 控制台干净')
   check('零 console error / 零失败请求', errs.length === 0, errs.slice(0, 3).join(' | '))
 } finally {
   await browser.close()

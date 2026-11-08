@@ -15,7 +15,7 @@ import { ElMessage } from '@/utils/element'
 import { Star, ChatDotRound, Edit, Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
-import { postsApi, type Post } from '@/api/posts'
+import { postsApi, type Post, type LikedPost } from '@/api/posts'
 import { followsApi, type FollowSuggestion } from '@/api/follows'
 import {
   favoritesApi,
@@ -23,6 +23,7 @@ import {
   type FavoritedPost,
   type FolderFilter
 } from '@/api/favorites'
+import { commentsApi, type MyCommentItem } from '@/api/comments'
 import { useFollow } from '@/composables/useFollow'
 import { useChatEntry } from '@/composables/useChatEntry'
 import { useImageField } from '@/composables/useImageField'
@@ -104,6 +105,51 @@ async function loadFavorites() {
     ElMessage.error(err?.response?.data?.message || '加载收藏失败')
   } finally {
     favLoading.value = false
+  }
+}
+
+// ===== 赞过 tab =====
+// 点赞是私下动作：接口只对本人开放，别人主页这一栏显示「私密」占位
+const likedPosts = ref<LikedPost[]>([])
+const likedTotal = ref(0)
+const likedLoading = ref(false)
+const likedLoaded = ref(false)
+
+async function loadLiked() {
+  if (!isOwner.value || likedLoading.value) return
+  likedLoading.value = true
+  try {
+    const res = await postsApi.getMyLikes({ pageSize: 50 })
+    likedPosts.value = res.list
+    likedTotal.value = res.pagination.total
+    likedLoaded.value = true
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '加载赞过的笔记失败')
+  } finally {
+    likedLoading.value = false
+  }
+}
+
+// ===== 评论 tab =====
+// 每条评论带它所在的笔记摘要：用户来这里是想「找回我说过的话」，
+// 只给一句评论正文点不回原帖，这个列表就一文不值
+const myComments = ref<MyCommentItem[]>([])
+const myCommentsTotal = ref(0)
+const commentsLoading = ref(false)
+const commentsLoaded = ref(false)
+
+async function loadMyComments() {
+  if (!isOwner.value || commentsLoading.value) return
+  commentsLoading.value = true
+  try {
+    const res = await commentsApi.listMine({ pageSize: 50 })
+    myComments.value = res.list
+    myCommentsTotal.value = res.pagination.total
+    commentsLoaded.value = true
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '加载评论失败')
+  } finally {
+    commentsLoading.value = false
   }
 }
 
@@ -452,24 +498,37 @@ watch(
 )
 
 // 收藏是懒加载的：只有真的切到那一栏才发请求，
-// 逛别人主页时不会替他把收藏接口也打一遍
+// 逛别人主页时不会替他把收藏接口也打一遍。
+// 评论 / 赞过同理：都是只对本人开放的数据，而且只在第一次切到时取一次
 watch(activeTab, (tab) => {
   if (tab === 'favorites' && isOwner.value && !favLoaded.value) loadFavorites()
+  if (tab === 'likes' && isOwner.value && !likedLoaded.value) loadLiked()
+  if (tab === 'comments' && isOwner.value && !commentsLoaded.value) loadMyComments()
 })
 
-// 切走收藏栏时丢弃已加载标记，下次进来重新取（期间可能收藏了新的）
+// 切走时丢弃已加载标记，下次进来重新取（期间赞了 / 评论了 / 收藏了都能看到新的）
 watch(activeTab, (tab, prev) => {
   if (prev === 'favorites' && tab !== 'favorites') favLoaded.value = false
+  if (prev === 'likes' && tab !== 'likes') likedLoaded.value = false
+  if (prev === 'comments' && tab !== 'comments') commentsLoaded.value = false
 })
 
-// ===== 笔记栏 / 收藏栏共用同一套卡片网格 =====
-// FavoritedPost 继承自 Post，所以同一个 v-for 能渲染两种列表，
-// 不用把网格模板抄两份（抄了就一定会各自漂移）
+// ===== 笔记栏 / 收藏栏 / 赞过栏共用同一套卡片网格 =====
+// FavoritedPost / LikedPost 都继承自 Post，所以同一个 v-for 能渲染三种列表，
+// 不用把网格模板抄三份（抄了就一定会各自漂移）
 const isFavTab = computed(() => activeTab.value === 'favorites')
 const showFavPrivate = computed(() => isFavTab.value && !isOwner.value)
 const showFavLoading = computed(() => isFavTab.value && isOwner.value && favLoading.value)
-const isPlaceholderTab = computed(() => activeTab.value !== 'posts' && !isFavTab.value)
-const gridPosts = computed<Post[]>(() => (isFavTab.value ? favPosts.value : posts.value))
+const isLikedTab = computed(() => activeTab.value === 'likes')
+/** 评论 / 赞过对别人是私密数据：数据源只有本人能查 */
+const isPrivateOnlyTab = computed(
+  () => (isFavTab.value || isLikedTab.value || activeTab.value === 'comments') && !isOwner.value
+)
+const gridPosts = computed<Post[]>(() => {
+  if (isFavTab.value) return favPosts.value
+  if (isLikedTab.value) return likedPosts.value
+  return posts.value
+})
 /** 只有「笔记」和「收藏」两栏有右侧控制条，其余 tab 不用留空行 */
 const showTabsBar = computed(() => activeTab.value === 'posts' || isFavTab.value)
 
@@ -477,6 +536,12 @@ function tabLabel(tab: { key: TabKey; label: string }): string {
   if (tab.key === 'posts') return `${tab.label} ${total.value}`
   if (tab.key === 'favorites' && isOwner.value && favLoaded.value) {
     return `${tab.label} ${favTotal.value}`
+  }
+  if (tab.key === 'likes' && isOwner.value && likedLoaded.value) {
+    return `${tab.label} ${likedTotal.value}`
+  }
+  if (tab.key === 'comments' && isOwner.value && commentsLoaded.value) {
+    return `${tab.label} ${myCommentsTotal.value}`
   }
   return tab.label
 }
@@ -676,6 +741,8 @@ watch(activeScope, async (scope) => {
             />
           </el-tabs>
 
+          <!-- 收藏 / 赞过 / 评论都只对本人开放：别人看只给「私密」占位，
+               不能给空列表 —— 空列表会让人以为对方一条都没有 -->
           <EmptyState
             v-if="showFavPrivate"
             icon="🔒"
@@ -683,14 +750,59 @@ watch(activeScope, async (scope) => {
             hint="收藏只有本人可见"
           />
 
-          <EmptyState v-else-if="showFavLoading" variant="loading" title="加载收藏..." />
+          <EmptyState
+            v-else-if="isPrivateOnlyTab && !isFavTab"
+            icon="🔒"
+            :title="activeTab === 'likes' ? 'TA 赞过的内容是私密的' : 'TA 的评论是私密的'"
+            hint="只有本人可见"
+          />
 
           <EmptyState
-            v-else-if="isPlaceholderTab"
-            icon="🚧"
-            :title="emptyHint"
-            hint="该功能正在开发中"
+            v-else-if="isFavTab && showFavLoading"
+            variant="loading"
+            title="加载收藏..."
           />
+
+          <EmptyState
+            v-else-if="isLikedTab && likedLoading"
+            variant="loading"
+            title="加载赞过的笔记..."
+          />
+
+          <EmptyState
+            v-else-if="activeTab === 'comments' && commentsLoading"
+            variant="loading"
+            title="加载评论..."
+          />
+
+          <!-- 评论 tab：不是网格，每条要带「发在哪篇笔记下」——找不回原帖的评论列表没有意义 -->
+          <template v-else-if="activeTab === 'comments'">
+            <el-empty v-if="myComments.length === 0" :description="emptyHint" />
+            <ul v-else class="my-comment-list">
+              <li v-for="c in myComments" :key="c.id" class="my-comment-row">
+                <router-link class="my-comment-post" :to="`/post/${c.post.id}`">
+                  <img
+                    v-if="c.post.imageThumbs?.length"
+                    :src="c.post.imageThumbs[0]"
+                    alt=""
+                    loading="lazy"
+                  />
+                  <span v-else class="my-comment-blank">纯文字</span>
+                </router-link>
+                <div class="my-comment-body">
+                  <p class="my-comment-text">
+                    <span v-if="c.isReply" class="my-comment-reply-tag">回复</span>{{ c.content }}
+                  </p>
+                  <p class="my-comment-meta">
+                    <router-link class="my-comment-source" :to="`/post/${c.post.id}`">
+                      {{ c.post.content }}
+                    </router-link>
+                    <span class="my-comment-time">{{ formatTime(c.createdAt) }}</span>
+                  </p>
+                </div>
+              </li>
+            </ul>
+          </template>
 
           <el-empty v-else-if="gridPosts.length === 0" :description="emptyHint" />
 
@@ -1138,6 +1250,100 @@ watch(activeScope, async (scope) => {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
   align-items: start;
+}
+
+/* ===== 评论 tab：左侧笔记小图 + 右侧「我说的话」===== */
+.my-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.my-comment-row {
+  display: flex;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.my-comment-row:last-child {
+  border-bottom: none;
+}
+
+.my-comment-post {
+  flex-shrink: 0;
+  width: 72px;
+  height: 54px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.my-comment-post img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.my-comment-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: var(--fs-2xs);
+  color: var(--text-3);
+}
+
+.my-comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.my-comment-text {
+  margin: 0;
+  font-size: var(--fs-base);
+  color: var(--foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.my-comment-reply-tag {
+  margin-right: 6px;
+  padding: 1px 6px;
+  font-size: var(--fs-2xs);
+  color: var(--text-on-accent);
+  background: var(--accent);
+  border-radius: var(--radius-full);
+}
+
+.my-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  min-width: 0;
+}
+
+.my-comment-source {
+  color: var(--text-2);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.my-comment-source:hover {
+  color: var(--accent);
+}
+
+.my-comment-time {
+  flex-shrink: 0;
 }
 
 .post-link {

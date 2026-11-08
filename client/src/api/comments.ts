@@ -76,5 +76,43 @@ export const commentsApi = {
     return request.delete<{ pinned: boolean; pinnedAt: string | null }>(
       `/posts/${postId}/comments/${commentId}/pin`
     )
+  },
+
+  /**
+   * 删除评论。评论作者本人和笔记作者都可以调；
+   * 删父评论时后端会把回复一起软删，`removed` 是这次进回收站的总条数
+   */
+  remove(postId: number, commentId: number) {
+    return request.delete<{ deleted: boolean; removed: number }>(
+      `/posts/${postId}/comments/${commentId}`
+    )
+  },
+
+  /** 我发过的评论（主页「评论」tab 用），每项带笔记摘要，点得回原帖 */
+  listMine(params: { page?: number; pageSize?: number } = {}) {
+    return request.get<MyCommentsPage>('/users/me/comments', { params })
   }
+}
+
+/** 「我的评论」列表项：评论本体 + 它所在笔记的摘要 */
+export interface MyCommentItem {
+  id: number
+  postId: number
+  /** null = 一级评论，有值 = 是某条评论的回复 */
+  parentId: number | null
+  content: string
+  createdAt: string
+  isReply: boolean
+  post: {
+    id: number
+    content: string
+    imageThumbs: string[]
+    topicTag: string | null
+    authorNickname: string
+  }
+}
+
+export interface MyCommentsPage {
+  list: MyCommentItem[]
+  pagination: { page: number; pageSize: number; total: number; hasMore: boolean }
 }

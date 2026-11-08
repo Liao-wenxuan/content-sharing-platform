@@ -207,7 +207,7 @@ router.get('/feed', optionalAuth, (req: Request, res: Response) => {
         p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
-        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
+        (SELECT COUNT(*) FROM comments WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count
       FROM posts p
       JOIN users u ON p.user_id = u.id
       ${whereClause}
@@ -305,7 +305,7 @@ router.get('/search', optionalAuth, (req: Request, res: Response) => {
         p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
-        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
+        (SELECT COUNT(*) FROM comments WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count
       FROM posts p
       JOIN users u ON p.user_id = u.id
       ${whereClause}
@@ -451,7 +451,7 @@ router.get('/:id', optionalAuth, (req: Request, res: Response) => {
         p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
         u.nickname AS author_nickname, u.avatar AS author_avatar,
         (SELECT COUNT(*) FROM likes WHERE post_id = p.id) AS like_count,
-        (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
+        (SELECT COUNT(*) FROM comments WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count
       FROM posts p
       JOIN users u ON p.user_id = u.id
       WHERE p.id = ?

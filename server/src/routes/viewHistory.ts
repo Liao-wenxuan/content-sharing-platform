@@ -116,7 +116,7 @@ router.get('/me/view-history', requireAuth, (req: Request, res: Response) => {
         `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag, p.media_type, p.video_url, p.video_poster, p.created_at,
                 v.viewed_at,
                 (SELECT COUNT(*) FROM likes    WHERE post_id = p.id) AS like_count,
-                (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count,
+                (SELECT COUNT(*) FROM comments WHERE post_id AND deleted_at IS NULL = p.id) AS comment_count,
                 u.nickname AS author_nickname, u.avatar AS author_avatar
            FROM view_history v
            JOIN posts p ON p.id = v.post_id

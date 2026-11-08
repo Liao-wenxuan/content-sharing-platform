@@ -258,6 +258,142 @@ router.get('/me/posts', requireAuth, (req: Request, res: Response) => {
   }
 })
 
+// ===== GET /me/likes —— 我赞过的笔记（分页）=====
+/**
+ * 主页「赞过」tab 的数据源。
+ *
+ * 可见性和「我的收藏」用同一条规则：别人的私密笔记不能出现
+ * （正常流程赞不到别人的私密笔记，但「转私密」发生在点赞之后时，
+ * 列表里留着它就是一条点进去 404 的死链接）。
+ */
+router.get('/me/likes', requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) return res.status(401).json({ message: '未登录' })
+
+    const page = Math.max(1, parseInt(String(req.query.page)) || 1)
+    const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
+    const offset = (page - 1) * pageSize
+
+    const params: any = { me: userId, pageSize, offset }
+    const where = `l.user_id = @me AND (p.visibility <> 'private' OR p.user_id = @me)`
+
+    const total = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM likes l JOIN posts p ON p.id = l.post_id WHERE ${where}`
+        )
+        .get(params) as any
+    ).c
+
+    const rows = db
+      .prepare(
+        `SELECT p.id, p.user_id, p.content, p.image_urls, p.image_thumbs, p.topic_tag,
+                p.visibility, p.media_type, p.video_url, p.video_poster, p.created_at,
+                l.created_at AS liked_at,
+                u.nickname AS author_nickname, u.avatar AS author_avatar,
+                (SELECT COUNT(*) FROM likes l2 WHERE l2.post_id = p.id) AS like_count,
+                (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id AND c.deleted_at IS NULL) AS comment_count
+         FROM likes l
+         JOIN posts p ON p.id = l.post_id
+         JOIN users u ON u.id = p.user_id
+         WHERE ${where}
+         ORDER BY l.created_at DESC, l.post_id DESC
+         LIMIT @pageSize OFFSET @offset`
+      )
+      .all(params) as any[]
+
+    res.json({
+      list: rows.map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        content: r.content,
+        imageUrls: r.image_urls ? JSON.parse(r.image_urls) : [],
+        imageThumbs: thumbsFromRow(r),
+        topicTag: r.topic_tag,
+        visibility: r.visibility,
+        ...mediaFromRow(r),
+        createdAt: toISO(r.created_at),
+        likedAt: toISO(r.liked_at),
+        likeCount: r.like_count,
+        commentCount: r.comment_count,
+        author: { id: r.user_id, nickname: r.author_nickname, avatar: r.author_avatar }
+      })),
+      pagination: { page, pageSize, total, hasMore: offset + rows.length < total }
+    })
+  } catch (err: any) {
+    console.error('[Get My Likes Error]', err)
+    res.status(500).json({ message: err.message || '获取赞过的笔记失败' })
+  }
+})
+
+// ===== GET /me/comments —— 我发过的评论（带笔记上下文，分页）=====
+/**
+ * 主页「评论」tab 的数据源。
+ *
+ * 和笔记网格不同，评论列表每一项都要能回答「这条评论是发在哪篇笔记下」，
+ * 所以每一项带一个 post 摘要（标题即正文、第一张缩略图），点进去就是原帖。
+ * 笔记被删 / 转私密的评论不出现 —— 留着就是一条点进去 404 的死链。
+ */
+router.get('/me/comments', requireAuth, (req: Request, res: Response) => {
+  try {
+    const userId = req.userId
+    if (!userId) return res.status(401).json({ message: '未登录' })
+
+    const page = Math.max(1, parseInt(String(req.query.page)) || 1)
+    const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize)) || 20))
+    const offset = (page - 1) * pageSize
+
+    const params: any = { me: userId, pageSize, offset }
+    const where = `c.user_id = @me AND c.deleted_at IS NULL
+                   AND (p.visibility <> 'private' OR p.user_id = @me)`
+
+    const total = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS c FROM comments c JOIN posts p ON p.id = c.post_id WHERE ${where}`
+        )
+        .get(params) as any
+    ).c
+
+    const rows = db
+      .prepare(
+        `SELECT c.id, c.post_id, c.parent_id, c.content, c.created_at,
+                p.content AS post_content, p.image_thumbs AS post_thumbs, p.topic_tag AS post_topic,
+                u.nickname AS author_nickname
+         FROM comments c
+         JOIN posts p ON p.id = c.post_id
+         JOIN users u ON u.id = p.user_id
+         WHERE ${where}
+         ORDER BY c.created_at DESC, c.id DESC
+         LIMIT @pageSize OFFSET @offset`
+      )
+      .all(params) as any[]
+
+    res.json({
+      list: rows.map((r) => ({
+        id: r.id,
+        postId: r.post_id,
+        parentId: r.parent_id,
+        content: r.content,
+        createdAt: toISO(r.created_at),
+        isReply: r.parent_id !== null,
+        post: {
+          id: r.post_id,
+          content: r.post_content,
+          imageThumbs: thumbsFromRow({ image_thumbs: r.post_thumbs }),
+          topicTag: r.post_topic,
+          authorNickname: r.author_nickname
+        }
+      })),
+      pagination: { page, pageSize, total, hasMore: offset + rows.length < total }
+    })
+  } catch (err: any) {
+    console.error('[Get My Comments Error]', err)
+    res.status(500).json({ message: err.message || '获取我的评论失败' })
+  }
+})
+
 // ===== 关注关系 =====
 // 四个动词拆成明确的 REST 资源，而不是一个 POST /toggle：
 //   POST   /:id/follow    关注

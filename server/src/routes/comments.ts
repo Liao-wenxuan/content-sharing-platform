@@ -61,7 +61,7 @@ const SELECT_COLS = `
   c.id, c.post_id, c.user_id, c.parent_id, c.content, c.created_at, c.pinned_at,
   u.nickname AS author_nickname, u.avatar AS author_avatar,
   (SELECT COUNT(*) FROM comment_likes cl WHERE cl.comment_id = c.id) AS like_count,
-  (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id) AS reply_count,
+  (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id AND r.deleted_at IS NULL) AS reply_count,
   EXISTS(SELECT 1 FROM comment_likes cl WHERE cl.comment_id = c.id AND cl.user_id = ?) AS liked
 `
 
@@ -83,7 +83,7 @@ router.get('/:postId/comments', optionalAuth, (req: Request, res: Response) => {
         `SELECT ${SELECT_COLS}
          FROM comments c
          JOIN users u ON u.id = c.user_id
-         WHERE c.post_id = ? AND c.parent_id IS NULL
+         WHERE c.post_id = ? AND c.parent_id IS NULL AND c.deleted_at IS NULL
          ORDER BY (c.pinned_at IS NOT NULL) DESC, c.pinned_at DESC, c.created_at ASC, c.id ASC`
       )
       .all(me, postId) as any[]
@@ -97,7 +97,7 @@ router.get('/:postId/comments', optionalAuth, (req: Request, res: Response) => {
           `SELECT ${SELECT_COLS}
            FROM comments c
            JOIN users u ON u.id = c.user_id
-           WHERE c.post_id = ? AND c.parent_id IS NOT NULL
+           WHERE c.post_id = ? AND c.parent_id IS NOT NULL AND c.deleted_at IS NULL
            ORDER BY c.created_at ASC, c.id ASC`
         )
         .all(me, postId) as any[]
@@ -274,6 +274,65 @@ function getCommentLikeCount(commentId: number): number {
     db.prepare('SELECT COUNT(*) AS c FROM comment_likes WHERE comment_id = ?').get(commentId) as any
   ).c
 }
+
+// ===== DELETE /api/posts/:postId/comments/:commentId —— 删除评论（软删）=====
+/**
+ * 谁能删：
+ *   - 评论作者本人（删自己的话）
+ *   - 笔记作者（自己主页的评论区， 版主权限）
+ *
+ * 删除是软删（打 deleted_at），并且**连回复一起删**：
+ * 回复挂在父评论下面，父评论消失后回复在界面上就没有容身之处；
+ * 与其让「回复突然全部消失」这种隐式行为吓到用户，确认框里写明白更诚实。
+ * 不硬删：真删错了还有得捞，计数也不用面对「行没了但 likes 表还在」的残局。
+ */
+router.delete(
+  '/:postId/comments/:commentId',
+  writeLimiter,
+  requireAuth,
+  (req: Request, res: Response) => {
+    try {
+      const postId = parseId(req.params.postId)
+      const commentId = parseId(req.params.commentId)
+      const userId = req.userId
+      if (!postId || !commentId || !userId) return res.status(400).json({ message: '参数错误' })
+
+      const post = db.prepare('SELECT user_id FROM posts WHERE id = ?').get(postId) as any
+      if (!post) return res.status(404).json({ message: '笔记不存在' })
+
+      const comment = db
+        .prepare(
+          'SELECT id, user_id FROM comments WHERE id = ? AND post_id = ? AND deleted_at IS NULL'
+        )
+        .get(commentId, postId) as any
+      if (!comment) return res.status(404).json({ message: '评论不存在' })
+
+      const isCommentAuthor = comment.user_id === userId
+      const isPostAuthor = post.user_id === userId
+      if (!isCommentAuthor && !isPostAuthor) {
+        // 403 但不区分「谁的是谁的」：错误信息说不出你为什么不能删
+        return res.status(403).json({ message: '只能删除自己的评论' })
+      }
+
+      const removed = db.transaction((): number => {
+        const r1 = db
+          .prepare('UPDATE comments SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(commentId)
+        const r2 = db
+          .prepare(
+            'UPDATE comments SET deleted_at = CURRENT_TIMESTAMP WHERE parent_id = ? AND deleted_at IS NULL'
+          )
+          .run(commentId)
+        return r1.changes + r2.changes
+      })()
+
+      res.json({ deleted: true, removed })
+    } catch (err: any) {
+      console.error('[Delete Comment Error]', err)
+      res.status(500).json({ message: err.message || '删除评论失败' })
+    }
+  }
+)
 
 // ===== 置顶 / 取消置顶 =====
 /**

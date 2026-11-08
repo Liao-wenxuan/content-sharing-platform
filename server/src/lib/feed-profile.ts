@@ -152,7 +152,7 @@ export function buildProfile(userId: number | null, nowMs = Date.now()): FeedPro
       .prepare(
         `SELECT p.topic_tag, p.user_id AS author_id, c.created_at AS at
            FROM comments c JOIN posts p ON p.id = c.post_id
-          WHERE c.user_id = ?`
+          WHERE c.user_id = ? AND c.deleted_at IS NULL`
       )
       .all(userId) as BehaviorRow[],
     SIGNAL_WEIGHT.comment,

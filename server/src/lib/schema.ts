@@ -152,6 +152,12 @@ export function initSchema(db: Database.Database): void {
     db.exec('ALTER TABLE comments ADD COLUMN pinned_at DATETIME')
     console.log('[DB] Migrated: comments.pinned_at added')
   }
+  // 删除是软删：父评论删了回复还在的话会变孤儿，硬删又牵扯级联，
+  // 统一「打时间戳 + 所有读取过滤」最直白，也让「删错还能捞回来」留着余地
+  if (!commentCols.has('deleted_at')) {
+    db.exec('ALTER TABLE comments ADD COLUMN deleted_at DATETIME')
+    console.log('[DB] Migrated: comments.deleted_at added')
+  }
 
   // 取某个父评论下的回复：按 (parent_id, created_at) 走
   db.exec(`CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id, created_at)`)
