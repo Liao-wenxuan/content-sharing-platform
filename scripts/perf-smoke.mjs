@@ -298,13 +298,15 @@ function report(metrics, distBytes) {
   // LCP 只证明内容开始可见，图片落地才是这块页面真正可用的时刻。
   const cutoff = metrics.imagesReadyAt
   const beforeLcp = resources.filter((r) => r.end <= cutoff)
-  // CSS 的 initiatorType 在 Chromium 里是 'link' 而不是 'stylesheet'。
-  // 只认后者的话首屏 CSS 会显示成「0.0 KB / 0 个请求」，
-  // 可明细里明明躺着那个 18KB 的 link —— 统计和明细互相打架。
+  // Chromium 对 modulepreload 进来的 chunk，initiatorType 有时报 'script'、
+  // 有时报 'other' —— 同一份产物、同一条链路，两次运行能差出 60KB 的「首屏 JS」。
+  // 按 **URL 扩展名** 判定才是稳定口径：entry + vue + axios + pinia 都是首屏 JS，
+  // 谁被算进来不该取决于浏览器那天的心情。CSS 同理用 link + .css 兜住。
+  const isJs = (r) => r.kind === 'script' || /\.js(\?|$)/.test(r.name)
   const isCss = (r) => r.kind === 'stylesheet' || (r.kind === 'link' && /\.css/.test(r.name))
   const sum = (list, test) => list.filter(test).reduce((a, b) => a + b.bytes, 0)
 
-  const firstScreenJs = sum(beforeLcp, (r) => r.kind === 'script')
+  const firstScreenJs = sum(beforeLcp, isJs)
   const firstScreenCss = sum(beforeLcp, isCss)
   const firstScreenImg = sum(beforeLcp, (r) => r.kind === 'img')
   const firstScreenAll = sum(beforeLcp, () => true)
@@ -329,7 +331,7 @@ function report(metrics, distBytes) {
   console.log(`  DOMContentLoaded ${metrics.domContentLoaded.toFixed(0).padStart(4)} ms`)
 
   console.log('\n=== 首屏下载构成（到「视口图片就绪」为止）===')
-  console.log(`  JS      ${kb(firstScreenJs).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'script').length} 个请求`)
+  console.log(`  JS      ${kb(firstScreenJs).padStart(8)} KB   ${beforeLcp.filter(isJs).length} 个请求`)
   console.log(`  CSS     ${kb(firstScreenCss).padStart(8)} KB   ${beforeLcp.filter(isCss).length} 个请求`)
   console.log(`  图片    ${kb(firstScreenImg).padStart(8)} KB   ${beforeLcp.filter((r) => r.kind === 'img').length} 个请求`)
   console.log(`  合计    ${kb(firstScreenAll).padStart(8)} KB   ${beforeLcp.length} 个请求`)
@@ -433,8 +435,8 @@ function checkBudget(metrics, sums, dataDirty = false) {
     ],
     [
       `首屏 JS ${(sums.firstScreenJs / KiB).toFixed(1)} KiB`,
-      sums.firstScreenJs <= 115 * KiB,
-      '上限 115 KiB（与 perf:budget 的 entry 体积门一起看）'
+      sums.firstScreenJs <= 180 * KiB,
+      '上限 180 KiB（entry + vue/axios/pinia vendor，防止懒加载失效）'
     ],
     [
       feed ? `/api/feed 在 ${feed.start.toFixed(0)}ms 发起` : '没有找到 /api/feed 请求',
