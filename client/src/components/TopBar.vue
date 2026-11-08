@@ -676,4 +676,35 @@ function onOutsideClick(e: MouseEvent) {
   font-size: var(--fs-xs);
   color: var(--muted-foreground);
 }
+
+/*
+ * 窄屏收敛：发布挪到底栏中间那颗圆钮，昵称和下拉箭头让位给搜索框。
+ * ⚠️ 不要在这里改 height：--top-bar-height 还被详情页 / 会话页 /
+ *    收藏页拿去算 sticky 偏移和高度，只改组件高度会让它们全部错位。
+ */
+@media (max-width: 768px) {
+  .top-bar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .search-wrap {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .publish-btn,
+  .user-name,
+  .arrow {
+    display: none;
+  }
+
+  .bar-actions {
+    gap: 6px;
+  }
+
+  .user-trigger {
+    padding: 4px;
+  }
+}
 </style>

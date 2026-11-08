@@ -52,6 +52,7 @@ const SUITES = [
   ['image', 'test:image'],
   ['reveal', 'test:reveal'],
   ['settings', 'test:settings'],
+  ['mobile', 'test:mobile'],
   ['ai', 'test:ai']
 ]
 

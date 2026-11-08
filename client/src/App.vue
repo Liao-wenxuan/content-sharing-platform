@@ -9,8 +9,9 @@
  *   └──────────┴─────────────────────────┘
  *
  * 与旧版的差别：
- * - 移除移动端的 BottomNav / 抽屉 Sidebar / 双层 HomeTopTabs
- * - 新增固定左栏 SideNav 与顶栏 TopBar
+ * - 桌面端用常驻左栏 SideNav + 顶栏 TopBar，不再有展开/收起的抽屉
+ * - 窄屏（≤768px）左栏换成底栏 MobileNav，顶栏动作区收敛，
+ *   内容区留出底栏 + 设备安全区的高度，不然最后一张卡永远点不到
  * - 登录页走独立全屏布局（不进三栏壳）
  */
 import { computed, watch, nextTick } from 'vue'
@@ -20,6 +21,7 @@ import { useRoute } from 'vue-router'
 // el-upload 会显示 "Click to upload"。归因时 en.mjs 实打实进了首屏 chunk。
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import SideNav from '@/components/SideNav.vue'
+import MobileNav from '@/components/MobileNav.vue'
 import TopBar from '@/components/TopBar.vue'
 import ErrorBoundary from '@/components/ErrorBoundary.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -93,6 +95,9 @@ watch(
           </ErrorBoundary>
         </main>
       </div>
+
+      <!-- 只在窄屏显示（组件内部按同一断点用 CSS 控制） -->
+      <MobileNav />
     </div>
   </el-config-provider>
 </template>
@@ -120,5 +125,12 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 断点与 SideNav / MobileNav / TopBar 保持一致：改就要一起改 */
+@media (max-width: 768px) {
+  .content {
+    padding: 16px 12px calc(76px + env(safe-area-inset-bottom, 0px));
+  }
 }
 </style>

@@ -1,16 +1,12 @@
 <script setup lang="ts">
 /**
- * 桌面端左侧固定导航
- *
- * 取代原来的移动端抽屉 Sidebar + 底部 BottomNav：
- * 桌面端不需要「展开 / 收起」，导航常驻左栏即可。
- *
- * 选中态：ElMenu 的 router 模式 + :default-active 绑 route.path。
- * 个人主页 /profile/me 在访客态也可能命中（见 ProfileView 的占位态），
- * 这里统一回落到「我的」这一项。
+ * 桌面端左侧固定导航。
  *
  * 只放「需要反复切换」的主干入口：搜索在顶栏（带即时建议下拉），
  * 消息做成顶栏铃铛，侧栏留给频道级浏览，避免导航项越堆越多。
+ *
+ * ≤768px 整栏隐藏，交给 MobileNav 的底部导航 ——
+ * 216px 的常驻左栏在 375 宽下会把内容挤成一条，折叠不了就只能换形态。
  */
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -223,5 +219,12 @@ function handleCommand(command: string) {
 .login-btn {
   width: 100%;
   font-weight: 600;
+}
+
+/* 与 App.vue / MobileNav.vue / TopBar.vue 同一个断点 */
+@media (max-width: 768px) {
+  .side-nav {
+    display: none;
+  }
 }
 </style>

@@ -1,9 +1,28 @@
 <!doctype html>
-<!-- 应用默认深色：先在 HTML 上落 class，避免首屏浅色闪烁。
-     用户切到浅色时 App.vue 会移除这个 class。 -->
+<!-- 默认深色：先落 class 兜底，再由下面这段同步脚本按用户已存的模式纠正。
+     放在 head 里、CSS 之前执行，否则浅色用户首屏会闪一下深色（FOUC）。 -->
 <html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // 与 useTheme.readStoredMode() 同一套读取规则（含老版本 'theme' 键迁移）。
+      // 这段必须早于任何样式：Vue 挂载前页面就已经是用户选的那一档。
+      ;(function () {
+        try {
+          var m = localStorage.getItem('themeMode') || localStorage.getItem('theme') || 'dark'
+          var dark =
+            m === 'dark' ||
+            (m === 'system' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          var root = document.documentElement
+          root.classList.toggle('dark', dark)
+          root.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {
+          /* 存储被禁用时保留 HTML 上的默认深色 */
+        }
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>内容社区</title>

@@ -180,6 +180,7 @@ console.log('\n[3] 每个面板都要真的能打开且有内容')
   const EXPECTED = [
     ['账号与安全', '修改密码'],
     ['切换账号', '这台设备'],
+    ['外观与主题', '主题模式'],
     ['通用设置', '打开首页时'],
     ['通知设置', '赞和收藏'],
     ['内容偏好', '屏蔽的话题'],
@@ -218,7 +219,13 @@ console.log('\n[3] 每个面板都要真的能打开且有内容')
     await page.keyboard.press('Escape')
     await page.waitForTimeout(280)
   }
-  check('11 个面板都能打开且有真实内容', missing.length === 0, missing.join(' | '))
+  // 用 EXPECTED.length 而不是写死「11 个」：以前加过面板但没改这个数，
+  // 报告上就一直显示旧值，看起来像审过了，其实新增的那个根本没进清单
+  check(
+    `${EXPECTED.length} 个设置入口都能打开且有真实内容`,
+    missing.length === 0,
+    missing.join(' | ')
+  )
 }
 
 console.log('\n[4] 「存储空间」显示的是真实统计值，不是写死的假数字')
@@ -456,6 +463,54 @@ console.log('\n[5b] 未成年人模式真的过滤了内容')
   await page.goto(`${BASE}/settings`, { waitUntil: 'domcontentloaded' })
   await page.locator('.settings').waitFor({ state: 'visible', timeout: 20000 })
   await page.waitForTimeout(800)
+}
+
+console.log('\n[5c] 外观与主题：三档都真的改配色，且偏好存得下来')
+{
+  await page.goto(`${BASE}/settings`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.settings').waitFor({ state: 'visible', timeout: 20000 })
+  await page.waitForTimeout(600)
+
+  await page.locator('[data-item="theme"]').click()
+  await page.locator('.el-drawer:visible').first().waitFor({ timeout: 8000 })
+  const drawer = page.locator('.el-drawer:visible').first()
+  const options = drawer.locator('.mode-option')
+  check('三档都在', (await options.count()) === 3, `${await options.count()} 档`)
+
+  const pick = (v) => drawer.locator(`.mode-option:has(input[value="${v}"])`).click()
+  const isDark = () => page.evaluate(() => document.documentElement.classList.contains('dark'))
+
+  await pick('dark')
+  await page.waitForTimeout(250)
+  check('选深色 → html.dark', (await isDark()) === true)
+
+  await pick('light')
+  await page.waitForTimeout(250)
+  check('选浅色 → 去掉 html.dark', (await isDark()) === false)
+
+  await pick('system')
+  await page.waitForTimeout(250)
+  check('跟随系统写进了 localStorage', (await page.evaluate(() => localStorage.getItem('themeMode'))) === 'system')
+  check('面板说明了当前解析结果', (await drawer.locator('.current').innerText()).includes('跟随系统'))
+
+  // 防抖 250ms 之后偏好应该已经落到服务端；刷新一次确认不会被按回去
+  await page.waitForTimeout(500)
+  const remote = await fetch(`${API}/api/settings`, {
+    headers: { Authorization: `Bearer ${user.token}` }
+  }).then((r) => r.json())
+  check('服务端存的也是 system', remote.settings?.themeMode === 'system', remote.settings?.themeMode)
+
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.locator('.settings').waitFor({ state: 'visible', timeout: 20000 })
+  await page.waitForTimeout(800)
+  check('刷新后仍是跟随系统', (await page.evaluate(() => localStorage.getItem('themeMode'))) === 'system')
+
+  // 恢复默认深色，别把后面的套件和截图带跑
+  await page.locator('[data-item="theme"]').click()
+  await page.locator('.el-drawer:visible').first().waitFor({ timeout: 8000 })
+  await page.locator('.el-drawer:visible .mode-option:has(input[value="dark"])').click()
+  await page.waitForTimeout(500)
+  await page.keyboard.press('Escape')
 }
 
 console.log('\n[6] 控制台干净')

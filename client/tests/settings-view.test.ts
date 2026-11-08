@@ -240,6 +240,53 @@ describe('useUserSettings', () => {
     await prefs.saveNow()
     expect(prefs.settings.value.themeMode).toBe('dark')
   })
+
+  /**
+   * 下面两条锁的是主题从「两条状态链」收敛成一条之后的行为。
+   * 以前顶栏切换只写 localStorage，刷新时 load() 用服务端的
+   * themeMode（还是 dark）把界面按回深色 —— 用户会觉得开关坏了。
+   */
+  it('⚠️ 顶栏切主题会同步进偏好，刷新后不会再被按回深色', async () => {
+    const { prefs } = await freshModule()
+    await prefs.load()
+
+    const { useTheme } = await import('@/composables/useTheme')
+    useTheme().toggleTheme() // dark -> light
+
+    // ① 偏好层当场就知道，不等保存
+    expect(prefs.settings.value.themeMode).toBe('light')
+
+    // ② 保存出去的正是刷新后服务端会回传的那一份
+    const save = vi.mocked((await import('@/api/settings')).settingsApi.save)
+    await prefs.saveNow()
+    const calls = save.mock.calls
+    expect(calls[calls.length - 1][0].themeMode).toBe('light')
+
+    // ③ 模拟刷新：重新拉一次偏好，界面仍是浅色
+    await prefs.load(true)
+    expect(useTheme().theme.value).toBe('light')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+  })
+
+  it('游客切主题只存本地，不发必失败的 PUT /settings', async () => {
+    localStorage.clear() // 去掉 beforeEach 造的登录态
+    vi.resetModules()
+    const settingsApi = await import('@/api/settings')
+    const prefs = (await import('@/composables/useUserSettings')).useUserSettings()
+    const save = vi.spyOn(settingsApi.settingsApi, 'save').mockResolvedValue({
+      ...DEFAULT_SETTINGS
+    })
+    await prefs.load()
+
+    const { useTheme } = await import('@/composables/useTheme')
+    useTheme().toggleTheme()
+    expect(prefs.settings.value.themeMode).toBe('light')
+    expect(localStorage.getItem('themeMode')).toBe('light')
+
+    // 防抖 250ms 之后 saveNow 应该已经跑过，但不能真的发请求
+    await new Promise((r) => setTimeout(r, 350))
+    expect(save).not.toHaveBeenCalled()
+  })
 })
 
 describe('useStorageStats', () => {

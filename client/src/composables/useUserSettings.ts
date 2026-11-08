@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import { settingsApi, DEFAULT_SETTINGS, type UserSettings } from '@/api/settings'
 import { useAuthStore } from '@/stores/auth'
-import { useTheme } from './useTheme'
+import { getThemeMode, onThemeModeChange, useTheme, type ThemeMode } from './useTheme'
 
 /**
  * 用户偏好的全局状态
@@ -34,18 +34,15 @@ let timer: ReturnType<typeof setTimeout> | null = null
  * 分开处理会造成「切了主题但要刷新才生效」。
  */
 function applyLocal(next: UserSettings) {
-  const { setTheme } = useTheme()
-  if (next.themeMode === 'system') {
-    // 「跟随系统」要真的读 media query，而不是退回深色 ——
-    // 尊重系统设置是这条选项存在的全部意义
-    const prefersDark =
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-color-scheme: dark)').matches
-    setTheme(prefersDark ? 'dark' : 'light')
-  } else {
-    setTheme(next.themeMode)
-  }
+  // 主题的唯一真值在 useTheme，这里只把偏好层的那一份**同步过去**。
+  // silent=true：来源就是偏好层，别再回调回来写一次（会形成来回写）。
+  // 'system' 也原样传，由 useTheme 解析系统偏好并监听变化 ——
+  // 在这里读一次 matchMedia 的话，用户中途改系统主题页面不会跟着变。
+  const mode: ThemeMode =
+    next.themeMode === 'system' || next.themeMode === 'light' || next.themeMode === 'dark'
+      ? next.themeMode
+      : 'dark'
+  useTheme().setMode(mode, true)
 
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.density = next.density
@@ -96,7 +93,10 @@ async function load(force = false) {
    */
   if (!isLoggedIn()) {
     loaded.value = true
-    settings.value = { ...DEFAULT_SETTINGS }
+    // 游客没有服务端偏好，但**有本地主题**：顶栏开关对游客也可点。
+    // 这里若直接用 DEFAULT_SETTINGS 的 'dark' 去 applyLocal，
+    // 游客手动切到浅色后一刷新就被按回深色 —— 那份偏好不能被默认值抹掉。
+    settings.value = { ...DEFAULT_SETTINGS, themeMode: getThemeMode() }
     applyLocal(settings.value)
     lastSaved = JSON.stringify(settings.value)
     return settings.value
@@ -157,6 +157,17 @@ async function saveNow(): Promise<void> {
   const payload = JSON.stringify(settings.value)
   if (payload === lastSaved) return // 没变就不发请求
 
+  /*
+   * 游客没有偏好可存，但游客**能**点顶栏主题开关（它现在也会排一次保存）。
+   * 不拦这一下的话每次切换都会打一个必失败的 PUT /settings → 401，
+   * 那条网络错误 JS 拦不掉，会把「零 console error」的 e2e 断言弄挂。
+   * 主题本身已经由 useTheme 落到 localStorage 了，刷新照样在。
+   */
+  if (!isLoggedIn()) {
+    lastSaved = payload
+    return
+  }
+
   saving.value = true
   try {
     // 保存的是**服务端回传的那份**，不是本地这份 ——
@@ -206,16 +217,18 @@ export function flushSettings(): void {
   }
 }
 
-// 用户选了「跟随系统」之后，系统主题变了也要跟着变
-if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-  const mq = window.matchMedia('(prefers-color-scheme: dark)')
-  const onSystemChange = () => {
-    if (settings.value.themeMode === 'system') applyLocal(settings.value)
-  }
-  // Safari 14 以下只有 addListener
-  if (mq.addEventListener) mq.addEventListener('change', onSystemChange)
-  else if (mq.addListener) mq.addListener(onSystemChange)
-}
+/**
+ * 顶栏 / 外观面板改主题时，偏好层要把同一个值存进账号。
+ *
+ * 这一步是「切了主题刷新却被改回去」的根治点：以前开关只写 localStorage，
+ * 而刷新后 load() 拿服务端的 themeMode 又把它覆盖了。现在两边永远一致。
+ * 回调里不再走 update()（那会再触发 applyLocal → setMode），只改值 + 排保存。
+ */
+onThemeModeChange((next) => {
+  if (settings.value.themeMode === next) return
+  settings.value = { ...settings.value, themeMode: next }
+  scheduleSave()
+})
 
 watch(
   () => settings.value,

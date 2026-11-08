@@ -272,7 +272,7 @@ check(
 )
 
 // ---------- 8. 设置页 ----------
-console.log('\n[8] 设置页（ElSwitch 主题）')
+console.log('\n[8] 设置页与主题持久化')
 await page.locator('.nav-menu .el-menu-item', { hasText: '设置' }).click()
 await page.waitForURL('**/settings')
 await page.locator('.settings .group-card').first().waitFor({ state: 'visible' })
@@ -297,14 +297,27 @@ const accountText = (await accountCard.innerText()) ?? ''
 check('账号摘要显示的是当前昵称', accountText.includes(newNick), newNick)
 check('账号摘要显示了用户 ID', accountText.includes('用户 ID'))
 
-// 主题开关
+// 主题切换：顶栏快捷按钮与「设置 → 外观与主题」共用同一条状态链
+const themeBtn = page.locator('[aria-label="切换主题"]')
 const wasDark = await page.evaluate(() => document.documentElement.classList.contains('dark'))
-await page.locator('.item-row .el-switch').first().click()
+await themeBtn.click()
 await page.waitForTimeout(500)
 const nowDark = await page.evaluate(() => document.documentElement.classList.contains('dark'))
 check('主题开关生效', wasDark !== nowDark, `dark: ${wasDark} -> ${nowDark}`)
-// 切回原主题
-await page.locator('.item-row .el-switch').first().click()
+
+/*
+ * ⚠️ 这条才是重点。以前开关只写 localStorage，刷新时偏好层会拿服务端的
+ * themeMode 把 html.dark 按回原值 —— 当场看不出问题，一刷新就露馅。
+ * 现在改动会同步进 settings 并保存，所以刷新后必须还是用户选的那一档。
+ */
+await page.reload({ waitUntil: 'networkidle' })
+await page.locator('.account-card').waitFor()
+await page.waitForTimeout(600)
+const afterReload = await page.evaluate(() => document.documentElement.classList.contains('dark'))
+check('刷新后主题不被按回去', afterReload === nowDark, `dark: ${nowDark} -> ${afterReload}`)
+
+// 切回原主题，免得影响后面的截图与别的套件
+await themeBtn.click()
 await page.waitForTimeout(400)
 
 // ---------- 9. 退出登录 ----------

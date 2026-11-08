@@ -42,6 +42,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useStorageStats, REPO_URL } from '@/composables/useStorageStats'
 import { formatBytes } from '@/utils/format'
 import PanelAccount from './settings/PanelAccount.vue'
+import PanelAppearance from './settings/PanelAppearance.vue'
 import PanelGeneral from './settings/PanelGeneral.vue'
 import PanelNotify from './settings/PanelNotify.vue'
 import PanelLanguage from './settings/PanelLanguage.vue'
@@ -55,7 +56,7 @@ import PanelSwitchAccount from './settings/PanelSwitchAccount.vue'
 const router = useRouter()
 const auth = useAuthStore()
 const toast = useToastStore()
-const { isDark, toggleTheme } = useTheme()
+const { mode, isDark, systemDark } = useTheme()
 const { load, saving, loadError } = useUserSettings()
 const storage = useStorageStats()
 
@@ -75,18 +76,21 @@ function close() {
 // `kind` 决定这一行长什么样：
 //   'route'   → 显示「查看」，点了跳走
 //   'panel'   → 显示「设置」，点了开抽屉
-//   'toggle'  → 右侧是开关，不显示按钮
 //   'action'  → 是个动作本身（退出登录），不显示按钮
 //
 // 分这么细是因为**按钮文案本身就是信息**：
 // 「设置」和「查看」在用户心里的预期完全不同，
 // 之前全都写成「设置」而其中一半根本进不去。
+//
+// 原来还有一种 kind='toggle'（深色模式开关行）。三档主题进来之后
+// 它既表达不了「跟随系统」，也不该再绕开外观面板单独写一份；
+// 整条分支连同类型一起删掉，不留永远走不到的代码。
 interface MenuItem {
   key: string
   label: string
   icon: unknown
   desc: string
-  kind: 'route' | 'panel' | 'toggle' | 'action'
+  kind: 'route' | 'panel' | 'action'
   to?: string
   panel?: string
 }
@@ -198,10 +202,11 @@ const groups: MenuGroup[] = [
       },
       {
         key: 'theme',
-        label: '深色模式',
-        desc: '配色与对比度',
+        label: '外观与主题',
+        desc: '跟随系统 · 深色 · 浅色',
         icon: Moon,
-        kind: 'toggle'
+        kind: 'panel',
+        panel: 'appearance'
       },
       {
         key: 'widget',
@@ -251,10 +256,6 @@ const groups: MenuGroup[] = [
 
 // ===== 点击分发 =====
 function onItemClick(item: MenuItem) {
-  if (item.kind === 'toggle') {
-    toggleTheme()
-    return
-  }
   if (item.kind === 'route' && item.to) {
     router.push(item.to)
     return
@@ -279,7 +280,14 @@ async function logout() {
   router.push('/login')
 }
 
-const themeHint = computed(() => (isDark.value ? '深色' : '浅色'))
+/** 三档模式都要在列表上说得清是「手动选的」还是「系统给的」 */
+const themeHint = computed(() => {
+  const resolved = isDark.value ? '深色' : '浅色'
+  if (mode.value === 'system') {
+    return `跟随系统 · ${systemDark.value ? '深色' : '浅色'}`
+  }
+  return resolved
+})
 
 /** 「存储空间」那一栏显示**真实统计值**，而不是写死的假字符串 */
 const storageHint = computed(() => {
@@ -321,32 +329,14 @@ onMounted(async () => {
           ⚠️ <li> 只负责列表语义，可点的是里面的 <button>。
 
           之前这里是 `<li class="item-row" role="button" tabindex="0">`，
-          同一个 role 同时坏了两件事：
-          ① role 覆盖掉 <li> 隐含的 listitem，axe 判「<ul> 里出现了
-             不允许的子节点 [role=button]」（5 张卡片各中一次）
-          ② 带开关的行里套着 el-switch，是交互控件嵌套（serious）
-
-          所以开关行不给 role，也不整行可点 —— 它本来也只有开关可点。
-          开关自己带 aria-label：读屏念到它时得知道自己在切什么，
-          而行首那行字对开关不是 label。
+          role 覆盖掉 <li> 隐含的 listitem，axe 判「<ul> 里出现了
+          不允许的子节点 [role=button]」（每张卡片各中一次）。
+          另外整行可点 + 行内再放开关，会变成交互控件嵌套（serious）。
+          所以每行只有一个 button，行首那行字只是它的内容。
         -->
         <ul class="item-list">
           <li v-for="item in group.items" :key="item.key" class="item-item">
-            <div v-if="item.kind === 'toggle'" class="item-row" :data-item="item.key">
-              <el-icon class="item-icon"><component :is="item.icon" /></el-icon>
-
-              <span class="item-text">
-                <span class="item-label">{{ item.label }}</span>
-                <span v-if="item.desc" class="item-desc">{{ item.desc }}</span>
-              </span>
-
-              <span v-if="item.key === 'theme'" class="item-value">{{ themeHint }}</span>
-
-              <el-switch :model-value="isDark" :aria-label="item.label" @change="toggleTheme" />
-            </div>
-
             <button
-              v-else
               type="button"
               class="item-row clickable"
               :data-item="item.key"
@@ -473,6 +463,15 @@ onMounted(async () => {
       @update:model-value="(v: boolean) => !v && close()"
     >
       <PanelSwitchAccount />
+    </el-drawer>
+
+    <el-drawer
+      :model-value="openPanel === 'appearance'"
+      title="外观与主题"
+      size="480px"
+      @update:model-value="(v: boolean) => !v && close()"
+    >
+      <PanelAppearance />
     </el-drawer>
 
     <el-drawer
