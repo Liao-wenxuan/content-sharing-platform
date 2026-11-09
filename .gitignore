@@ -19,6 +19,9 @@ coverage/
 .env
 .env.local
 !.env.example
+deploy/.env
+# 内置浏览器巡检会话（工具自己生成的临时快照/截图）
+.playwright-cli/
 # 日志
 *.log
 logs/

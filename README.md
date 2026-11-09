@@ -18,7 +18,7 @@ docker compose --profile seed run --rm seed    # 39 篇笔记 / 6 个能登录�
 # 浏览器打开 http://localhost:8080，用上面那组账号登录
 ```
 
-**体量**：1038 条单测（后端 477 / 前端 561，两端都卡覆盖率门禁）· 15 套 Playwright e2e · 5 个并行 CI job · 17 张表 · **零 ORM**，SQL 全手写。
+**体量**：1045 条单测（后端 477 / 前端 568，两端都卡覆盖率门禁）· 15 套 Playwright e2e · 5 个并行 CI job · 17 张表 · **零 ORM**，SQL 全手写。
 
 功能形态参考小红书，视觉层是自建的工业 HUD 风格；**桌面三栏布局，≤768px 自动切成底部导航**（左栏隐藏、顶栏动作区收敛、内容区留设备安全区），组件层使用 Element Plus（完全接管其主题变量），本地 SQLite 存储；除 Express / ws / multer / better-sqlite3 这类基础库外没有别的运行时依赖。目标是展示一个完整的前后端分离项目该有的工程能力。
 
@@ -59,11 +59,11 @@ docker compose --profile seed run --rm seed    # 39 篇笔记 / 6 个能登录�
 | 通知     | 五个来源（赞 / 收藏 / 关注 / 评论 / @提及）落一张可回溯的流水；**同一组合只保留一条**（重复互动浮到顶部并重新点亮，而不是刷屏）；未读数靠 **WS 帧实时更新**（别人点赞的那一刻铃铛就 +1，不用轮询）；三个分类可分别「全部已读」+ **按分类的通知开关**（关掉只影响之后的新通知，历史不删）；笔记被删后通知仍在，显示「原笔记已删除」                                                                                                                                                                                                                                                                                                                                    |
 | AI 问答  | 顶栏入口 →「想了解些什么」+ 两组快捷问题 → 对话页**流式**吐答案，**每条结论挂着可点回原帖的来源**（笔记 / 话题 / 用户三类分开成 tab）；答案只来自站内真实笔记，**找不到就明说没有**；**默认不接模型**（无 key、离线可跑、CI 里确定），靠检索 + 证据组织；配了 `AI_API_KEY` + `AI_BASE_URL` + `AI_MODEL` 就走 OpenAI 兼容的流式生成，上游抽风自动降级回确定性答案                                                                                                                                                                                                                                                                                                      |
 | 消息     | 两个顶层 Tab：通知（真实后端，见上一行）+ **实时聊天**（WebSocket 1v1：会话列表 / 历史分页 / 未读红点 / 已读回执 / 正在输入 / 多端同步 / 断线重连补发）；**撤回**（2 分钟内，只能撤自己的，内容**真的清空**并广播给双方）/ **置顶 + 免打扰**（每个人独立，置顶排最前）/ 消息流按抖音那套排：时间分隔线 / 未读分界线 / 同人连续消息合并 / **往上翻历史时不被新消息打断**（右下角出「N 条新消息」，自己决定要不要回到底部）；顶栏铃铛显示**聊天 + 通知**的合并未读                                                                                                                                                                                                      |
-| 布局     | 桌面三栏：左侧固定 ElMenu（发现 / 发布 / 收藏 / 我的 / 设置）+ 顶部栏（搜索 / 发布 / 主题 / 消息铃铛 / 用户菜单）+ 内容区；登录页走独立全屏                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 首页频道 | 12 个内容频道用 ElTabs 平铺一行（推荐 / 穿搭 / 美食 / 彩妆 / 影视 / 职场 / 情感 / 家居 / 游戏 / 旅行 / 健身 / 视频），选中态为居中的强调色短条（`--el-color-primary` → `--accent`，暗色 `#c6ca4c` / 浅色 `#5f6417`）                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 设置     | 6 组卡片 + **11 个真面板**（账号与安全 / 切换账号 / 通用 / 通知 / 多语言 / 隐私 / 存储 / 收货地址 / 小组件 / 帮助 / 关于）+ 深色模式开关 + 账号摘要 + 退出登录。每个面板背后都有**真的接口或真实内容** —— 零「即将上线」式占位                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 布局     | 桌面三栏：左侧固定 ElMenu（发现 / 发布 / 收藏 / 我的 / 设置）+ 顶部栏（搜索 / 发布 / 主题 / 消息铃铛 / 用户菜单）+ 内容区；登录页走独立全屏，窄屏额外给「返回」与「不登录，先去逛逛」两个出口 —— 全屏壳既没有侧栏也没有底栏，不给出口会把人困在里面                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 首页频道 | 12 个内容频道用 ElTabs 平铺一行（推荐 / 穿搭 / 美食 / 彩妆 / 影视 / 职场 / 情感 / 家居 / 游戏 / 旅行 / 健身 / 视频）；**≥1100px 才把 tab 条居中，窄屏恢复原生横向滚动 + 翻页箭头** —— 12 个 tab 总宽 952px，在 390px 视口整体居中会把选中的「推荐」推到 -261px 且 `scrollLeft` 仍为 0，用户既看不到当前频道也滚不回去；选中态是强调色短条（`--el-color-primary` → `--accent`，暗色 `#c6ca4c` / 浅色 `#5f6417`）                                                                                                                                                                                                                                                       |
+| 设置     | 6 组卡片 + **11 个真面板**（账号与安全 / 切换账号 / 通用 / 通知 / 多语言 / 隐私 / 存储 / 收货地址 / 小组件 / 帮助 / 关于）+ 外观与主题（系统 / 浅色 / 深色）+ 账号摘要 + 退出登录。**11 个抽屉在 ≤768px 由固定 480/520/560px 改为铺满视口**，否则右对齐后左边界到 -90/-130/-170，标题缺字、关闭按钮在屏外。每个面板背后都有**真的接口或真实内容** —— 零「即将上线」式占位                                                                                                                                                                                                                                                                                             |
 | 动效     | 五档时长 + 缓动字典 + CSS 原生弹簧（`linear()`，不需要动画库）；按语义分向入场（自己发的从右下、对方发的从左滑）；未读红点 pop / 铃铛来信摆一下；全局 `prefers-reduced-motion` 兜底，键盘用户有 `:focus-visible` 焦点环                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| 主题     | 暗色 / 亮色切换（`html.dark` 驱动，Element Plus 变量同步切换 + localStorage 持久化）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 主题     | **跟随系统 / 浅色 / 深色三态**，`useTheme` 是唯一真值（`mode` + 派生 `isDark`，系统主题变化实时跟随）；`index.html` 在首屏 CSS 之前有一小段脚本先落 `html.dark`，避免刷新时白闪；`useUserSettings` 只负责同步/保存，游客不会发一个必然失败的 `PUT /settings`                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 > 路线图见 [docs/architecture.md](docs/architecture.md#路线图)
 
@@ -243,6 +243,8 @@ docker compose down                                 # 停掉（数据留在 .doc
 - **健康检查 + `depends_on: service_healthy`**：等后端真的能连上 SQLite 再起 nginx，否则首页首屏会是空的，看着像 bug
 
 > 需要 Docker Desktop（Windows 上依赖 WSL2）。想手动换端口：`WEB_PORT=9090 docker compose up`。
+>
+> **要部署到自己的机器**，或想看线上那份真实拓扑（Caddy + pm2 + 单文件 SQLite）：见 [deploy/README.md](deploy/README.md) —— 反代配置、进程定义、环境变量清单、原子替换发布脚本和换机复现步骤都在仓库里，不再靠记忆。日常发版是 `./deploy/deploy.sh`，纯前端发布不会重启 Node，也就不会断掉在线的 WebSocket 连接。
 
 ## 🛠 本地开发
 
@@ -266,7 +268,7 @@ npm run dev          # vite
 ### 测试
 
 ```bash
-npm run test:client          # 前端单测（vitest + @vue/test-utils，37 文件 561 条）
+npm run test:client          # 前端单测（vitest + @vue/test-utils，38 文件 568 条）
 npm run test:client -- coverage   # 同上 + 覆盖率报告（utils / composables / components，语句 87%）
 cd server && npm test        # 后端单测（vitest + supertest，27 文件 477 条）
 cd server && npm run test:coverage   # 同上 + 覆盖率报告（src 全部，语句 78%）
@@ -284,7 +286,7 @@ npm run test:history        # 浏览记录：进详情页自动记一笔 / 重�
 npm run test:feed           # 推荐流：理由 / 不感兴趣 / 刷新后仍屏蔽 / 换一批 / 画像页撤销（26 断言）
 npm run test:reveal         # 滚动入场：逐帧证明动效在推进 / reduced-motion 真的停 / 没有 IntersectionObserver 不白屏 / 降级终态与正常终态几何一致（20 断言；逐像素只作诊断，见下）
 npm run test:settings       # 设置页：逐个点 13 项验证零静默 / 11 个面板有内容 / 外观三档真落库 / 偏好真改变行为（24 断言）
-npm run test:mobile         # 375 宽移动端：底栏出现 / 侧栏隐藏 / 无横向溢出 / 五格跳转 / 卡片不被压住 / 桌面回归（22 断言）
+npm run test:mobile         # 375 宽移动端：底栏出现 / 侧栏隐藏 / 无横向溢出 / 五格跳转 / 卡片不被压住 / 选中频道在可视区 / 登录页双出口 / 设置抽屉全宽 / 桌面回归（27 断言）
 npm run test:image          # 图片压缩：真 canvas 真的压下去 / EXIF 摆正后宽高交换 / 照片型 PNG 落盘是 WebP（23 断言）
 npm run test:motion          # 动效验证：证明入场真的在推进，且 reduced-motion 下真的停
 npm run test:e2e:all         # 按 CI 的方式顺序跑完 15 套（每套日志落 .e2e-logs/，跑完汇总）
@@ -345,6 +347,7 @@ npm run screenshot           # 重新生成 docs/screenshots/ 下的 README 配�
 ```
 content-sharing-platform/
 ├─ docker-compose.yml            # 一键起全栈：web(nginx) + server(+ seed profile)
+├─ deploy/                       # 裸机部署：Caddyfile / pm2 ecosystem / env 模板 / 原子替换发布脚本 / 换机复现文档
 ├─ client/                       # Vue 3 + Vite 前端
 │  ├─ src/
 │  │  ├─ views/                  # 15 个页面组件 / 14 条路由（ChatView 嵌在 MessagesView 里，不单独占路由；AiChatView 是 AI 对话页）
@@ -366,7 +369,7 @@ content-sharing-platform/
 │  │  ├─ stores/                 # Pinia: auth / toast / homeTabs
 │  │  ├─ router/                 # Vue Router 配置（20 条路由 + requiresAuth / guestOnly 守卫 + 路由懒加载）
 │  │  └─ constants.ts            # 客户端常量（与 server mirror）
-│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，37 文件 561 条）
+│  ├─ tests/                     # vitest + @vue/test-utils（jsdom，38 文件 568 条）
 │  │  ├─ helpers/fake-socket.ts  # 可手动驱动的假 WebSocket
 │  │  ├─ ai-chat-view.test.ts    # AI 对话页：来源先于答案 / 流式是追加不是替换 / 三类来源 tab
 │  │  ├─ image.test.ts           # 图片纯函数（41 条；EXIF 字节流是手工拼的，好处是能把截断 / 伪造字节序 / 越界偏移写得很具体）
@@ -558,6 +561,19 @@ LCP 图片传输完成   3038 ms
 
 同一台机器、同一限速档的本地对照：**LCP 4304 → 约 3300 ms（-23%）**，
 首屏总流量 **573 → 385 KB**、请求 **16 → 10**、CLS 仍为 0。
+
+部署到线上后又用同一档限速复测了一次真实链路（含 TLS / Caddy 缓存头 / 跨地域 RTT）：
+
+| 指标             | 优化前           | 优化后           | 变化        |
+| ---------------- | ---------------- | ---------------- | ----------- |
+| LCP              | 5512ms           | 3872ms           | **-30%**    |
+| 首屏图片         | 433 KB / 22 请求 | 263 KB / 11 请求 | -39% / -50% |
+| 首屏总流量       | 627 KB           | 454 KB           | -28%        |
+| `/api/feed` 发起 | 2516ms           | HTML 解析阶段    | 提前约 1.8s |
+
+本地干净库跑 `perf:check` 预算全绿（11 张图 / 268 KiB、总 462 KiB、LCP≈2.5s）。
+这里特意不把 LCP 绝对值写进预算：它会随机器负载和跨地域 RTT 抖几百毫秒，
+拿它当硬门槛只会训练人把红线往后挪。
 
 配套加了两把尺子：`perf:live` 让本地 preview 之外的真实链路（TLS / 反代 / 缓存头）也能量；
 `perf:check` 把结构性指标写成会红灯的预算 —— **只卡「首屏图片请求数 ≤ 视口内 + 8 / 图片 ≤ 320 KiB /
@@ -866,7 +882,7 @@ mock canvas 有两种用法：
 并以 exit 1 结束。门禁不是写在那儿好看的。
 
 **结果**：后端语句覆盖 **77.36%**、前端 **86.27%**，
-1038 条单测（后端 477 / 前端 561），两端都是 CI 门禁。
+1045 条单测（后端 477 / 前端 568），两端都是 CI 门禁。
 
 > 顺带发现并删掉了一段死代码：`SideNav.vue` 里有一条 `handleCommand('logout')`，
 > 模板里从来没调用过它 —— 退出登录在顶栏和设置页各有一处。
@@ -1280,7 +1296,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 | **ESLint + Prettier + Husky**            | lint-staged 在 pre-commit 跑 eslint + prettier；commitlint 强制 conventional commits（subject ≤ 72 字符）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **ESLint / Prettier 规则解冲突**         | `semi: false` 的 prettier 会删分号，但 `eslint:recommended` 的 `no-extra-semi` 会报错，两者来回翻转。接入 `eslint-config-prettier` 并放在 `extends` **最后**，关闭所有纯格式规则，让 prettier 成为格式的唯一权威                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **CI 类型检查曾经是假的**                | `client/tsconfig.json` 是 solution-style（`files: []` + `references`），`vue-tsc --noEmit` 直接跑等于什么都没检查，10+ 个 TS 报错被 CI 静默放过。CI 改成 `vue-tsc --noEmit -p tsconfig.app.json` 后立刻暴露，顺手把 API 层类型修对                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest **覆盖率** 477 例）/ `client`（vue-tsc + vitest 覆盖率 561 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier + **README 配图过期检查**）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）单独放在 `browser.yml`，用 **`paths-ignore`** 让纯文档提交整体跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。`ci.yml` 里的三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。**过滤必须放在工作流级而不是 job 级** —— `paths-ignore` 不是 job 的合法键，写上去整个工作流会被判为非法，而本地 YAML 解析器完全无感；现在 `npm run lint` 里有一道对着 GitHub 官方 schema 的校验，`scripts/check-workflow-schema.mjs`。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22） |
+| **GitHub Actions CI**                    | 5 个并行 job：`server`（tsc + vitest **覆盖率** 477 例）/ `client`（vue-tsc + vitest 覆盖率 568 例 + build + **首屏体积预算**）/ `lint`（eslint + **CSS 语法检查** + prettier + **README 配图过期检查**）/ `e2e`（**15 套 Playwright 套件**）/ `a11y`（**axe-core 深浅两主题**）。后两个共用一个 `web-env` composite action 起「后端 → seed → 前端」；**故意不设 `needs`** —— 挂上去看着省事，实际是一次 push 只拿一份信号。贵的两个（e2e / a11y）单独放在 `browser.yml`，用 **`paths-ignore`** 让纯文档提交整体跳过：写成 `paths` 的话，新增一个源码目录忘了列，e2e 会被**静默跳过** —— 该跑没跑而报告还是绿的，是最危险的失败方向；`paths-ignore` 只在所有改动都是文档时才跳过，其余一律全跑。`ci.yml` 里的三个 job 永远跑（prettier 也检查 markdown，文档提交同样得过格式检查）。**过滤必须放在工作流级而不是 job 级** —— `paths-ignore` 不是 job 的合法键，写上去整个工作流会被判为非法，而本地 YAML 解析器完全无感；现在 `npm run lint` 里有一道对着 GitHub 官方 schema 的校验，`scripts/check-workflow-schema.mjs`。ubuntu-latest + Node 24（vitest 5 与 better-sqlite3 13 的 engines 都要求 ≥ 22） |
 | **前端单测不是摆设**                     | 分列、高度估算、关键词切分抽成 `utils/masonry.ts` 的纯函数，不挂组件就能喂数据断言；更关键的是**组件、composable 和六个业务视图都有测**：485 条用例里，WebSocket 状态机用可手动驱动的假 socket 覆盖握手语义（`onopen` 不等于 open）、退避重连、4401 停止重试、心跳保活；聊天乐观发送覆盖**乱序 ack 收敛**（两条连发、ack 倒序回来，必须按 tempId 查映射表而不是靠「id 是负数」反查）；`useNotifications` 覆盖**模块级单例**与「WS 推来的未读数是覆盖而不是 +1」；六个视图（登录 / 首页 / 消息 / 话题 / 收藏夹 / 关注列表 / 浏览记录）直接 mount 起来测，锁的全是「写错了也不会崩」的语义 —— 404 与加载失败是两种东西、`//evil.com` 必须被挡（协议相对 URL）、粉丝与关注调的是两个不同接口、未分类必须是服务端筛选。`tsconfig.app.json` 的 `include` 特意带上 `tests/`，否则测试文件里的类型错误 `vue-tsc` 永远看不见；覆盖率门槛写进 `vitest.config.ts`（四项 84/75/81/85），跌破直接让 CI 红                                                                                                                                                                                                             |
 | **多端实时同步（IM）**                   | `ws` 库手写 JSON 协议（不用 Socket.IO）。核心是 `Hub` 里 **`Map<userId, Set<WebSocket>>`** —— 一个账号可挂 N 个连接，推消息时把 Set 全推一遍，「电脑发手机收」就成了自然结果，没有额外同步代码。若用 `Map<userId, WebSocket>`，用户的第二个标签页会直接变成哑巴                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **IM 的三个易漏点**                      | ① 浏览器 WS API 不能自定义 header，token 只能走 query —— 代价是可能进网关日志，办法是校验失败立刻用 4401 关闭、全程不打握手 URL；② 断线重连必须带 **sync 补偿**（心跳 ping/pong 只保证连接活着，不负责补数据），断网期间的消息全靠它；③ 重连退避要加**随机抖动**，否则服务重启后所有客户端在同一毫秒一起冲上来会把它再打挂                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -1364,7 +1380,7 @@ axe 把「正在变暗的白字」当成了最终颜色。
 
 ---
 
-**验证基线**：前端 561 条单测（37 文件）/ 后端 477 条（27 文件）/ 15 套 Playwright e2e（约 430 个断言点）/
+**验证基线**：前端 568 条单测（38 文件）/ 后端 477 条（27 文件）/ 15 套 Playwright e2e（约 430 个断言点）/
 lint 0 error / 覆盖率：后端 statements 78.08%（门槛 75）、前端 statements 87.29%（门槛 84）/
 CI 两个工作流五个 job 全绿
 （纯文档提交时 `browser.yml` 整体跳过，另外三个 job 照跑）。

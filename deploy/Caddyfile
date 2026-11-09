@@ -1,0 +1,45 @@
+# 裸机部署的反向代理配置（线上 csp.bscjs.top 用的就是这一份的同构版本）
+#
+# 和容器版 client/nginx.conf 是同一套拓扑：浏览器只看得见一个 origin，
+# /api /uploads /ws 反代到本机 Node，其余走静态 + SPA fallback。
+# 差别只在反代是谁：容器里是 nginx，裸机上是 Caddy（自动签证书）。
+#
+# 用法：把域名和静态根通过环境变量注入后，把本文件内容并进 /etc/caddy/Caddyfile，
+# 或 `caddy run --config deploy/Caddyfile`。不要直接改线上文件而不回写这里。
+#
+#   export CSP_DOMAIN=csp.example.com
+#   export CSP_WEB_ROOT=/srv/csp/repo/client/dist
+#
+# 注意：`{$VAR:default}` 是 Caddy 2.6+ 的写法，冒号后面是缺省值。
+
+{$CSP_DOMAIN:localhost} {
+	encode gzip zstd
+
+	# 构建产物带内容哈希，内容写定不变，可以放心 immutable。
+	# 不带哈希的 index.html 永远走 no-cache，否则发了新版用户还吃旧入口。
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+
+	# /assets 和 /uploads 各自已有长缓存头，排除掉避免叠加重复头。
+	# /uploads 的 30d immutable 是后端 express.static 设的，这里别覆盖。
+	@html not path /assets/* /uploads/*
+	header @html Cache-Control "no-cache"
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	# Caddy 自动转发 Upgrade / Connection，WebSocket 不需要额外头。
+	handle /ws* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle /uploads/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	handle {
+		root * {$CSP_WEB_ROOT:/srv/csp/repo/client/dist}
+		try_files {path} /index.html
+		file_server
+	}
+}
