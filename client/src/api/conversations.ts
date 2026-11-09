@@ -41,9 +41,16 @@ export const conversationsApi = {
     )
   },
 
-  /** 打开和某个用户的会话；已存在则复用（幂等） */
+  /**
+   * 打开和某个用户的会话；已存在则复用（幂等）
+   *
+   * 403 不是故障，是产品门槛「先关注对方才能发消息」。
+   * useChatEntry 会把它翻译成「关注并发送」确认框，useChat 会把服务端原话
+   * 透出去 —— 两条路都有明确的界面出口，所以标记 quietStatuses，
+   * 免得每次点「发消息」都在控制台留一条 [API Error]。
+   */
   create(userId: number): Promise<Conversation> {
-    return request.post<Conversation>('/conversations', { userId })
+    return request.post<Conversation>('/conversations', { userId }, { quietStatuses: [403] })
   },
 
   /** 历史消息游标分页：before 传上一页的 nextBefore */

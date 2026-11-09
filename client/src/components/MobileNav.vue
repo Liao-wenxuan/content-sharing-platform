@@ -57,7 +57,9 @@ const activeKey = computed(() => {
   if (p === '/') return route.query.channel === 'follow' ? 'follow' : 'home'
   if (p.startsWith('/follows')) return 'follow'
   if (p.startsWith('/publish')) return 'publish'
-  if (p.startsWith('/messages') || p.startsWith('/chat')) return 'messages'
+  // 私信只有 /messages 一个入口（?tab=chat&peer=…），没有 /chat 路由。
+  // 之前多列了一个 /chat 分支，看起来像容错，实际是在给不存在的路径背书。
+  if (p.startsWith('/messages')) return 'messages'
   if (
     p.startsWith('/profile') ||
     p.startsWith('/favorites') ||

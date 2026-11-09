@@ -13,6 +13,32 @@ const http: AxiosInstance = axios.create({
   timeout: 15000
 })
 
+/**
+ * 预期状态码的配置字段。
+ *
+ * 原则：**某个状态码算不算「错误」，由调用侧决定，不由拦截器替所有人决定。**
+ * 后端用 4xx 表达的不只有故障，还有产品规则（403「先关注才能发消息」）、
+ * 正常状态（游客访问 /settings 一定 401）、以及空结果（话题不存在 404）。
+ * 这些都该由调用方翻译成界面语言，而不是在控制台刷一条 [API Error] ——
+ * 后者既污染排查，也会把「零 console error」这条 e2e 断言弄挂。
+ */
+type ExpectedStatusConfig = {
+  silent404?: boolean
+  /** 历史标记，保留兼容：等同于 quietStatuses: [401] */
+  quiet401?: boolean
+  /** 预期内的拒绝：仍然 reject 让调用方处理，但不打 console.error */
+  quietStatuses?: number[]
+}
+
+/** 返回 true = 这条错误不该打日志。导出成纯函数是为了能直接测。 */
+export function shouldStayQuiet(config: unknown, status?: number): boolean {
+  if (!status || !config || typeof config !== 'object') return false
+  const c = config as ExpectedStatusConfig
+  if (c.silent404 && status === 404) return true
+  if (c.quiet401 && status === 401) return true
+  return Array.isArray(c.quietStatuses) && c.quietStatuses.includes(status)
+}
+
 // ===== 请求拦截器：自动加 token =====
 // 从 Pinia store 读 token（持久化由 pinia-plugin-persistedstate 负责）
 http.interceptors.request.use(
@@ -40,19 +66,19 @@ http.interceptors.response.use(
       return Promise.resolve(null)
     }
 
-    // 「401 是游客的正常状态」的出口。
+    // 「预期内的拒绝」出口（见上方 shouldStayQuiet）。
     //
-    // /api/settings 对游客一定返回 401（没有登录就没有偏好），
-    // 而 useUserSettings 是**全局**加载的，游客每次开页面都会打这一发。
-    // 它不是错误，是这个接口的正常响应之一 —— 但默认走下面的 console.error，
-    // 于是「游客打开首页」会稳定留下一条 [API Error]，
-    // 把「零 console error」这条 e2e 断言也弄挂。
+    // 已经登记的三类：
+    // - quiet401：游客访问 /settings 一定 401，而 useUserSettings 是全局加载的，
+    //   游客每次开页面都会打这一发，不是故障。
+    // - quietStatuses: [403]：发消息前没关注对方，后端按产品规则挡下来；
+    //   useChatEntry 会弹「要不要关注」，useChat 会把服务端原话透出去。
+    // - silent404：走上面那条，直接 resolve null。
     //
-    // 和 silent404 同一个道理：**某个状态码算不算错误，
-    // 由调用侧决定，而不是由拦截器替所有人决定。**
-    // 这里仍然 reject —— 调用方需要区分「游客」和「请求失败」，
-    // 只是不要往控制台里刷一条不该有的错误。
-    if ((error.config as any)?.quiet401 && error.response?.status === 401) {
+    // 这里仍然 reject —— 调用方需要区分「被规则挡下」和「真的挂了」，
+    // 区别只在于不要往控制台刷一条不该有的 [API Error]。
+    // 判据由**调用方**在 config 上声明，拦截器不猜状态码的含义。
+    if (shouldStayQuiet(error.config, error.response?.status)) {
       return Promise.reject(error)
     }
 

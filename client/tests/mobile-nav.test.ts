@@ -77,7 +77,10 @@ describe('MobileNav', () => {
     ['/follows/1', {}, '关注'],
     ['/publish', {}, '发布'],
     ['/messages', {}, '消息'],
-    ['/chat/3', {}, '消息'],
+    ['/messages?tab=chat&peer=1', {}, '消息'],
+    // /chat 从来就不是路由（私信是 /messages 上的 tab+peer 参数）。
+    // 手敲一个不存在的路径，只该回落到「发现」，不该假装还在消息页。
+    ['/chat/3', {}, '发现'],
     ['/profile/me', {}, '我的'],
     ['/favorites', {}, '我的'],
     ['/settings', {}, '我的'],
