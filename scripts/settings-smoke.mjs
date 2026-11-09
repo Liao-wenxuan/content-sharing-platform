@@ -29,7 +29,7 @@ const EMAIL = 'settings_check@test.local'
 const PASSWORD = 'Set12345'
 
 function ensureUser() {
-  const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')))
+  const db = new Database(process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'))
   let row = db.prepare('SELECT id, email, nickname FROM users WHERE email = ?').get(EMAIL)
   if (!row) {
     const bcrypt = serverRequire('bcryptjs')
@@ -39,8 +39,7 @@ function ensureUser() {
     row = { id: Number(info.lastInsertRowid), email: EMAIL, nickname: '设置检查号' }
   }
   db.close()
-  const secret =
-    getJwtSecret(ROOT)
+  const secret = getJwtSecret(ROOT)
   return { id: row.id, token: jwt.sign({ userId: row.id, email: EMAIL }, secret) }
 }
 
@@ -52,7 +51,9 @@ const user = ensureUser()
  * 提到模块作用域是因为第 5b 组要用它去捞一张真实存在的图片 URL ——
  * 写在里面的话，第 6 组声明的 `db` 在它后面才存在，拿不到。
  */
-const db = new Database((process.env.DB_PATH || path.join(ROOT, 'server', 'data.db')), { readonly: true })
+const db = new Database(process.env.DB_PATH || path.join(ROOT, 'server', 'data.db'), {
+  readonly: true
+})
 
 /**
  * 拿到一份完整的默认偏好。
@@ -477,33 +478,66 @@ console.log('\n[5c] 外观与主题：三档都真的改配色，且偏好存得
   const options = drawer.locator('.mode-option')
   check('三档都在', (await options.count()) === 3, `${await options.count()} 档`)
 
-  const pick = (v) => drawer.locator(`.mode-option:has(input[value="${v}"])`).click()
   const isDark = () => page.evaluate(() => document.documentElement.classList.contains('dark'))
 
+  /**
+   * 点完不等固定毫秒，等 localStorage 真的变成目标值。
+   *
+   * 2026-11-09 的 Browser CI 实测：三次连续切换之间只隔 250ms，慢机器上
+   * Vue 重渲染 + change 事件可能比这个窗口更晚落地，click 命中了正在被替换
+   * 的节点，于是「跟随系统」这一档根本没生效，后面四条断言一起假失败。
+   * 同一份代码本地与第二次 CI 全绿 —— 典型时序 flaky，不是产品缺陷。
+   * 固定 sleep 猜时序就是这么来的，改成等状态，失败才算真失败。
+   */
+  const pick = async (v) => {
+    await drawer.locator(`.mode-option:has(input[value="${v}"])`).click()
+    await page.waitForFunction((expected) => localStorage.getItem('themeMode') === expected, v, {
+      timeout: 8000
+    })
+  }
+
   await pick('dark')
-  await page.waitForTimeout(250)
   check('选深色 → html.dark', (await isDark()) === true)
 
   await pick('light')
-  await page.waitForTimeout(250)
   check('选浅色 → 去掉 html.dark', (await isDark()) === false)
 
   await pick('system')
-  await page.waitForTimeout(250)
-  check('跟随系统写进了 localStorage', (await page.evaluate(() => localStorage.getItem('themeMode'))) === 'system')
-  check('面板说明了当前解析结果', (await drawer.locator('.current').innerText()).includes('跟随系统'))
+  check(
+    '跟随系统写进了 localStorage',
+    (await page.evaluate(() => localStorage.getItem('themeMode'))) === 'system'
+  )
+  check(
+    '面板说明了当前解析结果',
+    (await drawer.locator('.current').innerText()).includes('跟随系统')
+  )
 
-  // 防抖 250ms 之后偏好应该已经落到服务端；刷新一次确认不会被按回去
-  await page.waitForTimeout(500)
-  const remote = await fetch(`${API}/api/settings`, {
-    headers: { Authorization: `Bearer ${user.token}` }
-  }).then((r) => r.json())
-  check('服务端存的也是 system', remote.settings?.themeMode === 'system', remote.settings?.themeMode)
+  // 偏好是防抖落库的。轮询等服务端真的写进去，而不是赌 500ms 够用；
+  // 超时后 check 照样会红，所以这不会掩盖「真的没保存」。
+  let remote
+  for (let i = 0; i < 12; i++) {
+    remote = await fetch(`${API}/api/settings`, {
+      headers: { Authorization: `Bearer ${user.token}` }
+    }).then((r) => r.json())
+    if (remote.settings?.themeMode === 'system') break
+    await page.waitForTimeout(200)
+  }
+  check(
+    '服务端存的也是 system',
+    remote.settings?.themeMode === 'system',
+    remote.settings?.themeMode
+  )
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('.settings').waitFor({ state: 'visible', timeout: 20000 })
-  await page.waitForTimeout(800)
-  check('刷新后仍是跟随系统', (await page.evaluate(() => localStorage.getItem('themeMode'))) === 'system')
+  // 刷新后 load() 会拿服务端的 themeMode 覆盖本地，等它跑完再断言
+  await page
+    .waitForFunction(() => localStorage.getItem('themeMode') === 'system', null, { timeout: 8000 })
+    .catch(() => {})
+  check(
+    '刷新后仍是跟随系统',
+    (await page.evaluate(() => localStorage.getItem('themeMode'))) === 'system'
+  )
 
   // 恢复默认深色，别把后面的套件和截图带跑
   await page.locator('[data-item="theme"]').click()
