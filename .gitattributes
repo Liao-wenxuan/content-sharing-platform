@@ -1,0 +1,4 @@
+# Shell 脚本一律以 LF 入库。
+# Windows 上 core.autocrlf 会把 shebang 写成 `#!/usr/bin/env bash\r`，
+# 服务器端 `./deploy/deploy.sh` 就会报 "bad interpreter"，而文件内容看起来完全正常。
+*.sh text eol=lf
