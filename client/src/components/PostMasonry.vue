@@ -708,12 +708,13 @@ function markCoverBroken(postId: number) {
 .count-badge {
   position: absolute;
   right: 8px;
-  top: 8px;
+  bottom: 8px;
   padding: 1px 8px;
   border-radius: var(--radius-full);
   font-size: var(--fs-2xs);
   color: #fff;
   background: rgba(0, 0, 0, 0.55);
+  transition: opacity var(--dur-fast) var(--ease-out-expo);
 }
 
 /* 搜索命中的话题标签角标 */
@@ -733,7 +734,7 @@ function markCoverBroken(postId: number) {
 .play-badge {
   position: absolute;
   right: 8px;
-  top: 8px;
+  bottom: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -745,12 +746,21 @@ function markCoverBroken(postId: number) {
   backdrop-filter: blur(2px);
   /* 卡片 hover 时角标跟着放大 —— 参考动效里「卡片被拿起来」的同一套手感，
      封面 zoom 1.04、角标 1.1，差值让角标有浮出来的层次 */
-  transition: transform var(--dur-fast) var(--ease-out-expo);
+  transition:
+    transform var(--dur-fast) var(--ease-out-expo),
+    opacity var(--dur-fast) var(--ease-out-expo);
 }
 
 .card:hover .play-badge,
 .card:focus-visible .play-badge {
   transform: scale(1.1);
+}
+
+/* hover 时右下角要让位给「话题预览胶囊」（.peek），否则两者叠在右下角。
+   非 hover 时图数 / 视频标是常显信息，hover 时切换成话题提示。 */
+.card-wrap:hover .count-badge,
+.card-wrap:hover .play-badge {
+  opacity: 0;
 }
 
 /*
