@@ -12,7 +12,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/utils/element'
-import { Star, ChatDotRound, Edit, Plus } from '@element-plus/icons-vue'
+import { Star, ChatDotRound, Edit, Plus, Camera, Loading } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
 import { postsApi, type Post, type LikedPost } from '@/api/posts'
@@ -31,6 +31,7 @@ import { NICKNAME_MAX_LENGTH, AVATAR_MAX_EDGE, COVER_MAX_EDGE, IMAGE_QUALITY } f
 import { isValidImageUrl } from '@/utils/image'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
+import defaultCover from '@/assets/default-cover.svg'
 
 const route = useRoute()
 const router = useRouter()
@@ -476,6 +477,69 @@ async function submitEdit() {
   }
 }
 
+// ===== 直接改头像 / 封面（本人主页，点相机即改）=====
+// 跟「编辑资料」弹窗走同一套压缩 + 上传，区别是这里传完直接落库，
+// 不用先打开弹窗、再点保存。封面 / 头像本就是独立资源，
+// 没必要为了换一张图把昵称也跟着提交一遍（服务端也是局部更新）。
+const coverInput = ref<HTMLInputElement | null>(null)
+const avatarInput = ref<HTMLInputElement | null>(null)
+
+function pickCover() {
+  coverInput.value?.click()
+}
+
+function pickAvatar() {
+  avatarInput.value?.click()
+}
+
+async function onCoverPicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 清空，允许重复选同一张
+  if (!file) return
+  const url = await coverField.upload(file)
+  if (url) await saveCover(url)
+}
+
+async function onAvatarPicked(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // 清空，允许重复选同一张
+  if (!file) return
+  const url = await avatarField.upload(file)
+  if (url) await saveAvatar(url)
+}
+
+async function saveCover(url: string) {
+  try {
+    const updated = await authApi.updateProfile({ cover: url })
+    if (profileUser.value) {
+      profileUser.value = { ...profileUser.value, cover: updated.cover }
+    }
+    if (auth.user) {
+      auth.user = { ...auth.user, cover: updated.cover }
+    }
+    ElMessage.success('封面已更新')
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '封面更新失败，请重试')
+  }
+}
+
+async function saveAvatar(url: string) {
+  try {
+    const updated = await authApi.updateProfile({ avatar: url })
+    if (profileUser.value) {
+      profileUser.value = { ...profileUser.value, avatar: updated.avatar }
+    }
+    if (auth.user) {
+      auth.user = { ...auth.user, avatar: updated.avatar }
+    }
+    ElMessage.success('头像已更新')
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || '头像更新失败，请重试')
+  }
+}
+
 // ===== 工具函数 =====
 function avatarText(nickname?: string): string {
   return nickname?.[0]?.toUpperCase() || '?'
@@ -597,8 +661,21 @@ watch(activeScope, async (scope) => {
 
     <template v-else-if="profileUser">
       <!-- ===== 封面 ===== -->
-      <div class="cover" :class="{ 'has-image': profileUser.cover }">
+      <!-- 默认背景图常驻：没有用户封面时显示默认图，有了封面 <img> 会盖在上面 -->
+      <div class="cover" :style="{ backgroundImage: `url(${defaultCover})` }">
         <img v-if="profileUser.cover" :src="profileUser.cover" alt="主页封面" />
+        <button
+          v-if="isOwner"
+          type="button"
+          class="cover-edit"
+          :disabled="coverUploading"
+          :aria-label="profileUser.cover ? '更换封面' : '上传封面'"
+          :title="profileUser.cover ? '更换封面' : '上传封面'"
+          @click="pickCover"
+        >
+          <el-icon v-if="coverUploading"><component :is="Loading" class="spin" /></el-icon>
+          <el-icon v-else><component :is="Camera" /></el-icon>
+        </button>
       </div>
 
       <div class="profile-grid">
@@ -612,9 +689,23 @@ watch(activeScope, async (scope) => {
                 永远不显示，页面上永远只有昵称首字，
                 而数据库里确实存了那个地址（界面上却看不出来）。
               -->
-              <el-avatar :size="72" :src="profileUser.avatar || undefined" class="avatar" alt="">
-                {{ avatarText(profileUser.nickname) }}
-              </el-avatar>
+              <div class="avatar-wrap">
+                <el-avatar :size="72" :src="profileUser.avatar || undefined" class="avatar" alt="">
+                  {{ avatarText(profileUser.nickname) }}
+                </el-avatar>
+                <button
+                  v-if="isOwner"
+                  type="button"
+                  class="avatar-edit"
+                  :disabled="avatarUploading"
+                  :aria-label="profileUser.avatar ? '更换头像' : '上传头像'"
+                  :title="profileUser.avatar ? '更换头像' : '上传头像'"
+                  @click="pickAvatar"
+                >
+                  <el-icon v-if="avatarUploading"><component :is="Loading" class="spin" /></el-icon>
+                  <el-icon v-else><component :is="Camera" /></el-icon>
+                </button>
+              </div>
 
               <div class="info-main">
                 <div class="nickname-row">
@@ -890,6 +981,22 @@ watch(activeScope, async (scope) => {
       </div>
     </template>
 
+    <!-- 直接改头像 / 封面的隐藏文件选择器：按钮触发 click，改完即传即存 -->
+    <input
+      ref="coverInput"
+      type="file"
+      accept="image/*"
+      class="visually-hidden"
+      @change="onCoverPicked"
+    />
+    <input
+      ref="avatarInput"
+      type="file"
+      accept="image/*"
+      class="visually-hidden"
+      @change="onAvatarPicked"
+    />
+
     <!-- ===== 编辑资料 dialog ===== -->
     <el-dialog
       v-model="showEditModal"
@@ -1088,6 +1195,43 @@ watch(activeScope, async (scope) => {
   display: block;
 }
 
+/* 默认封面图常驻在背景上（内联 background-image），用户封面 <img> 会盖住它；
+   没有用户封面时不留空白，而是一张干净的渐变默认图 */
+.cover-edit {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-size: var(--fs-md);
+  color: var(--foreground);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  opacity: 0.82;
+  backdrop-filter: blur(6px);
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.cover-edit:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.cover-edit:disabled {
+  cursor: wait;
+}
+
 /* ===== 双栏 ===== */
 .profile-grid {
   display: grid;
@@ -1123,6 +1267,45 @@ watch(activeScope, async (scope) => {
   color: var(--foreground);
   font-size: var(--fs-display);
   flex-shrink: 0;
+}
+
+/* 头像外层：相对定位，让相机按钮能贴在右下角 */
+.avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.avatar-edit {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: var(--fs-sm);
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.avatar-edit:hover:not(:disabled) {
+  color: var(--accent-foreground);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.avatar-edit:disabled {
+  cursor: wait;
 }
 
 .info-main {
@@ -1500,5 +1683,32 @@ watch(activeScope, async (scope) => {
   font-size: var(--fs-2xs);
   color: var(--muted-foreground);
   margin-top: 2px;
+}
+
+/* 隐藏的文件选择器：可聚焦、可被 JS 触发 click，但视觉上不可见 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 上传中的旋转图标 */
+.spin {
+  animation: csp-spin 0.9s linear infinite;
+}
+
+@keyframes csp-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

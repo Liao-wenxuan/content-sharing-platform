@@ -22,7 +22,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '@/utils/element'
-import { Collection, Plus, Delete, EditPen, FolderOpened } from '@element-plus/icons-vue'
+import { Collection, Plus, Delete, EditPen, FolderOpened, VideoPlay } from '@element-plus/icons-vue'
 import { favoritesApi, type FavoriteFolder } from '@/api/favorites'
 import { useFavoritesList } from '@/composables/useFavoritesList'
 import { useRelativeTime } from '@/composables/useRelativeTime'
@@ -201,11 +201,21 @@ onMounted(reload)
 <template>
   <div class="fav-manage">
     <header class="head">
-      <h1 class="title">收藏</h1>
-      <p class="subtitle">
-        共 {{ allCount }} 篇 · {{ folders.length }} 个收藏夹
-        <span class="subtitle-hint">收藏只有自己可见，可以按主题归进收藏夹</span>
-      </p>
+      <div class="head-copy">
+        <h1 class="title">收藏</h1>
+        <p class="subtitle">收藏只有自己可见，可以按主题归进收藏夹</p>
+      </div>
+      <div class="head-stats" aria-label="收藏概览">
+        <div class="stat">
+          <b class="stat-num">{{ allCount }}</b>
+          <span class="stat-label">篇收藏</span>
+        </div>
+        <span class="stat-sep" aria-hidden="true"></span>
+        <div class="stat">
+          <b class="stat-num">{{ folders.length }}</b>
+          <span class="stat-label">个收藏夹</span>
+        </div>
+      </div>
     </header>
 
     <div class="layout">
@@ -267,7 +277,7 @@ onMounted(reload)
               maxlength="20"
               @keyup.enter="createFolder"
             />
-            <el-button type="primary" :loading="creating" @click="createFolder">
+            <el-button type="default" :loading="creating" @click="createFolder">
               <el-icon><component :is="Plus" /></el-icon>
               创建
             </el-button>
@@ -365,7 +375,7 @@ onMounted(reload)
         />
 
         <template v-else>
-          <div class="fav-grid">
+          <div class="fav-grid" :class="{ 'is-sparse': posts.length <= 2 }">
             <article
               v-for="p in posts"
               :key="p.id"
@@ -382,6 +392,9 @@ onMounted(reload)
                   />
                   <p v-else class="fav-cover-text">{{ excerptOf(p.content) }}</p>
                   <span v-if="p.mediaType === 'video'" class="fav-badge">视频</span>
+                  <span v-if="p.mediaType === 'video'" class="fav-play" aria-hidden="true">
+                    <el-icon><component :is="VideoPlay" /></el-icon>
+                  </span>
                 </div>
                 <div class="fav-body">
                   <p class="fav-text">{{ p.content }}</p>
@@ -428,58 +441,111 @@ onMounted(reload)
 
 <style scoped>
 .fav-manage {
-  max-width: var(--content-max-width);
+  max-width: var(--content-max-width-wide);
   margin: 0 auto;
   padding: 24px 0 48px;
 }
 
+/* 页头：左边文案、右边概览数字，一个明确的视觉锚点。
+   原来只有一行小标题，整页从左往右「塌」下去，没有重心 */
 .head {
-  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.head-copy {
+  min-width: 0;
 }
 
 .title {
   margin: 0;
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 
 .subtitle {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
-.subtitle-hint {
-  margin-left: 8px;
-  color: var(--text-3);
+.head-stats {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+  padding: 10px 18px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
 }
 
-/* ===== 两栏 ===== */
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.stat-num {
+  font-family: var(--font-numeric);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--foreground);
+}
+
+.stat-label {
+  font-size: var(--fs-2xs);
+  color: var(--muted-foreground);
+}
+
+.stat-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border-soft);
+}
+
+/* ===== 筛选条 =====
+   原来是「页面内再放一条 200px 竖栏」，跟全局左侧导航叠成左上两大坨，
+   主内容被挤到右边一条窄缝里。改成顶部横向条：内容区全宽，重心立刻回正。 */
 .layout {
-  display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .side {
-  position: sticky;
-  top: calc(var(--top-bar-height) + 16px);
   display: flex;
-  flex-direction: column;
-  gap: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 12px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
 }
 
 .side-block {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.side-block:not(:first-child) {
+  padding-left: 18px;
+  border-left: 1px solid var(--border-soft);
 }
 
 .side-title {
-  margin: 0 0 6px;
-  padding: 0 10px;
+  margin: 0 2px 0 0;
+  padding: 0;
   font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -493,23 +559,26 @@ onMounted(reload)
   color: var(--text-3);
 }
 
+/* 筛选项改为胶囊：横排时不再撑满整行，宽度随内容收缩 */
 .side-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
+  gap: 6px;
+  width: auto;
+  padding: 6px 12px;
   font-family: inherit;
-  font-size: var(--fs-base);
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
   text-align: left;
   background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
   cursor: pointer;
+  white-space: nowrap;
   transition:
     background 0.15s ease,
-    color 0.15s ease;
+    color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .side-item:hover {
@@ -520,22 +589,10 @@ onMounted(reload)
 .side-item.active {
   color: var(--foreground);
   background: var(--surface-3);
-}
-
-/* 选中态不能只靠底色：深色主题下 surface-3 和 surface-2 差得太近，
-   加一条左侧强调线，一眼能看出「我现在在哪个筛选里」 */
-.side-item.active::before {
-  content: '';
-  width: 2px;
-  height: 14px;
-  margin-left: -10px;
-  margin-right: 8px;
-  background: var(--accent);
-  border-radius: var(--radius-full);
+  border-color: var(--border-strong);
 }
 
 .side-label {
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -544,28 +601,48 @@ onMounted(reload)
 
 .side-count {
   font-family: var(--font-numeric);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-2xs);
   color: var(--text-3);
 }
 
 .active .side-count {
-  color: var(--accent);
+  color: var(--foreground);
 }
 
+/* 建夹区不再单独占一整行 + 上边框，收进同一条筛选带右侧 */
 .create-block {
-  padding-top: 4px;
-  border-top: 1px solid var(--border-soft);
+  margin-left: auto;
+  gap: 8px;
 }
 
 .create-row {
   display: flex;
   gap: 8px;
-  padding: 0 2px;
+  padding: 0;
 }
 
-/* ===== 右栏 ===== */
+.create-row :deep(.el-input__wrapper) {
+  border-radius: var(--radius-full);
+}
+
+.create-row :deep(.el-button) {
+  border-radius: var(--radius-full);
+}
+
+.create-row :deep(.el-input) {
+  width: 148px;
+}
+
+/* ===== 内容面板 =====
+   卡片原本直接漂在页面底色上，1 条内容时 70% 面积是纯黑虚无。
+   给内容区一个有边界的面板，空白变成「有容器的空白」而不是漏了内容。 */
 .main {
   min-width: 0;
+  min-height: 380px;
+  padding: 18px 20px 20px;
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
 }
 
 .main-head {
@@ -665,8 +742,59 @@ onMounted(reload)
 /* ===== 卡片 ===== */
 .fav-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 18px;
+  /* 收藏少时整组居中，避免一张卡孤零零贴左上、大片留白 */
+  justify-content: center;
+}
+
+/* 只有 1–2 条收藏时：切成横向大卡，封面 + 正文左右分栏。
+   小方卡在宽内容区里只占 210px，剩下全是黑 —— 横向铺开才有「内容」的分量 */
+.fav-grid.is-sparse {
+  grid-template-columns: minmax(0, 1fr);
+  /* 横向卡不能铺满 1176px：6:1 的扁条比小方卡还难看。
+     收在 720px 并居中，留白变成对称的、有意的 */
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.fav-grid.is-sparse .fav-link {
+  display: flex;
+  align-items: stretch;
+}
+
+.fav-grid.is-sparse .fav-cover {
+  flex: 0 0 220px;
+  width: 220px;
+  aspect-ratio: auto;
+  min-height: 168px;
+}
+
+.fav-grid.is-sparse .fav-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 20px;
+}
+
+.fav-grid.is-sparse .fav-text {
+  font-size: var(--fs-base);
+  -webkit-line-clamp: 3;
+}
+
+/* 横向卡里作者和时间必须挨着：space-between 会把时间甩到卡片最右端，
+   跟右上角「取消收藏」叠成两行散点 */
+.fav-grid.is-sparse .fav-meta {
+  justify-content: flex-start;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+/* 稀疏卡收窄后不该再显示「取消收藏」文字，图标按钮就够 */
+.fav-grid.is-sparse .fav-remove-text {
+  display: none;
 }
 
 .fav-card {
@@ -709,6 +837,18 @@ onMounted(reload)
   display: block;
 }
 
+/* 封面顶部蒙版：任何缩略图（尤其亮色/视频帧）上，
+   左上「视频」徽标和右上「取消收藏」都看得清，不必靠运气 */
+.fav-cover::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 52px;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.32), rgb(0 0 0 / 0));
+  pointer-events: none;
+  z-index: 1;
+}
+
 .fav-cover-text {
   margin: 0;
   padding: 14px;
@@ -723,13 +863,33 @@ onMounted(reload)
 
 .fav-badge {
   position: absolute;
-  top: 8px;
+  bottom: 8px;
   left: 8px;
-  padding: 1px 7px;
+  padding: 2px 8px;
   font-size: var(--fs-2xs);
-  color: var(--background);
-  background: var(--accent);
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.2);
   border-radius: var(--radius-full);
+}
+
+.fav-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: var(--radius-full);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .fav-body {
@@ -754,7 +914,7 @@ onMounted(reload)
   gap: 8px;
   margin-top: 8px;
   font-size: var(--fs-2xs);
-  color: var(--text-3);
+  color: var(--muted-foreground);
 }
 
 .fav-author {
@@ -832,27 +992,85 @@ onMounted(reload)
 .pager {
   display: flex;
   justify-content: center;
-  padding: 24px 0 0;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
 }
 
 .pager-end {
   margin: 0;
   font-size: var(--fs-xs);
-  color: var(--text-3);
+  color: var(--muted-foreground);
 }
 
 @media (max-width: 860px) {
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
+  .fav-manage {
+    padding: 16px 0 32px;
+  }
+
+  .head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .head-stats {
+    align-self: stretch;
+    justify-content: space-around;
   }
 
   .side {
-    position: static;
+    gap: 8px 12px;
+    padding: 10px 12px;
+  }
+
+  .side-block:not(:first-child) {
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .create-block {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .create-row :deep(.el-input) {
+    width: auto;
+    flex: 1;
+  }
+
+  .main {
+    padding: 14px 12px 16px;
   }
 
   .fav-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  /* 窄屏退回竖卡：横向大卡在手机上会把封面和文字挤成两条 */
+  .fav-grid.is-sparse .fav-link {
+    display: block;
+  }
+
+  .fav-grid.is-sparse .fav-cover {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    min-height: 0;
+  }
+
+  .fav-grid.is-sparse .fav-body {
+    display: block;
+    padding: 10px 12px 12px;
+  }
+
+  .fav-grid.is-sparse .fav-text {
+    font-size: var(--fs-sm);
+    -webkit-line-clamp: 2;
+  }
+
+  .fav-grid.is-sparse .fav-meta {
+    margin-top: 8px;
   }
 }
 </style>
