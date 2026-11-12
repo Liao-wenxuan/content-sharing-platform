@@ -589,7 +589,9 @@ onMounted(async () => {
 }
 
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .page-title {
@@ -608,52 +610,56 @@ onMounted(async () => {
 
 /* ===== 分组卡 ===== */
 /*
- * 这里用 CSS 多列（multi-column）而不是 Grid，量过之后换的。
+ * 换回 Grid 行式布局，只为一件事：**两列卡片的起始线必须对齐**。
  *
- * Grid 是**行式**布局：同一横排的格子共享一个行高，所以每排里
- * 最高的那张卡片会把旁边几张撑出空白。而设置页各分组的条目数差异很大
- * （原来一张 6 项、一张 1 项），这个空白就会大到「像缺了一块卡片」。
+ * 之前用 multi-column 是量过的：各分组条目数差异大时，Grid 同行会被最高的
+ * 卡撑出空洞（实测同排 69px、两列底部落差 323px）。后来「当前账号」挪进
+ * 页脚带、分组重新分配，条目数已拉平（左 2/3/2，右 3/2/2），再给每张卡
+ * 统一 min-height: 216px —— 现在同行最高与最矮只差 68px，拉伸出的空白
+ * 远小于「两列各自流动、中间那条分隔线永远错开」的观感损失。
  *
- * 同样的内容量下实测三种方案：
- *
- *   方案                同排最大空洞   两列底部落差   内容区总高
- *   Grid（原来）            69px         323px      1206px
- *   multi-column（第一版）  —（无「排」   186px      1069px
- *                         的概念）
- *   + 账号摘要挪进页脚带      —           137px       883px
- *   + 分组重新分配（这一版）  —             0px       814px
- *
- * 多列是每列各自流动，空白被摊在每张卡片下方，而不是攒成
- * 「一整张卡片的下方全空」那一块 —— 视觉上后者才是刺眼的那种。
- *
- * ⚠️ 顺序没有被打乱：多列按列填充，从上到下读完左列再读右列，
- * 正好等于 DOM 顺序（账号 → 通用 → 隐私与安全 → 内容与外观 →
- * 常用工具 → 帮助）。「当前账号」挪到了页脚带，不参与分列。
- *
- * 试过但撤回的两种：
- *   - Grid + align-items: stretch：边框齐了，但「账号」只有 2 行、
- *     「内容与外观」有 6 行，前者被拉出半张卡片的空洞，同样更糟。
- *   - Grid + grid-auto-flow: dense：前四张刚好填满 2×2，没有空洞可回填。
+ * Grid 行优先填充，DOM 顺序就等于视觉阅读顺序，也比多列的
+ * 「先读完左列再读右列」更符合直觉。
  */
 .settings-grid {
-  /*
-   * 用 column-width 而不是 columns: 2 —— 前者让浏览器按容器宽度
-   * 自己决定列数：1080 的内容宽下正好出 2 列，窄屏（不足两张 440px）
-   * 自动收成单列，和原来 minmax(440px, 1fr) 的断点一致。
-   */
-  column-width: 440px;
-  column-gap: var(--sp-4);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+  align-items: stretch;
+}
+
+@media (max-width: 860px) {
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .group-card {
-  /* 卡片绝不能被列切成两半 */
-  break-inside: avoid;
-  margin: 0 0 var(--sp-4) 0;
+  margin: 0;
+}
+
+/* 统一每张卡的最小高度：两列按同一节奏起卡，中间那条分隔线不再左右错开。
+   只作用于网格里的卡，页脚带的「当前账号 / 退出登录」不该被拉高。
+   用 min-height 而非固定 height，密度档位调大时内容仍能自然撑开。 */
+.settings-grid .group-card {
+  min-height: 216px;
 }
 
 .group-title {
-  font-weight: 600;
-  font-size: var(--fs-base);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  color: var(--text-1);
+  letter-spacing: 0.02em;
+}
+
+/* 卡片头与列表之间给一条明确的分界：分组标题不再是「列表的第一行」 */
+.group-card :deep(.el-card__header) {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.group-card :deep(.el-card__body) {
+  padding: 8px 18px 14px;
 }
 
 .item-list {
@@ -713,7 +719,7 @@ onMounted(async () => {
 }
 
 .item-icon {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-md);
   flex-shrink: 0;
 }
@@ -738,7 +744,7 @@ onMounted(async () => {
 
 .item-desc {
   font-size: var(--fs-xs);
-  color: var(--text-3);
+  color: var(--text-2);
   line-height: 1.5;
 }
 
@@ -753,15 +759,22 @@ onMounted(async () => {
  * 箭头在说「旁边还有东西」，文字在承诺一个具体动作。
  * 而且这一列换成文字之后，每行都要多占 40px。
  */
+/* 每行右侧都有同一个箭头，八次全亮就是八处视觉噪音：
+   默认压到 35% 透明度，hover 才亮起来指向「这一行可点」 */
 .item-arrow {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-sm);
   transform: rotate(180deg);
   flex-shrink: 0;
+  opacity: 0.35;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
 }
 
 .item-row.clickable:hover .item-arrow {
   color: var(--accent);
+  opacity: 1;
 }
 
 /* ===== 账号摘要（页脚带） ===== */

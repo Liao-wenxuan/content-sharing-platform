@@ -31,7 +31,6 @@ import { NICKNAME_MAX_LENGTH, AVATAR_MAX_EDGE, COVER_MAX_EDGE, IMAGE_QUALITY } f
 import { isValidImageUrl } from '@/utils/image'
 import { useRelativeTime } from '@/composables/useRelativeTime'
 import EmptyState from '@/components/EmptyState.vue'
-import defaultCover from '@/assets/default-cover.svg'
 
 const route = useRoute()
 const router = useRouter()
@@ -662,7 +661,7 @@ watch(activeScope, async (scope) => {
     <template v-else-if="profileUser">
       <!-- ===== 封面 ===== -->
       <!-- 默认背景图常驻：没有用户封面时显示默认图，有了封面 <img> 会盖在上面 -->
-      <div class="cover" :style="{ backgroundImage: `url(${defaultCover})` }">
+      <div class="profile-cover">
         <img v-if="profileUser.cover" :src="profileUser.cover" alt="主页封面" />
         <button
           v-if="isOwner"
@@ -834,98 +833,101 @@ watch(activeScope, async (scope) => {
 
           <!-- 收藏 / 赞过 / 评论都只对本人开放：别人看只给「私密」占位，
                不能给空列表 —— 空列表会让人以为对方一条都没有 -->
-          <EmptyState
-            v-if="showFavPrivate"
-            icon="🔒"
-            title="TA 的收藏是私密的"
-            hint="收藏只有本人可见"
-          />
+          <!-- 内容收进有边界的面板：空态不再孤零零漂在纯色背景里 -->
+          <div class="content-panel">
+            <EmptyState
+              v-if="showFavPrivate"
+              icon="🔒"
+              title="TA 的收藏是私密的"
+              hint="收藏只有本人可见"
+            />
 
-          <EmptyState
-            v-else-if="isPrivateOnlyTab && !isFavTab"
-            icon="🔒"
-            :title="activeTab === 'likes' ? 'TA 赞过的内容是私密的' : 'TA 的评论是私密的'"
-            hint="只有本人可见"
-          />
+            <EmptyState
+              v-else-if="isPrivateOnlyTab && !isFavTab"
+              icon="🔒"
+              :title="activeTab === 'likes' ? 'TA 赞过的内容是私密的' : 'TA 的评论是私密的'"
+              hint="只有本人可见"
+            />
 
-          <EmptyState
-            v-else-if="isFavTab && showFavLoading"
-            variant="loading"
-            title="加载收藏..."
-          />
+            <EmptyState
+              v-else-if="isFavTab && showFavLoading"
+              variant="loading"
+              title="加载收藏..."
+            />
 
-          <EmptyState
-            v-else-if="isLikedTab && likedLoading"
-            variant="loading"
-            title="加载赞过的笔记..."
-          />
+            <EmptyState
+              v-else-if="isLikedTab && likedLoading"
+              variant="loading"
+              title="加载赞过的笔记..."
+            />
 
-          <EmptyState
-            v-else-if="activeTab === 'comments' && commentsLoading"
-            variant="loading"
-            title="加载评论..."
-          />
+            <EmptyState
+              v-else-if="activeTab === 'comments' && commentsLoading"
+              variant="loading"
+              title="加载评论..."
+            />
 
-          <!-- 评论 tab：不是网格，每条要带「发在哪篇笔记下」——找不回原帖的评论列表没有意义 -->
-          <template v-else-if="activeTab === 'comments'">
-            <el-empty v-if="myComments.length === 0" :description="emptyHint" />
-            <ul v-else class="my-comment-list">
-              <li v-for="c in myComments" :key="c.id" class="my-comment-row">
-                <router-link class="my-comment-post" :to="`/post/${c.post.id}`">
-                  <img
-                    v-if="c.post.imageThumbs?.length"
-                    :src="c.post.imageThumbs[0]"
-                    alt=""
-                    loading="lazy"
-                  />
-                  <span v-else class="my-comment-blank">纯文字</span>
-                </router-link>
-                <div class="my-comment-body">
-                  <p class="my-comment-text">
-                    <span v-if="c.isReply" class="my-comment-reply-tag">回复</span>{{ c.content }}
-                  </p>
-                  <p class="my-comment-meta">
-                    <router-link class="my-comment-source" :to="`/post/${c.post.id}`">
-                      {{ c.post.content }}
-                    </router-link>
-                    <span class="my-comment-time">{{ formatTime(c.createdAt) }}</span>
-                  </p>
-                </div>
-              </li>
-            </ul>
-          </template>
+            <!-- 评论 tab：不是网格，每条要带「发在哪篇笔记下」——找不回原帖的评论列表没有意义 -->
+            <template v-else-if="activeTab === 'comments'">
+              <el-empty v-if="myComments.length === 0" :description="emptyHint" />
+              <ul v-else class="my-comment-list">
+                <li v-for="c in myComments" :key="c.id" class="my-comment-row">
+                  <router-link class="my-comment-post" :to="`/post/${c.post.id}`">
+                    <img
+                      v-if="c.post.imageThumbs?.length"
+                      :src="c.post.imageThumbs[0]"
+                      alt=""
+                      loading="lazy"
+                    />
+                    <span v-else class="my-comment-blank">纯文字</span>
+                  </router-link>
+                  <div class="my-comment-body">
+                    <p class="my-comment-text">
+                      <span v-if="c.isReply" class="my-comment-reply-tag">回复</span>{{ c.content }}
+                    </p>
+                    <p class="my-comment-meta">
+                      <router-link class="my-comment-source" :to="`/post/${c.post.id}`">
+                        {{ c.post.content }}
+                      </router-link>
+                      <span class="my-comment-time">{{ formatTime(c.createdAt) }}</span>
+                    </p>
+                  </div>
+                </li>
+              </ul>
+            </template>
 
-          <el-empty v-else-if="gridPosts.length === 0" :description="emptyHint" />
+            <el-empty v-else-if="gridPosts.length === 0" :description="emptyHint" />
 
-          <div v-else class="post-grid">
-            <router-link
-              v-for="(post, index) in gridPosts"
-              :key="post.id"
-              :to="`/post/${post.id}`"
-              class="post-link"
-            >
-              <el-card shadow="never" class="post-card" body-class="post-body">
-                <div class="cover" :class="`ratio-${index % 3}`">
-                  <img
-                    v-if="post.imageUrls?.length"
-                    :src="post.imageUrls[0]"
-                    :alt="`${post.author?.nickname} 的笔记封面`"
-                    loading="lazy"
-                  />
-                  <span v-else class="cover-blank">纯文字</span>
-                </div>
-                <p class="content">{{ post.content }}</p>
-                <div class="post-meta">
-                  <span class="stat">
-                    <el-icon><component :is="Star" /></el-icon>{{ post.likeCount }}
-                  </span>
-                  <span class="stat">
-                    <el-icon><component :is="ChatDotRound" /></el-icon>{{ post.commentCount }}
-                  </span>
-                  <span class="time">{{ formatTime(post.createdAt) }}</span>
-                </div>
-              </el-card>
-            </router-link>
+            <div v-else class="post-grid">
+              <router-link
+                v-for="(post, index) in gridPosts"
+                :key="post.id"
+                :to="`/post/${post.id}`"
+                class="post-link"
+              >
+                <el-card shadow="never" class="post-card" body-class="post-body">
+                  <div class="cover" :class="`ratio-${index % 3}`">
+                    <img
+                      v-if="post.imageUrls?.length"
+                      :src="post.imageUrls[0]"
+                      :alt="`${post.author?.nickname} 的笔记封面`"
+                      loading="lazy"
+                    />
+                    <span v-else class="cover-blank">纯文字</span>
+                  </div>
+                  <p class="content">{{ post.content }}</p>
+                  <div class="post-meta">
+                    <span class="stat">
+                      <el-icon><component :is="Star" /></el-icon>{{ post.likeCount }}
+                    </span>
+                    <span class="stat">
+                      <el-icon><component :is="ChatDotRound" /></el-icon>{{ post.commentCount }}
+                    </span>
+                    <span class="time">{{ formatTime(post.createdAt) }}</span>
+                  </div>
+                </el-card>
+              </router-link>
+            </div>
           </div>
         </div>
 
@@ -1180,15 +1182,23 @@ watch(activeScope, async (scope) => {
 }
 
 /* ===== 封面 ===== */
-.cover {
-  height: 200px;
+/* 顶部封面必须独占一个类名：帖子网格里的缩略图也叫 .cover，
+   两个同名规则互相覆盖会把这里的背景图冲掉、相机按钮也失去定位祖先 */
+.profile-cover {
+  position: relative;
+  height: 168px;
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: linear-gradient(120deg, var(--muted), var(--secondary));
+  background-color: var(--surface-2);
+  /* 由 Vite 处理资源路径与 data URI 转义。之前拼进内联 :style 的
+     url(...) 会被 data URI 里的特殊字符弄成无效声明，computed 值是 none */
+  background-image: url('../assets/default-cover.svg');
+  background-size: cover;
+  background-position: center;
   margin-bottom: 20px;
 }
 
-.cover img {
+.profile-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1238,6 +1248,11 @@ watch(activeScope, async (scope) => {
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 24px;
   align-items: start;
+  /* 两栏一起上浮压住封面底边：封面从「悬空横幅」变成资料区的背景板，
+     不再出现封面横跨两栏、下面内容却只占左半的脱节感 */
+  position: relative;
+  z-index: 1;
+  margin-top: -56px;
 }
 
 /* 视口不够宽时右栏落到下方 */
@@ -1256,16 +1271,26 @@ watch(activeScope, async (scope) => {
 }
 
 /* ===== 资料卡 ===== */
+/* 编辑按钮绝对定位到卡片右上角，不再挤在昵称旁边抢标题的位置 */
+.info-card {
+  position: relative;
+  border: 1px solid var(--border-soft);
+}
+
 .info-body {
   display: flex;
-  gap: 18px;
+  gap: 20px;
   align-items: flex-start;
 }
 
 .avatar {
-  background: var(--muted);
+  background: var(--surface-3);
   color: var(--foreground);
-  font-size: var(--fs-display);
+  /* 原来是 --fs-display(32px)：首字比昵称还大，层级整个反了 */
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  border: 3px solid var(--card);
+  box-shadow: var(--shadow-md);
   flex-shrink: 0;
 }
 
@@ -1317,6 +1342,14 @@ watch(activeScope, async (scope) => {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* 给右上角的编辑按钮让出一条安全带，昵称长了也不会撞上 */
+  padding-right: 108px;
+}
+
+.edit-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }
 
 .nickname {
@@ -1324,6 +1357,7 @@ watch(activeScope, async (scope) => {
   font-size: var(--fs-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.35;
 }
 
 .xhs-id {
@@ -1340,18 +1374,33 @@ watch(activeScope, async (scope) => {
   height: auto;
 }
 
+/* 统计改成带竖线分隔的三块：数字放大、标签退后，
+   不再是一整行糊在一起的小字 */
 .stats {
   display: flex;
-  gap: 20px;
-  margin-top: 14px;
+  align-items: center;
+  gap: 0;
+  margin-top: 18px;
   font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
+.stats .stat {
+  padding: 0 22px;
+  border-left: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+
+.stats .stat:first-child {
+  padding-left: 0;
+  border-left: none;
+}
+
 .stat b {
   color: var(--foreground);
-  font-size: var(--fs-md);
-  margin-right: 3px;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin-right: 4px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1391,6 +1440,25 @@ watch(activeScope, async (scope) => {
 }
 
 /* ===== 内容区 ===== */
+/* 内容面板给 tabs 下方一个稳定容器：空态居中、有内容时自然撑开，
+   底部不会再是一整片没有边界的空白 */
+.content-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+  padding: 20px 22px 24px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+}
+
+/* 单个空态元素用 margin:auto 在 flex 列里水平垂直居中；
+   有笔记时不匹配这些类，网格照常顶部排列 */
+.content-panel :deep(.el-empty),
+.content-panel :deep(.empty-state) {
+  margin: auto;
+}
+
 .content-tabs {
   margin-top: 24px;
 }
@@ -1709,6 +1777,42 @@ watch(activeScope, async (scope) => {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* 窄屏：统计三块收紧并允许换行，否则「获赞与收藏」会被裁出屏幕 */
+@media (max-width: 768px) {
+  .profile-cover {
+    height: 140px;
+  }
+
+  .profile-grid {
+    margin-top: -40px;
+  }
+
+  .nickname-row {
+    padding-right: 96px;
+  }
+
+  .edit-btn {
+    top: 12px;
+    right: 12px;
+  }
+
+  .stats {
+    flex-wrap: wrap;
+    row-gap: 10px;
+    margin-top: 14px;
+  }
+
+  .stats .stat {
+    padding: 0 12px;
+    font-size: var(--fs-xs);
+  }
+
+  .content-panel {
+    min-height: 260px;
+    padding: 16px 14px 20px;
   }
 }
 </style>
