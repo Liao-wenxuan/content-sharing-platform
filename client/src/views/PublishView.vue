@@ -589,8 +589,24 @@ async function handleSubmit() {
 <template>
   <div class="publish">
     <header class="page-header">
-      <h1 class="page-title">发布笔记</h1>
-      <p class="page-subtitle">记录当下，分享你的生活与想法</p>
+      <div class="head-line">
+        <div>
+          <h1 class="page-title">发布笔记</h1>
+          <p class="page-subtitle">记录当下，分享你的生活与想法</p>
+        </div>
+        <!-- 统计锚点：字数 / 图片 / 话题不用滚到表单里数 -->
+        <div class="head-stats">
+          <span
+            ><b>{{ content.length }}</b> / {{ POST_CONTENT_MAX_LENGTH }} 字</span
+          >
+          <span
+            ><b>{{ images.length }}</b> / {{ MAX_IMAGES }} 张图</span
+          >
+          <span
+            ><b>{{ topicTag.trim() ? 1 : 0 }}</b> 个话题</span
+          >
+        </div>
+      </div>
     </header>
 
     <div class="publish-grid">
@@ -887,8 +903,46 @@ async function handleSubmit() {
             <li>话题标签建议只填一个，太多反而没人点。</li>
           </ul>
         </el-card>
+
+        <!-- 右栏原来只有一张 280px 高的须知卡，下面空 600px 纯黑。
+             补一张随表单实时变化的摘要：两栏重心不再全压在左边。 -->
+        <el-card shadow="never" class="summary-card">
+          <template #header>
+            <span class="tips-title">本次笔记</span>
+          </template>
+          <dl class="summary-list">
+            <div>
+              <dt>正文</dt>
+              <dd>{{ content.length ? content.length + ' 字' : '还没写' }}</dd>
+            </div>
+            <div>
+              <dt>话题</dt>
+              <dd>{{ topicTag.trim() || '未填' }}</dd>
+            </div>
+            <div>
+              <dt>媒体</dt>
+              <dd>{{ mediaKind === 'image' ? '图文' : '视频' }}</dd>
+            </div>
+            <div>
+              <dt>图片</dt>
+              <dd>{{ images.length }} / {{ MAX_IMAGES }} 张</dd>
+            </div>
+            <div>
+              <dt>可见性</dt>
+              <dd>{{ visibility === 'public' ? '公开' : '仅自己可见' }}</dd>
+            </div>
+            <div>
+              <dt>状态</dt>
+              <dd :class="{ ready: canSubmit }">{{ canSubmit ? '可以发布了' : '还差一点' }}</dd>
+            </div>
+          </dl>
+        </el-card>
       </aside>
     </div>
+
+    <footer class="publish-foot">
+      <span>发布前所有内容都可以修改 · 已经到底了</span>
+    </footer>
   </div>
 </template>
 
@@ -896,10 +950,37 @@ async function handleSubmit() {
 .publish {
   max-width: var(--content-max-width);
   margin: 0 auto;
+  padding-bottom: 48px;
 }
 
 .page-header {
   margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.head-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.head-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.head-stats b {
+  margin-right: 3px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {
@@ -1124,6 +1205,9 @@ async function handleSubmit() {
 .tips-col {
   position: sticky;
   top: calc(var(--top-bar-height) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .tips-title {
@@ -1140,6 +1224,61 @@ async function handleSubmit() {
   font-size: var(--fs-sm);
   line-height: 1.9;
   color: var(--muted-foreground);
+}
+
+/* 右栏实时摘要：一张表格式的清单，把 600px 空白换成有用的信息 */
+.summary-list {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.summary-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.summary-list > div:last-child {
+  border-bottom: none;
+}
+
+.summary-list dt {
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+}
+
+.summary-list dd {
+  margin: 0;
+  color: var(--foreground);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-list dd.ready {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.publish-foot {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+@media (max-width: 700px) {
+  .head-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
 }
 
 /* 可见性说明：紧跟开关，用 muted 色 —— 它是解释不是警告 */

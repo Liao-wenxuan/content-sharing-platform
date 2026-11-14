@@ -319,6 +319,7 @@ watch(activeId, () => {
         <el-tag v-if="totalUnread > 0" type="danger" size="small" effect="dark" round>
           {{ totalUnread }}
         </el-tag>
+        <span class="list-count">{{ conversations.length }} 位</span>
       </div>
 
       <!-- 连接状态：断线时必须让用户知道为什么收不到消息 -->
@@ -418,6 +419,9 @@ watch(activeId, () => {
           </div>
         </li>
       </ul>
+
+      <!-- 列表底部收口：两三个会话时左栏下方不再是一片没有解释的黑 -->
+      <div class="conv-foot">共 {{ conversations.length }} 个会话</div>
     </aside>
 
     <!-- 右：聊天窗口 -->
@@ -435,7 +439,12 @@ watch(activeId, () => {
           </div>
         </header>
 
-        <div ref="listEl" class="msg-list" @scroll.passive="onScroll">
+        <div
+          ref="listEl"
+          class="msg-list"
+          :class="{ 'is-blank': !activeMessages.length && !loadingMessages && !messagesError }"
+          @scroll.passive="onScroll"
+        >
           <div class="history-top">
             <el-button
               v-if="hasMoreHistory"
@@ -454,6 +463,17 @@ watch(activeId, () => {
           <div v-else-if="messagesError && !activeMessages.length" class="list-hint list-error">
             <p>消息加载失败</p>
             <el-button size="small" @click="reloadMessages">重试</el-button>
+          </div>
+
+          <!-- 会话建好了但一条消息都没有：原来中间是 500px 纯黑，
+               用户分不清「没发过」还是「加载挂了」。空态本身要能说明状态。 -->
+          <div
+            v-if="!activeMessages.length && !loadingMessages && !messagesError"
+            class="msg-blank"
+          >
+            <el-icon class="blank-icon"><component :is="Promotion" /></el-icon>
+            <p class="blank-title">还没有消息</p>
+            <p class="blank-sub">发第一句，和 {{ activeConversation.peer.nickname }} 打个招呼吧</p>
           </div>
 
           <template v-for="item in timeline" :key="item.key">
@@ -1006,6 +1026,56 @@ watch(activeId, () => {
   content: '';
   display: block;
   margin-top: auto;
+}
+
+.list-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 会话列表底部收口：两三个会话时左栏下方不再是一整片没有解释的黑 */
+.conv-foot {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-soft);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  text-align: center;
+}
+
+/* 空会话：取消「把消息推到底部」的 ::before，整块改为居中 */
+.msg-list.is-blank {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.msg-list.is-blank::before,
+.msg-list.is-blank .history-top {
+  display: none;
+}
+
+.msg-blank {
+  color: var(--muted-foreground);
+}
+
+.blank-icon {
+  font-size: 38px;
+  color: var(--text-3);
+}
+
+.blank-title {
+  margin: 12px 0 4px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.blank-sub {
+  margin: 0;
+  font-size: var(--fs-sm);
 }
 
 .history-top {

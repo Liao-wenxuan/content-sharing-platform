@@ -46,6 +46,11 @@ const signalMax = computed(() =>
   Math.max(1, ...SIGNALS.map((s) => profile.value?.signalCounts[s.key] ?? 0))
 )
 
+/** 页头统计锚点：四张卡铺开后首屏就能读出「画像到底有没有东西」 */
+const signalTotal = computed(() =>
+  SIGNALS.reduce((sum, s) => sum + (profile.value?.signalCounts[s.key] ?? 0), 0)
+)
+
 async function load() {
   loading.value = true
   errorMsg.value = ''
@@ -89,8 +94,28 @@ onMounted(() => {
 <template>
   <div class="interest">
     <header class="page-header">
-      <h1 class="page-title">我的兴趣画像</h1>
-      <p class="page-subtitle">推荐流按这里的权重排序。屏蔽过的内容也会列在下面，可以随时撤销。</p>
+      <div class="head-line">
+        <div>
+          <h1 class="page-title">我的兴趣画像</h1>
+          <p class="page-subtitle">
+            推荐流按这里的权重排序。屏蔽过的内容也会列在下面，可以随时撤销。
+          </p>
+        </div>
+        <div v-if="profile && !profile.isGuest" class="head-stats">
+          <span
+            ><b>{{ profile.topics.length }}</b> 个话题</span
+          >
+          <span
+            ><b>{{ profile.authors.length }}</b> 位作者</span
+          >
+          <span
+            ><b>{{ signalTotal }}</b> 次行为</span
+          >
+          <span
+            ><b>{{ profile.mutedCount }}</b> 篇屏蔽</span
+          >
+        </div>
+      </div>
     </header>
 
     <EmptyState v-if="loading" variant="loading" title="正在算画像..." />
@@ -119,113 +144,116 @@ onMounted(() => {
       </el-card>
 
       <template v-else>
-        <!-- 1. 你关心什么 -->
-        <el-card class="block">
-          <template #header>
-            <div class="card-head">
-              <span>你常看的话题</span>
-              <span class="card-hint">条形长度 = 相对权重，不是占比</span>
-            </div>
-          </template>
-
-          <div v-if="profile.topics.length === 0" class="empty-line">
-            还没有足够的行为。多逛逛、点几个赞，这里就会有内容。
-          </div>
-          <ul v-else class="bars">
-            <li v-for="t in profile.topics" :key="t.tag" class="bar-row">
-              <span class="bar-label"># {{ t.tag }}</span>
-              <span class="bar-track">
-                <span class="bar-fill" :style="{ width: `${(t.weight / topicMax) * 100}%` }" />
-              </span>
-              <span class="bar-value">{{ t.weight }}</span>
-            </li>
-          </ul>
-        </el-card>
-
-        <el-card class="block">
-          <template #header>
-            <div class="card-head">
-              <span>你常看的作者</span>
-              <span class="card-hint">共关注 {{ profile.followedCount }} 位</span>
-            </div>
-          </template>
-
-          <div v-if="profile.authors.length === 0" class="empty-line">还没有形成作者偏好。</div>
-          <ul v-else class="bars">
-            <li v-for="a in profile.authors" :key="a.authorId" class="bar-row">
-              <router-link :to="`/profile/${a.authorId}`" class="bar-label author">
-                {{ a.nickname }}
-              </router-link>
-              <span class="bar-track">
-                <span class="bar-fill" :style="{ width: `${(a.weight / authorMax) * 100}%` }" />
-              </span>
-              <span class="bar-value">{{ a.weight }}</span>
-            </li>
-          </ul>
-        </el-card>
-
-        <!-- 2. 系统看到了什么信号 -->
-        <el-card class="block">
-          <template #header>
-            <div class="card-head">
-              <span>系统看到的你的行为</span>
-              <span class="card-hint">行为越强，对排序的影响越大</span>
-            </div>
-          </template>
-
-          <ul class="bars">
-            <li v-for="s in SIGNALS" :key="s.key" class="bar-row">
-              <span class="bar-label">{{ s.label }}</span>
-              <span class="bar-track">
-                <span
-                  class="bar-fill"
-                  :style="{ width: `${((profile.signalCounts[s.key] ?? 0) / signalMax) * 100}%` }"
-                />
-              </span>
-              <span class="bar-value">{{ profile.signalCounts[s.key] ?? 0 }}</span>
-              <span class="bar-hint">{{ s.hint }}</span>
-            </li>
-          </ul>
-        </el-card>
-
-        <!-- 3. 屏蔽管理：唯一能改变推荐的操作，必须显眼且可撤销 -->
-        <el-card class="block">
-          <template #header>
-            <div class="card-head">
-              <span>已屏蔽</span>
-              <span class="card-hint">
-                {{ profile.mutedCount }} 篇笔记 · {{ profile.mutedAuthorCount }} 位作者
-              </span>
-            </div>
-          </template>
-
-          <div v-if="profile.muted.length === 0" class="empty-line">
-            还没有屏蔽任何内容。在推荐流里点卡片右上角的 × 就能屏蔽。
-          </div>
-          <ul v-else class="muted-list">
-            <li v-for="m in profile.muted" :key="m.postId" class="muted-row">
-              <div class="muted-info">
-                <router-link :to="`/post/${m.postId}`" class="muted-title">
-                  {{ m.topicTag ? `# ${m.topicTag}` : '未分类' }}
-                </router-link>
-                <span class="muted-author">{{ m.authorNickname }}</span>
+        <!-- 四张卡改 2×2：原来一列四张要滚 1300px，首屏只看得到一张半 -->
+        <div class="interest-grid">
+          <!-- 1. 你关心什么 -->
+          <el-card class="block">
+            <template #header>
+              <div class="card-head">
+                <span>你常看的话题</span>
+                <span class="card-hint">条形长度 = 相对权重，不是占比</span>
               </div>
-              <el-button
-                size="small"
-                plain
-                :loading="clearing === m.postId"
-                @click="unmute(m.postId)"
-              >
-                取消屏蔽
-              </el-button>
-            </li>
-          </ul>
-        </el-card>
+            </template>
 
-        <p class="foot-note">
+            <div v-if="profile.topics.length === 0" class="empty-line">
+              还没有足够的行为。多逛逛、点几个赞，这里就会有内容。
+            </div>
+            <ul v-else class="bars">
+              <li v-for="t in profile.topics" :key="t.tag" class="bar-row">
+                <span class="bar-label"># {{ t.tag }}</span>
+                <span class="bar-track">
+                  <span class="bar-fill" :style="{ width: `${(t.weight / topicMax) * 100}%` }" />
+                </span>
+                <span class="bar-value">{{ t.weight }}</span>
+              </li>
+            </ul>
+          </el-card>
+
+          <el-card class="block">
+            <template #header>
+              <div class="card-head">
+                <span>你常看的作者</span>
+                <span class="card-hint">共关注 {{ profile.followedCount }} 位</span>
+              </div>
+            </template>
+
+            <div v-if="profile.authors.length === 0" class="empty-line">还没有形成作者偏好。</div>
+            <ul v-else class="bars">
+              <li v-for="a in profile.authors" :key="a.authorId" class="bar-row">
+                <router-link :to="`/profile/${a.authorId}`" class="bar-label author">
+                  {{ a.nickname }}
+                </router-link>
+                <span class="bar-track">
+                  <span class="bar-fill" :style="{ width: `${(a.weight / authorMax) * 100}%` }" />
+                </span>
+                <span class="bar-value">{{ a.weight }}</span>
+              </li>
+            </ul>
+          </el-card>
+
+          <!-- 2. 系统看到了什么信号 -->
+          <el-card class="block">
+            <template #header>
+              <div class="card-head">
+                <span>系统看到的你的行为</span>
+                <span class="card-hint">行为越强，对排序的影响越大</span>
+              </div>
+            </template>
+
+            <ul class="bars">
+              <li v-for="s in SIGNALS" :key="s.key" class="bar-row">
+                <span class="bar-label">{{ s.label }}</span>
+                <span class="bar-track">
+                  <span
+                    class="bar-fill"
+                    :style="{ width: `${((profile.signalCounts[s.key] ?? 0) / signalMax) * 100}%` }"
+                  />
+                </span>
+                <span class="bar-value">{{ profile.signalCounts[s.key] ?? 0 }}</span>
+                <span class="bar-hint">{{ s.hint }}</span>
+              </li>
+            </ul>
+          </el-card>
+
+          <!-- 3. 屏蔽管理：唯一能改变推荐的操作，必须显眼且可撤销 -->
+          <el-card class="block">
+            <template #header>
+              <div class="card-head">
+                <span>已屏蔽</span>
+                <span class="card-hint">
+                  {{ profile.mutedCount }} 篇笔记 · {{ profile.mutedAuthorCount }} 位作者
+                </span>
+              </div>
+            </template>
+
+            <div v-if="profile.muted.length === 0" class="empty-line">
+              还没有屏蔽任何内容。在推荐流里点卡片右上角的 × 就能屏蔽。
+            </div>
+            <ul v-else class="muted-list">
+              <li v-for="m in profile.muted" :key="m.postId" class="muted-row">
+                <div class="muted-info">
+                  <router-link :to="`/post/${m.postId}`" class="muted-title">
+                    {{ m.topicTag ? `# ${m.topicTag}` : '未分类' }}
+                  </router-link>
+                  <span class="muted-author">{{ m.authorNickname }}</span>
+                </div>
+                <el-button
+                  size="small"
+                  plain
+                  :loading="clearing === m.postId"
+                  @click="unmute(m.postId)"
+                >
+                  取消屏蔽
+                </el-button>
+              </li>
+            </ul>
+          </el-card>
+        </div>
+
+        <div class="interest-foot">
           画像是每次打开推荐流时按你的实时行为现算的，没有存第二份数据 ——
           所以你刚点完赞，下一次推荐就已经变了。
-        </p>
+        </div>
       </template>
     </template>
   </div>
@@ -235,10 +263,38 @@ onMounted(() => {
 .interest {
   max-width: var(--content-max-width);
   margin: 0 auto;
+  padding: 24px 0 48px;
 }
 
+/* 页头带统计锚点：画像是不是空的，不必滚完四张卡才知道 */
 .page-header {
-  padding: 4px 0 20px;
+  padding-bottom: 16px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.head-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.head-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.head-stats b {
+  margin-right: 3px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {
@@ -254,8 +310,30 @@ onMounted(() => {
   color: var(--muted-foreground);
 }
 
+/* 四张卡改 2×2 等高：原来一列四张要滚 1300px，首屏只看得到一张半。
+   同一行两张卡下沿对齐，底部不再参差；空态在卡内居中而不是贴左下。 */
+.interest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
 .block {
-  margin-bottom: 16px;
+  min-height: 232px;
+  display: flex;
+  flex-direction: column;
+}
+
+.block :deep(.el-card__header) {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.block :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .card-head {
@@ -273,9 +351,10 @@ onMounted(() => {
 }
 
 .empty-line {
-  padding: 10px 0;
+  padding: 16px 0;
   font-size: var(--fs-sm);
   color: var(--muted-foreground);
+  text-align: center;
 }
 
 /* ===== 权重条 ===== */
@@ -290,7 +369,12 @@ onMounted(() => {
   grid-template-columns: 96px 1fr 52px;
   align-items: center;
   gap: 12px;
-  padding: 7px 0;
+  padding: 9px 0;
+}
+
+/* 每行一条细线：等长权重条看起来像装饰线，有行节奏才读得出是数据 */
+.bar-row + .bar-row {
+  border-top: 1px solid var(--border-soft);
 }
 
 .bar-label {
@@ -312,7 +396,7 @@ a.bar-label.author:hover {
 }
 
 .bar-track {
-  height: 8px;
+  height: 6px;
   border-radius: var(--radius-full);
   background: var(--muted);
   overflow: hidden;
@@ -399,9 +483,30 @@ a.bar-label.author:hover {
   color: var(--muted-foreground);
 }
 
-.foot-note {
-  margin: 4px 0 0;
+/* 底部全宽收口：四张卡之后给一个明确的「到这里就结束了」 */
+.interest-foot {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
   font-size: var(--fs-xs);
   color: var(--text-2);
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .head-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .interest-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 单列时不再强行拉高卡片：否则条形上方会空出 60px 的「居中留白」 */
+  .block {
+    min-height: 0;
+  }
 }
 </style>

@@ -221,8 +221,24 @@ watch(activeCategory, (cat) => {
 <template>
   <div class="messages">
     <header class="page-header">
-      <h1 class="page-title">消息</h1>
-      <p class="page-subtitle">点赞、关注和评论都会出现在这里</p>
+      <div class="head-line">
+        <div>
+          <h1 class="page-title">消息</h1>
+          <p class="page-subtitle">点赞、关注和评论都会出现在这里</p>
+        </div>
+        <!-- 统计锚点：Tab 下方到底是「没有数据」还是「还没加载」，首屏就能区分 -->
+        <div class="head-stats">
+          <span
+            ><b>{{ notifyUnread }}</b> 条未读通知</span
+          >
+          <span
+            ><b>{{ notifications.length }}</b> 条{{ currentCategory.label }}</span
+          >
+          <span
+            ><b>{{ totalUnread }}</b> 条未读消息</span
+          >
+        </div>
+      </div>
     </header>
 
     <!-- 顶层两个 Tab：通知（静态活动流）/ 聊天（WebSocket 实时） -->
@@ -264,7 +280,15 @@ watch(activeCategory, (cat) => {
 
       <div class="messages-grid">
         <!-- ================= 左栏：通知流 ================= -->
-        <el-card shadow="never" class="activity-card">
+        <!-- 空通知时左卡只有 378 高，右栏 731 高，下面空出 350px 纯黑。
+             让两栏等高 + 空态在卡内居中，而不是靠「内容自己长高」。 -->
+        <el-card
+          shadow="never"
+          class="activity-card"
+          :class="{
+            'is-blank': notifications.length === 0 && !notificationsLoading && !notificationsError
+          }"
+        >
           <template #header>
             <span class="card-title">
               <el-icon><component :is="currentCategory.icon" /></el-icon>
@@ -410,6 +434,11 @@ watch(activeCategory, (cat) => {
 
     <!-- 聊天：WebSocket 实时消息，组件自己管连接和状态 -->
     <ChatView v-else class="chat-panel" />
+
+    <!-- 底部全宽收口：两个 Tab 都在同一条线上结束，不留下半屏黑 -->
+    <footer class="messages-foot">
+      <span>{{ activeSection === 'chat' ? '聊天' : currentCategory.label }} · 已经到底了</span>
+    </footer>
   </div>
 </template>
 
@@ -417,10 +446,37 @@ watch(activeCategory, (cat) => {
 .messages {
   max-width: var(--content-max-width);
   margin: 0 auto;
+  padding-bottom: 48px;
 }
 
 .page-header {
   margin-bottom: 12px;
+}
+
+/* 标题与统计同一行：这里不加下边框，Tab 自带的 nav 线就是页头收口，
+   再叠一条会变成两条平行线 */
+.head-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.head-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.head-stats b {
+  margin-right: 3px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {
@@ -454,7 +510,31 @@ watch(activeCategory, (cat) => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 24px;
-  align-items: start;
+  /* stretch 而不是 start：空通知时左卡会被右栏拉到同高，
+     底下那 350px 纯黑变成「有边界的面板」，不再像页面坏了 */
+  align-items: stretch;
+}
+
+.activity-card {
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-card.is-blank :deep(.el-card__body) {
+  align-items: center;
+  justify-content: center;
+}
+
+/* 右栏跟着 stretch 时，第二张卡接住多出来的高度，底部不会留一道空 */
+.side-col > :last-child {
+  flex: 1;
 }
 
 /* 视口不够宽时右栏落到下方 */
@@ -706,5 +786,22 @@ watch(activeCategory, (cat) => {
   border: none;
   border-radius: 0;
   overflow: hidden;
+}
+
+.messages-foot {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+@media (max-width: 700px) {
+  .head-line {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
 }
 </style>

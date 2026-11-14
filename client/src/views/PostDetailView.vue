@@ -470,6 +470,17 @@ watch(
          不支持的浏览器自动隐藏（@supports 包住），零 JS 开销 -->
     <div class="reading-progress" aria-hidden="true"></div>
 
+    <!-- 纸面上方一条轻页头：详情页刻意沉浸，但不能连「从哪来 / 这是哪条」
+         都不给。统计锚点让互动量不必滚到吸底操作栏才看得见。 -->
+    <header v-if="post" class="detail-head">
+      <button type="button" class="crumb" @click="goBack">发现</button>
+      <span class="crumb-sep" aria-hidden="true">/</span>
+      <span class="crumb-current">{{ post.topicTag || '笔记详情' }}</span>
+      <span class="detail-stats">
+        {{ post.commentCount }} 条评论 · {{ likeCount }} 赞 · {{ favoriteCount }} 收藏
+      </span>
+    </header>
+
     <EmptyState v-if="loading" variant="loading" title="加载笔记..." hint="马上就好" />
 
     <EmptyState
@@ -783,6 +794,12 @@ watch(
         </div>
       </aside>
     </article>
+
+    <!-- 底部全宽收口：一张纸之外给个明确的结束点，不然纸下沿直接切进页底 -->
+    <footer v-if="post" class="detail-foot">
+      <span>已经到底了</span>
+      <button type="button" class="crumb" @click="goBack">回到发现</button>
+    </footer>
   </div>
 </template>
 
@@ -797,6 +814,66 @@ watch(
 .detail {
   max-width: 1120px;
   margin: 0 auto;
+  padding-bottom: 48px;
+}
+
+/* 纸面上方的轻页头：只占一行，不抢媒体的主角位 */
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 2px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--fs-sm);
+  color: var(--muted-foreground);
+}
+
+.crumb {
+  padding: 0;
+  font: inherit;
+  color: var(--muted-foreground);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.crumb:hover {
+  color: var(--accent);
+}
+
+.crumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.crumb-sep {
+  color: var(--text-3);
+}
+
+.crumb-current {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.detail-stats {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 纸面下方全宽收口 */
+.detail-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
 }
 
 .note-sheet {
@@ -808,7 +885,7 @@ watch(
    * 但笔记详情的主角是一张图，图的高度被视口钉死后，
    * 右栏内部滚动才成立 —— 这正是小红书网页版的解法。
    */
-  height: calc(100vh - var(--top-bar-height) - 48px);
+  height: calc(100vh - var(--top-bar-height) - 96px);
   min-height: 540px;
   background: var(--card, var(--el-bg-color));
   border: 1px solid var(--el-border-color);
@@ -910,6 +987,12 @@ watch(
   flex: 1;
   min-height: 0;
   min-width: 0;
+  /* 摄影棚底：contain 之后没铺满的部分不再是整块死黑 */
+  background: radial-gradient(
+    ellipse at 50% 42%,
+    color-mix(in srgb, var(--muted) 78%, transparent),
+    transparent 72%
+  );
 }
 
 .main-image {
@@ -924,13 +1007,13 @@ watch(
   height: 100%;
 }
 
-/* 视频播放器：黑底是刻意的 —— 信箱模式（letterbox），
-   视频没铺满时黑边属于播放器而不是页面底色 */
+/* 视频播放器：信箱模式的黑边原本是 #000，在 660px 高的舞台里变成上下
+   各 140px 的纯黑条。换成与摄影棚同色系的深灰 —— 留白还是留白，但不再是黑洞。 */
 .video-player {
   display: block;
   width: 100%;
   height: 100%;
-  background: #000;
+  background: color-mix(in srgb, var(--muted) 72%, #000);
   object-fit: contain;
 }
 
@@ -1398,6 +1481,15 @@ watch(
 
   .actions {
     position: static;
+  }
+
+  .detail-head {
+    flex-wrap: wrap;
+  }
+
+  .detail-stats {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>
