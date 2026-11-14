@@ -184,15 +184,19 @@ onMounted(() => {
       />
 
       <template v-else>
-        <el-empty v-if="posts.length === 0" :description="`没有找到与「${query}」相关的内容`">
-          <el-button @click="clearSearch">换个词试试</el-button>
-        </el-empty>
+        <div v-if="posts.length === 0" class="content-panel is-blank">
+          <el-empty :description="`没有找到与「${query}」相关的内容`">
+            <el-button @click="clearSearch">换个词试试</el-button>
+          </el-empty>
+        </div>
 
-        <PostMasonry v-else :posts="posts" :highlight="query" />
+        <div v-else class="content-panel">
+          <PostMasonry :posts="posts" :highlight="query" />
 
-        <div v-if="posts.length > 0" class="pager">
-          <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
-          <span v-else class="no-more">— 共 {{ total }} 条，已全部显示 —</span>
+          <div v-if="posts.length > 0" class="pager">
+            <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
+            <span v-else class="no-more">— 共 {{ total }} 条，已全部显示 —</span>
+          </div>
         </div>
       </template>
     </template>
@@ -203,14 +207,17 @@ onMounted(() => {
 .search-page {
   max-width: var(--content-max-width-wide);
   margin: 0 auto;
+  padding: 20px 0 40px;
 }
 
-/* ===== 结果计数 ===== */
+/* ===== 结果计数：单独一条带下划线的页头，和内容区分开 ===== */
 .result-meta {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
   font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
@@ -259,15 +266,42 @@ onMounted(() => {
   margin: 0;
 }
 
-/* ===== 分页 ===== */
+/* ===== 结果面板 ===== */
+.content-panel {
+  padding: 18px 20px 8px;
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.content-panel.is-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+}
+
+/* ===== 分页：全宽分隔线收口，不再把「共 N 条」漂在半空 ===== */
 .pager {
   display: flex;
   justify-content: center;
-  padding: 36px 0 12px;
+  margin-top: 18px;
+  padding: 18px 0 10px;
+  border-top: 1px solid var(--border-soft);
 }
 
 .no-more {
   color: var(--muted-foreground);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
+}
+
+@media (max-width: 640px) {
+  .search-page {
+    padding: 14px 0 30px;
+  }
+
+  .content-panel {
+    padding: 14px 12px 8px;
+  }
 }
 </style>

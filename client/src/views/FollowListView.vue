@@ -157,36 +157,40 @@ watch([activeTab, targetId], () => load(true))
 
     <EmptyState v-else-if="loading && list.length === 0" variant="loading" title="加载中..." />
 
-    <EmptyState v-else-if="list.length === 0" variant="empty" :title="emptyTitle" />
+    <div v-else-if="list.length === 0" class="content-panel is-blank">
+      <EmptyState variant="empty" :title="emptyTitle" />
+    </div>
 
-    <ul v-else class="rows">
-      <li v-for="u in list" :key="u.id" class="row">
-        <router-link :to="`/profile/${u.id}`" class="row-link">
-          <el-avatar :size="44" :src="u.avatar || undefined" alt="">
-            {{ avatarText(u.nickname) }}
-          </el-avatar>
-          <div class="row-info">
-            <div class="row-name">{{ u.nickname }}</div>
-            <div class="row-meta">{{ u.postCount }} 篇笔记</div>
-          </div>
-        </router-link>
+    <div v-else class="content-panel is-list">
+      <ul class="rows">
+        <li v-for="u in list" :key="u.id" class="row">
+          <router-link :to="`/profile/${u.id}`" class="row-link">
+            <el-avatar :size="44" :src="u.avatar || undefined" alt="">
+              {{ avatarText(u.nickname) }}
+            </el-avatar>
+            <div class="row-info">
+              <div class="row-name">{{ u.nickname }}</div>
+              <div class="row-meta">{{ u.postCount }} 篇笔记</div>
+            </div>
+          </router-link>
 
-        <el-button
-          v-if="u.id !== auth.user?.id"
-          size="small"
-          round
-          :type="u.isFollowing ? 'default' : 'primary'"
-          :plain="!u.isFollowing"
-          :loading="busyId === u.id"
-          @click="toggleRow(u)"
-        >
-          {{ u.isFollowing ? '已关注' : '关注' }}
-        </el-button>
-      </li>
-    </ul>
+          <el-button
+            v-if="u.id !== auth.user?.id"
+            size="small"
+            round
+            :type="u.isFollowing ? 'default' : 'primary'"
+            :plain="!u.isFollowing"
+            :loading="busyId === u.id"
+            @click="toggleRow(u)"
+          >
+            {{ u.isFollowing ? '已关注' : '关注' }}
+          </el-button>
+        </li>
+      </ul>
 
-    <div v-if="hasMore && list.length > 0" class="more">
-      <el-button :loading="loading" @click="loadMore">加载更多</el-button>
+      <div v-if="hasMore" class="more">
+        <el-button :loading="loading" @click="loadMore">加载更多</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -200,12 +204,15 @@ watch([activeTab, targetId], () => load(true))
 
 .head {
   margin-bottom: 4px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .title {
   margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 
@@ -222,7 +229,25 @@ watch([activeTab, targetId], () => load(true))
 }
 
 .tabs {
-  margin-bottom: 8px;
+  margin-bottom: 14px;
+}
+
+/*
+ * 列表收进有边界的面板：只有 1 位粉丝时不会变成「一条横线 + 整页纯黑」。
+ * 行改成卡片式节奏（内边距 + hover 底色），信息密度更稳。
+ */
+.content-panel {
+  min-height: 380px;
+  padding: 8px 16px 14px;
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.content-panel.is-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .rows {
@@ -235,8 +260,18 @@ watch([activeTab, targetId], () => load(true))
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 4px;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  transition: background 0.15s ease;
+}
+
+.row:hover {
+  background: var(--surface-2);
+}
+
+.row:last-child {
+  border-bottom: none;
 }
 
 .row-link {
@@ -270,6 +305,17 @@ watch([activeTab, targetId], () => load(true))
 .more {
   display: flex;
   justify-content: center;
-  padding: 20px 0;
+  padding: 18px 0 4px;
+  border-top: 1px solid var(--border-soft);
+}
+
+@media (max-width: 640px) {
+  .content-panel {
+    padding: 6px 8px 10px;
+  }
+
+  .row {
+    padding: 12px 8px;
+  }
 }
 </style>

@@ -125,24 +125,25 @@ onMounted(load)
       @action="load"
     />
 
-    <EmptyState
-      v-else-if="items.length === 0"
-      icon="👀"
-      title="还没有浏览记录"
-      hint="看过的笔记会自动出现在这里，方便回头找"
-      action="去逛逛"
-      compact
-      @action="router.push('/')"
-    />
+    <div v-else-if="items.length === 0" class="content-panel is-blank">
+      <EmptyState
+        icon="👀"
+        title="还没有浏览记录"
+        hint="看过的笔记会自动出现在这里，方便回头找"
+        action="去逛逛"
+        compact
+        @action="router.push('/')"
+      />
+    </div>
 
-    <template v-else>
+    <div v-else class="content-panel" :class="{ 'is-sparse': items.length <= 2 }">
       <PostMasonry :posts="items" />
 
       <div class="pager">
         <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
         <span v-else class="no-more">— 已经到底了 —</span>
       </div>
-    </template>
+    </div>
   </div>
 </template>
 
@@ -158,13 +159,16 @@ onMounted(load)
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .title {
   margin: 0;
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--foreground);
 }
 
@@ -172,6 +176,7 @@ onMounted(load)
   font-size: var(--fs-md);
   color: var(--muted-foreground);
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 .subtitle {
@@ -180,14 +185,64 @@ onMounted(load)
   color: var(--muted-foreground);
 }
 
+/*
+ * 内容收进一个带边界的面板：记录少时不会再出现「一张小卡贴左上、
+ * 右边 70% 纯黑」的失衡。空态和稀疏态共用同一个容器，重心固定。
+ */
+.content-panel {
+  min-height: 380px;
+  padding: 18px 20px 8px;
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.content-panel.is-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+ * 稀疏时 PostMasonry 仍会算出多列（只有第一列有卡片），
+ * 让空列不占位、有内容的列固定宽度并整组居中。
+ * 用 :deep 只在本页生效，不碰共享组件在首页 / 推荐流里的排布。
+ */
+.content-panel.is-sparse :deep(.masonry) {
+  justify-content: center;
+  gap: 18px;
+}
+
+.content-panel.is-sparse :deep(.masonry-col) {
+  flex: 0 0 400px;
+  width: 400px;
+}
+
+.content-panel.is-sparse :deep(.masonry-col:empty) {
+  display: none;
+}
+
 .pager {
   display: flex;
   justify-content: center;
-  padding-top: 20px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
 }
 
 .no-more {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
+}
+
+@media (max-width: 640px) {
+  .content-panel {
+    padding: 14px 12px 8px;
+  }
+
+  .content-panel.is-sparse :deep(.masonry-col) {
+    flex: 1 1 0;
+    width: auto;
+  }
 }
 </style>

@@ -988,6 +988,7 @@ watch(activeScope, async (scope) => {
       ref="coverInput"
       type="file"
       accept="image/*"
+      aria-label="选择主页封面图片"
       class="visually-hidden"
       @change="onCoverPicked"
     />
@@ -995,6 +996,7 @@ watch(activeScope, async (scope) => {
       ref="avatarInput"
       type="file"
       accept="image/*"
+      aria-label="选择头像图片"
       class="visually-hidden"
       @change="onAvatarPicked"
     />

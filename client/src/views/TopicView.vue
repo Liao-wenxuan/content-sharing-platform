@@ -156,19 +156,27 @@ watch(
       </section>
 
       <!-- ===== 笔记列表 ===== -->
-      <EmptyState
-        v-if="posts.length === 0 && !loading"
-        icon="✍️"
-        :title="`「${topic.tag}」下还没有笔记`"
-        hint="发一篇带这个话题的笔记，它就会出现在这里"
-        compact
-      />
+      <div
+        class="content-panel"
+        :class="{
+          'is-sparse': posts.length > 0 && posts.length <= 2,
+          'is-blank': posts.length === 0
+        }"
+      >
+        <EmptyState
+          v-if="posts.length === 0 && !loading"
+          icon="✍️"
+          :title="`「${topic.tag}」下还没有笔记`"
+          hint="发一篇带这个话题的笔记，它就会出现在这里"
+          compact
+        />
 
-      <PostMasonry v-else :posts="posts" />
+        <PostMasonry v-else :posts="posts" />
 
-      <div v-if="posts.length > 0" class="pager">
-        <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
-        <span v-else class="no-more">— 已经到底了 —</span>
+        <div v-if="posts.length > 0" class="pager">
+          <el-button v-if="hasMore" :loading="loadingMore" @click="loadMore">加载更多</el-button>
+          <span v-else class="no-more">— 已经到底了 —</span>
+        </div>
       </div>
     </template>
   </div>
@@ -181,17 +189,21 @@ watch(
   padding: 24px 0 48px;
 }
 
-/* ===== 头部 ===== */
+/* ===== 头部：做成有边界的横幅，不再是一行飘在页面左上 ===== */
 .topic-head {
   display: flex;
   align-items: center;
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  background: color-mix(in srgb, var(--surface-1) 70%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
 }
 
 .topic-cover {
-  width: 132px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
   flex-shrink: 0;
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -205,12 +217,19 @@ watch(
   display: block;
 }
 
+.topic-info {
+  flex: 1;
+  min-width: 0;
+}
+
 .topic-name {
   margin: 0;
-  font-size: var(--fs-display);
-  font-weight: 600;
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--foreground);
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 /* # 用弱化色，不然整个标题都在喊 */
@@ -220,18 +239,20 @@ watch(
 }
 
 .topic-stat {
-  margin: 8px 0 0;
-  font-size: var(--fs-base);
+  margin: 10px 0 0;
+  font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
-/* ===== 相关话题 ===== */
+/* ===== 相关话题：单独一条横向带，和内容区有明确分界 ===== */
 .related {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .related-label {
@@ -272,15 +293,68 @@ watch(
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== 内容面板 ===== */
+.content-panel {
+  min-height: 380px;
+  padding: 18px 20px 8px;
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+
+.content-panel.is-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 只有 1-2 篇时，空列不占位、有内容的列整组居中 */
+.content-panel.is-sparse :deep(.masonry) {
+  justify-content: center;
+  gap: 18px;
+}
+
+.content-panel.is-sparse :deep(.masonry-col) {
+  flex: 0 0 400px;
+  width: 400px;
+}
+
+.content-panel.is-sparse :deep(.masonry-col:empty) {
+  display: none;
+}
+
 /* ===== 分页 ===== */
 .pager {
   display: flex;
   justify-content: center;
-  padding-top: 20px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
 }
 
 .no-more {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
+}
+
+@media (max-width: 640px) {
+  .topic-head {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .topic-cover {
+    width: 72px;
+    height: 72px;
+  }
+
+  .content-panel {
+    padding: 14px 12px 8px;
+  }
+
+  .content-panel.is-sparse :deep(.masonry-col) {
+    flex: 1 1 0;
+    width: auto;
+  }
 }
 </style>

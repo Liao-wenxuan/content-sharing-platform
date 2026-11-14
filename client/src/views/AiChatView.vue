@@ -295,6 +295,8 @@ onBeforeUnmount(() => {
 
 .page-header {
   margin-bottom: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .page-title {
@@ -311,16 +313,31 @@ onBeforeUnmount(() => {
   color: var(--text-2);
 }
 
+/*
+ * 对话区收进有边界的面板：空态不再漂在一整页黑底上，
+ * 面板和底部提问框之间有明确分界，视觉重心落在同一块区域。
+ */
 .turn-list {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
-  padding-bottom: var(--sp-4);
+  padding: 18px 20px 8px;
+  margin-bottom: 14px;
+  background: color-mix(in srgb, var(--surface-1) 55%, transparent);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
 }
 
 /* ===== 空态 ===== */
 .ai-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 10vh 24px 6vh;
+  padding: 24px;
 }
 
 .ai-empty-icon {
