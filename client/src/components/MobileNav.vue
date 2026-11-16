@@ -14,7 +14,7 @@
  * 而且游客根本不知道这个站有发布功能。未登录点需要登录的项，
  * 统一带 redirect 去登录页，回来还在原来想去的地方。
  */
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Compass, Star, EditPen, Bell, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -74,10 +74,35 @@ const activeKey = computed(() => {
   return 'home'
 })
 
+/** 重复点当前那一格：给一下脉冲 + 回到顶部，别让人以为按钮坏了 */
+const pulseKey = ref('')
+let pulseTimer: ReturnType<typeof setTimeout> | undefined
+
+function isSameTarget(item: NavItem) {
+  if (route.path !== item.path) return false
+  // 首页的「发现 / 关注」是同一条 path，靠 query.channel 区分
+  const currentChannel = typeof route.query.channel === 'string' ? route.query.channel : ''
+  return currentChannel === (item.query?.channel ?? '')
+}
+
 function go(item: NavItem) {
   if (item.requiresAuth && !auth.isLoggedIn) {
     const target = item.query ? `${item.path}?${new URLSearchParams(item.query)}` : item.path
     router.push({ name: 'login', query: { redirect: target } })
+    return
+  }
+  if (isSameTarget(item)) {
+    pulseKey.value = ''
+    nextTick(() => {
+      pulseKey.value = item.key
+      clearTimeout(pulseTimer)
+      pulseTimer = setTimeout(() => (pulseKey.value = ''), 420)
+    })
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {
+      /* jsdom / 老浏览器没有平滑滚动，脉冲已经是反馈了 */
+    }
     return
   }
   router.push({ path: item.path, query: item.query })
@@ -91,7 +116,11 @@ function go(item: NavItem) {
       :key="item.key"
       type="button"
       class="nav-item"
-      :class="{ 'is-active': activeKey === item.key, 'is-publish': item.key === 'publish' }"
+      :class="{
+        'is-active': activeKey === item.key,
+        'is-publish': item.key === 'publish',
+        'is-pulse': pulseKey === item.key
+      }"
       :aria-current="activeKey === item.key ? 'page' : undefined"
       :aria-label="item.label"
       @click="go(item)"
@@ -151,6 +180,11 @@ function go(item: NavItem) {
     background: var(--surface-2);
   }
 
+  /* 已经在当前页时点同一格：轻脉冲一下，替代被吞掉的重复导航 */
+  .nav-item.is-pulse .nav-icon-wrap {
+    animation: nav-pulse 420ms var(--ease-out-expo);
+  }
+
   .nav-item.is-active {
     color: var(--accent);
   }
@@ -192,9 +226,25 @@ function go(item: NavItem) {
   }
 }
 
+@keyframes nav-pulse {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .nav-icon-wrap {
     transition: none;
+  }
+
+  .nav-item.is-pulse .nav-icon-wrap {
+    animation: none;
   }
 }
 </style>

@@ -29,6 +29,7 @@ import {
   Delete
 } from '@element-plus/icons-vue'
 import { postsApi, type SuggestResponse } from '@/api/posts'
+import { notificationsApi, type NotificationItem } from '@/api/notifications'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useTheme } from '@/composables/useTheme'
@@ -37,6 +38,7 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { useNotifications } from '@/composables/useNotifications'
 import { topicPath } from '@/api/topics'
 import AiEntry from '@/components/AiEntry.vue'
+import MessageBellPanel from '@/components/MessageBellPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,6 +54,7 @@ const {
 const { unreadTotal: chatUnread } = useWebSocket()
 const {
   unreadCount: notifyUnread,
+  markRead: markNotificationsRead,
   start: startNotifications,
   stop: stopNotifications
 } = useNotifications()
@@ -280,8 +283,71 @@ function goPublish() {
   router.push('/publish')
 }
 
-function goMessages() {
+/**
+ * 铃铛下拉预览。
+ *
+ * 原来点铃铛只做 router.push('/messages')，人已经站在消息页时
+ * 那是一次重复导航 —— Vue Router 静默忽略，看上去就是「点了没反应」。
+ * 现在 click 由 popover 接管：任何页面点开都有面板，面板里再决定去哪。
+ */
+const bellOpen = ref(false)
+const bellItems = ref<NotificationItem[]>([])
+const bellLoading = ref(false)
+
+async function loadBellPreview() {
+  if (!auth.isLoggedIn) return
+  bellLoading.value = true
+  try {
+    // 不传 category：铃铛看的是「最近发生了什么」，不是某一个分类。
+    // 也不写回 useNotifications 的单例 list —— 消息页切分类会改那份，
+    // 两边共用一份会在用户切 Tab 时把铃铛内容也换掉。
+    const res = await notificationsApi.list({ page: 1, pageSize: 6 })
+    bellItems.value = res?.list ?? []
+  } catch {
+    bellItems.value = []
+  } finally {
+    bellLoading.value = false
+  }
+}
+
+async function markBellRead() {
+  await markNotificationsRead()
+  // 面板是独立数据，标完重新拉一次，红点和条目才同时落地
+  await loadBellPreview()
+}
+
+function closeBell() {
+  bellOpen.value = false
+}
+
+function openBellItem(item: NotificationItem) {
+  closeBell()
+  // 笔记被删 / 关注类通知没有可跳的笔记：去看 TA 的主页，至少有个去处
+  router.push(item.postId ? `/post/${item.postId}` : `/profile/${item.actor.id}`)
+}
+
+/** 已经在目标页时不能再「假装跳一次」：给一个看得见的动作 */
+function alreadyHere(hint: string) {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  toast.show(hint, 'info')
+}
+
+function openAllMessages() {
+  closeBell()
+  if (route.path === '/messages' && route.query.tab !== 'chat') {
+    alreadyHere('已经在消息页了')
+    return
+  }
   router.push('/messages')
+}
+
+function openBellChat() {
+  closeBell()
+  if (route.path === '/messages' && route.query.tab === 'chat') {
+    alreadyHere('已经在聊天页了')
+    return
+  }
+  router.push({ path: '/messages', query: { tab: 'chat' } })
 }
 
 function handleCommand(command: string) {
@@ -428,18 +494,39 @@ function onOutsideClick(e: MouseEvent) {
         />
       </el-tooltip>
 
-      <!-- 消息：侧栏不再放这一项，改成顶栏铃铛（仅登录态） -->
-      <el-tooltip v-if="auth.isLoggedIn" content="消息" placement="bottom">
-        <el-badge :value="bellUnread" :hidden="bellUnread === 0" :max="99" class="bell-badge">
-          <el-button
-            :class="['icon-btn', { 'bell-swing': bellRinging }]"
-            circle
-            :icon="Bell"
-            aria-label="消息"
-            @click="goMessages"
-          />
-        </el-badge>
-      </el-tooltip>
+      <!-- 消息：侧栏不再放这一项，改成顶栏铃铛（仅登录态）。
+           click 打开预览面板，而不是直接 push /messages —— 人已经在消息页时
+           重复导航会被静默忽略，看起来就是「按钮坏了」。 -->
+      <el-popover
+        v-if="auth.isLoggedIn"
+        v-model:visible="bellOpen"
+        trigger="click"
+        placement="bottom-end"
+        :width="340"
+        popper-class="message-bell-popper"
+        @show="loadBellPreview"
+      >
+        <template #reference>
+          <el-badge :value="bellUnread" :hidden="bellUnread === 0" :max="99" class="bell-badge">
+            <el-button
+              :class="['icon-btn', { 'bell-swing': bellRinging }]"
+              circle
+              :icon="Bell"
+              aria-label="消息"
+            />
+          </el-badge>
+        </template>
+        <MessageBellPanel
+          :items="bellItems"
+          :loading="bellLoading"
+          :notify-unread="notifyUnread"
+          :chat-unread="chatUnread"
+          @open-item="openBellItem"
+          @mark-read="markBellRead"
+          @open-all="openAllMessages"
+          @open-chat="openBellChat"
+        />
+      </el-popover>
 
       <!-- 已登录：头像下拉 -->
       <el-dropdown v-if="auth.isLoggedIn" trigger="click" @command="handleCommand">

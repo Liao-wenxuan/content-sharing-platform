@@ -153,17 +153,33 @@ async function publishDemoContent() {
 }
 
 /** 注册（已存在则登录）一个账号，返回 { token, id } */
+/**
+ * 登录/注册请求外面包一层限流自愈。
+ *
+ * authLimiter 是「1 分钟 5 次」，截图脚本连着跑几轮很容易撞上 429。
+ * 以前第二账号一撞限流，评论线程 + 消息中心互动就整段被跳过，
+ * 09-messages 又拍成空态 —— 而且脚本只是打印一句「注意」照样 exit 0。
+ * 这里按服务端给的 Retry-After 等一次再试，让配图不靠赌时间窗。
+ */
+async function authPost(path, data) {
+  let res = await page.request.post(`${API}${path}`, { data })
+  if (res.status() === 429) {
+    const seconds = Number(res.headers()['retry-after']) || 65
+    const waitMs = Math.min(70000, Math.max(1000, seconds * 1000))
+    console.log(`  ${path} 撞登录限流，等 ${Math.round(waitMs / 1000)}s 后重试`)
+    await new Promise((r) => setTimeout(r, waitMs))
+    res = await page.request.post(`${API}${path}`, { data })
+  }
+  return res
+}
+
 async function ensureAccount(email, password, nickname) {
-  const reg = await page.request.post(`${API}/api/auth/register`, {
-    data: { email, password, nickname }
-  })
+  const reg = await authPost('/api/auth/register', { email, password, nickname })
   const body = reg.status() < 300 ? await reg.json() : null
   if (body?.accessToken) return { token: body.accessToken, id: body.userInfo.id }
 
   // 已存在就直接登录（脚本可重复跑）
-  const login = await page.request.post(`${API}/api/auth/login`, {
-    data: { email, password }
-  })
+  const login = await authPost('/api/auth/login', { email, password })
   if (login.status() >= 300) throw new Error(`${email} 既注册不了也登不上：${login.status()}`)
   const b = await login.json()
   return { token: b.accessToken, id: b.userInfo.id }
@@ -260,6 +276,20 @@ async function seedRelationships() {
     })
     if (c2.status() >= 300) issues.push(`回复评论失败 ${c2.status()}`)
     else console.log('  评论线程：1 条主楼 + 1 条回复')
+
+    // 顺手让「消息中心」那张配图不是一片空：第二账号真实点赞 / 收藏 / 关注主账号，
+    // 加上上面那条评论回复，三个分类的通知都由服务端 createNotification 正常产生。
+    // 不往 notifications 表塞记录 —— 那样点进通知会跳到别人的笔记，是假数据。
+    const auth2 = { Authorization: `Bearer ${me2.token}` }
+    for (const [verb, url] of [
+      ['赞', `/api/posts/${postId}/like`],
+      ['收藏', `/api/posts/${postId}/favorite`],
+      ['关注', `/api/users/${myId}/follow`]
+    ]) {
+      const r = await page.request.post(`${API}${url}`, { headers: auth2, data: {} })
+      if (r.status() >= 300) issues.push(`互动（${verb}）失败 ${r.status()}`)
+    }
+    console.log('  消息中心互动数据：赞 / 收藏 / 评论 / 关注')
   } catch (e) {
     issues.push(`第二账号不可用，跳过回复：${e.message}`)
   }

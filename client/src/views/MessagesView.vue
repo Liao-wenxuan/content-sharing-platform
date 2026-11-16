@@ -325,12 +325,16 @@ watch(activeCategory, (cat) => {
             compact
           />
 
+          <!-- 空态必须给出口：只写「暂无」让人以为消息功能坏了，
+               实际只是还没人互动过。给一个能走的路，而不是一句解释。 -->
           <EmptyState
             v-else-if="notifications.length === 0"
             icon="🔔"
             :title="`暂无${currentCategory.label}`"
             :hint="EMPTY_HINT[activeCategory]"
+            action="去发现逛逛"
             compact
+            @action="router.push('/')"
           />
 
           <ul v-else class="activity-list">

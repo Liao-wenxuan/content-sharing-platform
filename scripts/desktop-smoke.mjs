@@ -211,6 +211,11 @@ check('头像真的换了', !!avatarSrc && avatarSrc.includes('/uploads/'), avat
 // ---------- 7. 消息页（从顶栏铃铛进，侧栏已无入口）----------
 console.log('\n[7] 消息页（ElTabs，入口=顶栏铃铛）')
 await page.locator('.top-bar button[aria-label="消息"]').click()
+// 铃铛现在是「先展开预览面板」，不是直接跳页 —— 面板里再点「查看全部消息」。
+// 只断言面板出现还不够：得真的能从面板走到消息页，否则等于把入口改没了。
+await page.locator('.bell-panel').waitFor({ state: 'visible', timeout: 10000 })
+check('铃铛展开消息预览', true)
+await page.locator('.bell-foot-main').click()
 await page.waitForURL('**/messages')
 check('消息页标题', (await page.locator('.page-title').innerText()) === '消息')
 const msgTabs = await page.locator('.msg-tabs').innerText()
