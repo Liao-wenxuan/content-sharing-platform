@@ -48,6 +48,17 @@ vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ isLoggedIn: mocks.isLoggedIn })
 }))
 
+/** 消息项的未读角标：和顶栏铃铛共用同一份状态，这里只钉住「合计」这件事 */
+const unreadMock = vi.hoisted(() => ({ chat: 0, notify: 0 }))
+vi.mock('@/composables/useWebSocket', async () => {
+  const { computed } = await import('vue')
+  return { useWebSocket: () => ({ unreadTotal: computed(() => unreadMock.chat) }) }
+})
+vi.mock('@/composables/useNotifications', async () => {
+  const { computed } = await import('vue')
+  return { useNotifications: () => ({ unreadCount: computed(() => unreadMock.notify) }) }
+})
+
 /**
  * Element Plus 的替身。
  *
@@ -89,6 +100,17 @@ const ElButtonStub = defineComponent({
   }
 })
 
+const ElBadgeStub = defineComponent({
+  name: 'ElBadge',
+  props: {
+    value: { type: [Number, String], default: 0 },
+    max: { type: Number, default: 99 }
+  },
+  setup(_props, { slots }) {
+    return () => h('span', { class: 'el-badge-stub' }, slots.default?.())
+  }
+})
+
 function mountNav() {
   return mount(SideNav, {
     global: {
@@ -96,7 +118,8 @@ function mountNav() {
         'el-menu': ElMenuStub,
         'el-menu-item': ElMenuItemStub,
         'el-icon': ElIconStub,
-        'el-button': ElButtonStub
+        'el-button': ElButtonStub,
+        'el-badge': ElBadgeStub
       }
     }
   })
@@ -117,15 +140,18 @@ beforeEach(() => {
   mocks.route.meta = {}
   mocks.isLoggedIn = true
   mocks.push.mockClear()
+  unreadMock.chat = 0
+  unreadMock.notify = 0
 })
 
 describe('SideNav', () => {
-  it('登录时六个入口都在', () => {
+  it('登录时七个入口都在（含消息）', () => {
     const wrapper = mountNav()
     expect(indexesOf(wrapper)).toEqual([
       '/',
       '/?channel=follow',
       '/publish',
+      '/messages',
       '/favorites',
       '/profile/me',
       '/settings'
@@ -175,6 +201,14 @@ describe('SideNav', () => {
       expect(activeOf(mountNav())).toBe('/profile/me')
     })
 
+    it('消息页高亮「消息」，带不带 tab query 都一样', () => {
+      mocks.route.path = '/messages'
+      expect(activeOf(mountNav())).toBe('/messages')
+
+      mocks.route.query = { tab: 'chat' }
+      expect(activeOf(mountNav())).toBe('/messages')
+    })
+
     it('粉丝 / 关注列表回「关注」', () => {
       mocks.route.path = '/follows/9'
       expect(activeOf(mountNav())).toBe('/?channel=follow')
@@ -209,6 +243,22 @@ describe('SideNav', () => {
         expect(indexesOf(wrapper)).toContain(active)
       }
     })
+  })
+
+  it('消息项的未读角标是「通知 + 私信」的合计，没未读就不显示', () => {
+    mocks.isLoggedIn = false
+    expect(mountNav().findComponent(ElBadgeStub).exists()).toBe(false)
+
+    mocks.isLoggedIn = true
+    expect(mountNav().findComponent(ElBadgeStub).exists()).toBe(false)
+
+    unreadMock.chat = 2
+    unreadMock.notify = 3
+    const wrapper = mountNav()
+    const badge = wrapper.findComponent(ElBadgeStub)
+    expect(badge.exists()).toBe(true)
+    // stub 把 value 当 prop 吃掉了，不会落到 DOM attribute 上
+    expect(badge.props('value')).toBe(5)
   })
 
   it('点「登录 / 注册」带着当前地址跳过去', async () => {

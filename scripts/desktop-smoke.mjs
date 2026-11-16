@@ -60,12 +60,11 @@ check('顶栏 TopBar 存在', await page.locator('header.top-bar').isVisible())
 check('Element Plus 样式已加载', await page.locator('.el-menu').isVisible())
 
 const navText = await page.locator('.nav-menu').innerText()
-for (const label of ['发现', '发布', '我的', '设置']) {
+for (const label of ['发现', '发布', '消息', '我的', '设置']) {
   check(`侧栏含「${label}」`, navText.includes(label))
 }
-// 搜索入口在顶栏下拉、消息改成顶栏铃铛，都不再占侧栏位置
+// 搜索只在顶栏下拉里；消息现在侧栏和顶栏铃铛各有一个入口
 check('侧栏不再含「搜索」', !navText.includes('搜索'))
-check('侧栏不再含「消息」', !navText.includes('消息'))
 check(
   '顶栏显示昵称（已登录）',
   (await page.locator('.user-trigger .user-name').innerText()) === NICK
@@ -208,8 +207,13 @@ await page.waitForTimeout(1500)
 const avatarSrc = await page.locator('.info-card .el-avatar img').getAttribute('src')
 check('头像真的换了', !!avatarSrc && avatarSrc.includes('/uploads/'), avatarSrc || '(没有 img)')
 
-// ---------- 7. 消息页（从顶栏铃铛进，侧栏已无入口）----------
-console.log('\n[7] 消息页（ElTabs，入口=顶栏铃铛）')
+// ---------- 7. 消息页（侧栏 + 顶栏铃铛两个入口都要能进）----------
+console.log('\n[7] 消息页（ElTabs，双入口）')
+await page.locator('.nav-menu .el-menu-item', { hasText: '消息' }).click()
+await page.waitForURL('**/messages')
+check('侧栏「消息」能进消息页', true)
+
+// 站在消息页点铃铛：重复导航已被面板替代，这里必须仍能打开预览
 await page.locator('.top-bar button[aria-label="消息"]').click()
 // 铃铛现在是「先展开预览面板」，不是直接跳页 —— 面板里再点「查看全部消息」。
 // 只断言面板出现还不够：得真的能从面板走到消息页，否则等于把入口改没了。
