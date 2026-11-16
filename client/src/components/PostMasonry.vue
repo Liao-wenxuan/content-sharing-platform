@@ -382,7 +382,7 @@ function markCoverBroken(postId: number) {
               外面 —— 在瀑布流里行不通：胶囊会压到下一行卡片上，margin 过渡
               还会抖动整列布局。所以这里做的是「意译」而不是「照抄」：
 
-              1. 垫纸   → .card::before，整卡背后浮起一层 surface（含投影）
+              1. 陈列卡面 → .card-wrap，静止态就有一张描边卡面，hover 整卡上浮
               2. 分类徽章 → .topic-peek，hover 才显形（搜索命中时 tag-badge
                           已经占了左上角，所以排除掉避免叠罗汉）
               3. 数据胶囊 → .peek，贴着封面底边错峰浮出（赞 / 评 / 图数），
@@ -565,83 +565,58 @@ function markCoverBroken(postId: number) {
 }
 
 /*
- * 卡片外壳。
+ * 陈列卡外壳（2026-11-16 存量 UI 重塑）。
  *
- * 它存在的唯一原因是「链接里不能再放链接或按钮」：
- * 不感兴趣按钮和作者主页链接都要在 <a class="card"> 外面，
- * 定位和 hover 状态因此挂到这个壳上，而不是挂在卡片链接上。
+ * 它的作用是「一张展台」：静止态就有一张完整的面 + 1px 描边，
+ * 封面、标题、作者行同处其中 —— 内容像被摆上去，而不是裸贴在页面底上。
  *
- * 封面和壳的顶边是齐的，所以 .dismiss-btn 的偏移量沿用原来的数值。
+ * 之所以把面挂在 .card-wrap（而不是 <a class="card">）上：
+ * 链接里不能再放链接或按钮，不感兴趣按钮和作者主页链接都必须是
+ * <a class="card"> 的兄弟节点。把面/描边/hover 挂到共同的壳上，
+ * 才能让「整张卡」作为一个整体浮起，同时不制造嵌套交互控件。
+ *
+ * 无阴影（工业 HUD 原则）：层级靠面 + 描边建立，hover 时面上浮半档、
+ * 描边转强调色。列间距 18px / 行间距 26px 容得下 4px 上浮，不碰邻居。
  */
 .card-wrap {
   position: relative;
   display: block;
+  padding: var(--card-face-pad);
+  border: 1px solid var(--card-face-border);
+  border-radius: var(--radius-md);
+  background: var(--card-face);
+  transition:
+    transform var(--dur-standard) var(--ease-out-expo),
+    border-color var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.card-wrap:hover,
+.card-wrap:focus-within {
+  transform: translateY(-4px);
+  border-color: var(--card-face-border-hover);
+  background: var(--card-face-hover);
 }
 
 .card {
   display: block;
   color: inherit;
-  border-radius: var(--radius-md);
-  /*
-   * position + z-index:0 是给下面的「垫纸」（.card::before, z-index:-1）
-   * 圈出一个层叠上下文用的 —— 没有它，-1 会试图钻到页面背景底下，
-   * 垫纸直接消失。transform 也会创建上下文，但那只存在于 hover 态，
-   * 静止态必须有稳定的兜底。
-   */
-  position: relative;
-  z-index: 0;
-  /* 键盘用户也要看到「这里能点进去」的邀请，和 hover 同一套反馈 */
-  transition:
-    background-color var(--dur-fast) var(--ease-out-expo),
-    transform var(--dur-standard) var(--ease-out-expo);
+  border-radius: var(--radius-sm);
 }
 
 .card:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 4px;
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
 }
 
-/*
- * 悬停「垫纸」+ 抬升 —— 参考/15.文章卡预览效果的核心意象。
- *
- * 参考的实现是 margin-top + scale 过渡（会触发 layout），这里改成
- * 纯 transform：垫纸从「藏在卡片正后方」平移到位，卡片整体上浮 4px。
- * 垫纸比内容大一圈（inset 负值），四边各露出约 8-10px ——
- * 列间距 18px / 行间距 26px，都容得下，不会碰到邻居。
- */
-.card::before {
-  content: '';
-  position: absolute;
-  inset: -8px -10px -10px;
-  z-index: -1;
-  border-radius: calc(var(--radius-md) + 4px);
-  background: var(--surface-2);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
-  opacity: 0;
-  transform: translateY(6px) scale(0.985);
-  transition:
-    opacity var(--dur-fast) var(--ease-out-expo),
-    transform var(--dur-standard) var(--ease-out-expo);
-}
-
-.card-wrap:hover .card,
-.card:focus-visible {
-  transform: translateY(-4px);
-}
-
-.card-wrap:hover .card::before,
-.card:focus-visible::before {
-  opacity: 1;
-  transform: none;
-}
-
-/* 封面：圆角、无边框，卡片本身没有背景和描边 */
+/* 封面：内嵌在陈列卡面里，圆角收一档与卡面形成内外层次 */
 .cover {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   /*
    * 封面加载时的占位色。
    *
@@ -918,8 +893,9 @@ function markCoverBroken(postId: number) {
 */
 .dismiss-btn {
   position: absolute;
-  right: 8px;
-  top: 8px;
+  /* 卡面有 8px 内边距，封面内缩了——按钮基准跟着内缩，才仍贴在封面角上 */
+  right: calc(var(--card-face-pad) + 8px);
+  top: calc(var(--card-face-pad) + 8px);
   z-index: 2;
   display: flex;
   align-items: center;
@@ -934,23 +910,22 @@ function markCoverBroken(postId: number) {
   backdrop-filter: blur(4px);
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out-expo);
+  /* 整张 .card-wrap 上浮时会带着按钮走，按钮自己只做轻微放大，不再叠加位移 */
+  transition:
+    opacity var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
 }
 
 .card-wrap:hover .dismiss-btn,
 .dismiss-btn:focus-visible {
   opacity: 1;
-  /* 卡片抬升（.card 的 translateY(-4px)）时按钮跟着走，否则悬停瞬间它悬在原位 */
-  transform: translateY(-4px);
 }
 
 .dismiss-btn:hover {
   background: var(--accent);
-}
-
-/* 只动 transform / opacity / color / border-color，不碰 layout 属性 */
-.dismiss-btn:hover {
-  transform: translateY(-4px) scale(1.08);
+  /* 只动 transform / opacity / color，不碰 layout 属性 */
+  transform: scale(1.08);
 }
 
 /* ===== 标题 ===== */

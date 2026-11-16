@@ -582,7 +582,8 @@ watch(activeCategory, (cat) => {
 
 /* 整行可点 → 必须有 hover 和 focus-visible，否则没人知道能点 */
 .activity-item:hover {
-  background: var(--muted);
+  /* 与关注列表 / 内容卡一致：行 hover 走新卡面族 */
+  background: var(--card-face-hover);
   border-radius: var(--radius-md);
 }
 

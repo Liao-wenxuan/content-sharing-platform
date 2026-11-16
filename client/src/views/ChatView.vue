@@ -681,7 +681,8 @@ watch(activeId, () => {
 .discover-item:hover,
 .discover-item:focus-visible {
   border-color: var(--accent);
-  background: var(--muted);
+  /* 与关注列表 / 内容卡一致：行 hover 走新卡面族 */
+  background: var(--card-face-hover);
 }
 
 /* 焦点框默认在按钮外侧，栅格里会被相邻卡片切掉，收到内侧 */
@@ -905,7 +906,7 @@ watch(activeId, () => {
 }
 
 .conv-item:hover {
-  background: var(--muted);
+  background: var(--card-face-hover);
 }
 
 .conv-item:focus-visible {

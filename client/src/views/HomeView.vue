@@ -312,7 +312,7 @@ watch(isFollowFeed, () => loadFeed(true))
  * 只有宽屏（nav 放得下）才需要居中，且只作用在 header 上。
  */
 .channel-tabs :deep(.el-tabs__header) {
-  margin-bottom: 22px;
+  margin-bottom: 16px;
 }
 
 @media (min-width: 1100px) {
@@ -326,24 +326,33 @@ watch(isFollowFeed, () => loadFeed(true))
   border-bottom: none;
 }
 
+/*
+ * 频道项改成「导航胶囊」：选中态给一张极淡的强调底面 + 强调色短下划线。
+ * 用 color 分层级而不是 opacity —— 后者会把底面一起淡化，选中态的面就立不起来。
+ * 只改 item 自身，不动 nav-wrap / nav-scroll 的横向滚动结构。
+ */
 .channel-tabs :deep(.el-tabs__item) {
   position: relative;
-  height: 44px;
-  padding: 0 4px;
-  margin: 0 20px;
-  font-size: var(--fs-md);
-  color: var(--foreground);
-  opacity: 0.62;
+  height: 38px;
+  line-height: 38px;
+  padding: 0 16px;
+  margin: 0 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-base);
+  color: var(--text-2);
+  transition:
+    color var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
 }
 
 .channel-tabs :deep(.el-tabs__item:hover) {
-  opacity: 0.9;
+  color: var(--foreground);
 }
 
 .channel-tabs :deep(.el-tabs__item.is-active) {
   color: var(--foreground);
-  opacity: 1;
   font-weight: 600;
+  background: var(--channel-active-bg);
 }
 
 /* 官方整宽下划线换成居中短条，颜色走 --el-color-primary（即强调色） */
@@ -354,10 +363,10 @@ watch(isFollowFeed, () => loadFeed(true))
 .channel-tabs :deep(.el-tabs__item.is-active::after) {
   content: '';
   position: absolute;
-  bottom: 8px;
+  bottom: 5px;
   left: 50%;
   transform: translateX(-50%);
-  width: 18px;
+  width: 16px;
   height: 3px;
   border-radius: 2px;
   background: var(--el-color-primary);

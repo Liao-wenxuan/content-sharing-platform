@@ -237,17 +237,22 @@ watch([activeTab, targetId], () => load(true))
  * 行改成卡片式节奏（内边距 + hover 底色），信息密度更稳。
  */
 .content-panel {
-  min-height: 380px;
   padding: 8px 16px 14px;
   background: color-mix(in srgb, var(--surface-1) 55%, transparent);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
 }
 
+/*
+ * 只有空态才需要固定高度让插图居中；有内容时容器随行数自适应。
+ * 之前 min-height 挂在通用 .content-panel 上，1 个关注时下方空 300px，
+ * 像一个没装满的柜子 —— 评审指出的「未完成感」就来自这里。
+ */
 .content-panel.is-blank {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 380px;
 }
 
 .rows {
@@ -263,11 +268,12 @@ watch([activeTab, targetId], () => load(true))
   padding: 14px 12px;
   border-bottom: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
-  transition: background 0.15s ease;
+  /* 用户列表是「行」不是陈列卡：只统一 hover 面到新变量族，不套完整卡面 */
+  transition: background var(--dur-fast) var(--ease-out-expo);
 }
 
 .row:hover {
-  background: var(--surface-2);
+  background: var(--card-face-hover);
 }
 
 .row:last-child {

@@ -797,20 +797,30 @@ onMounted(reload)
   display: none;
 }
 
+/*
+ * 收藏卡（2026-11-16 对齐陈列卡语言）。
+ * 改前：--card / --border-soft 比首页陈列卡暗一档、描边更弱，
+ * 同一批内容从首页到收藏页「面」突然塌下去。改后统一走 --card-face*
+ * 变量族，静止态就有清晰的独立面，hover 上浮 + 描边转苔绿。
+ */
 .fav-card {
   position: relative;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--card-face-border);
   border-radius: var(--radius-md);
-  background: var(--card);
+  background: var(--card-face);
+  /* 与首页/个人主页一致：封面内嵌到卡面里，四周留呼吸 */
+  padding: var(--card-face-pad);
   overflow: hidden;
   transition:
-    border-color 0.16s ease,
-    transform 0.16s ease;
+    border-color var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-standard) var(--ease-out-expo);
 }
 
 .fav-card:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
+  border-color: var(--card-face-border-hover);
+  background: var(--card-face-hover);
+  transform: translateY(-4px);
 }
 
 .fav-card.selected {
@@ -828,6 +838,7 @@ onMounted(reload)
   aspect-ratio: 4 / 3;
   background: var(--surface-2);
   overflow: hidden;
+  border-radius: var(--radius-sm);
 }
 
 .fav-cover img {

@@ -1604,18 +1604,30 @@ watch(activeScope, async (scope) => {
   color: inherit;
 }
 
+/*
+ * 个人主页笔记卡（2026-11-16 对齐陈列卡语言）。
+ * el-card 默认面/描边沿用旧 token，和首页新陈列卡不同档；这里 deep 覆盖到
+ * --card-face* 变量族，静止态就有独立面，hover 上浮 4px + 描边转苔绿。
+ */
 .post-card {
+  border-color: var(--card-face-border) !important;
+  background: var(--card-face) !important;
+  border-radius: var(--radius-md) !important;
   transition:
-    transform 0.18s ease,
-    border-color 0.18s ease;
+    transform var(--dur-standard) var(--ease-out-expo),
+    border-color var(--dur-fast) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
 }
 
 .post-link:hover .post-card {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  border-color: var(--card-face-border-hover) !important;
+  background: var(--card-face-hover) !important;
 }
 
+/* 封面内嵌到卡面里，和首页陈列卡一致：留 8px 呼吸，圆角收一档形成内外层次 */
 .post-body {
-  padding: 0 0 10px;
+  padding: var(--card-face-pad) !important;
 }
 
 .cover {
@@ -1623,6 +1635,7 @@ watch(activeScope, async (scope) => {
   aspect-ratio: 3 / 4;
   background: var(--muted);
   overflow: hidden;
+  border-radius: var(--radius-sm);
 }
 
 .ratio-1 {
@@ -1655,7 +1668,8 @@ watch(activeScope, async (scope) => {
 }
 
 .content {
-  margin: 10px 12px 8px;
+  /* 卡面已有 --card-face-pad 内边距，这里只留上下呼吸，不再左右缩进 */
+  margin: 10px 0 8px;
   font-size: var(--fs-sm);
   line-height: 1.5;
   display: -webkit-box;
@@ -1670,7 +1684,7 @@ watch(activeScope, async (scope) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 12px;
+  padding: 0;
   font-size: var(--fs-xs);
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;

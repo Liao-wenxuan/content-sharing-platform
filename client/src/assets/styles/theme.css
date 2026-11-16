@@ -114,6 +114,21 @@
   --radius-full: 999px; /* 胶囊 / 头像 */
   --radius: 10px; /* 兼容旧名 → md */
 
+  /* —— 陈列卡面（内容浏览卡片的「展台」）——
+   * 2026-11-16 存量 UI 重塑：卡片从「裸贴在页面底上」改成静止态就有
+   * 一张完整的面。为什么不用 --surface-1：卡片面需要在页面底和面板之间
+   * 再分一档，且 hover 要有明确的「浮起」目标色，单独成族语义更清楚。
+   * 无阴影（工业 HUD 原则）——层级完全靠「面 + 1px 描边」建立。
+   */
+  --card-face: #232325; /* 陈列卡静止面：比页面底(#19191b)亮一档，确保无图占位卡也有清晰的独立面 */
+  --card-face-hover: #2a2a2d; /* hover 浮起后的面 */
+  --card-face-border: #3a3a3f; /* 静止描边：提到常规 border 档，纯色占位卡轮廓才立得住 */
+  --card-face-border-hover: var(--accent); /* hover 描边转强调色——导航信号 */
+  --card-face-pad: 8px; /* 封面与卡面之间的留白：让图「摆进去」而不是贴边 */
+
+  /* 频道胶囊：选中态给一个极淡的强调底面，作为「你在哪」的第二个信号 */
+  --channel-active-bg: rgba(174, 185, 120, 0.12);
+
   /* —— 字号：6 档 ——
      原来 11/12/13/14/15/16 六档挤在 6px 内，区分度不足，
      视觉上分辨不出；而 18/19px 是零散出现的。
@@ -239,6 +254,14 @@
 
   --chip-border: #cfcfc8;
   --chip-text: var(--text-2);
+
+  /* 陈列卡面（浅色）：静止面接近白，靠描边分层；hover 再深半档 */
+  --card-face: #ffffff;
+  --card-face-hover: #fafaf7;
+  --card-face-border: #e2e2dc;
+  --card-face-border-hover: var(--accent);
+  --card-face-pad: 8px;
+  --channel-active-bg: rgba(93, 100, 23, 0.1);
 
   --shadow-sm: none;
   --shadow: none;

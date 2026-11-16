@@ -710,7 +710,8 @@ onMounted(async () => {
 }
 
 .item-row.clickable:hover {
-  background: var(--surface-2);
+  /* 与关注列表 / 内容卡一致：行 hover 走新卡面族 */
+  background: var(--card-face-hover);
 }
 
 .item-row.clickable:focus-visible {
