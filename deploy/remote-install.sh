@@ -60,7 +60,9 @@ case "$MODE" in
   frontend|full)
     replace_dir "$REPO/client" dist index.html "$CLIENT_TAR"
     if [[ "$MODE" == full ]]; then
-      replace_dir "$REPO/server" dist dist/index.js "$SERVER_TAR"
+      # 校验文件相对 dist.new 根：server-dist.tgz 是 `tar -C server/dist .` 打的，
+      # 解开后 index.js 就在 dist.new/ 根，不是 dist.new/dist/index.js。
+      replace_dir "$REPO/server" dist index.js "$SERVER_TAR"
       # 后端换了才需要重启；纯前端发布不惊动 Node 进程，
       # 也就不会断掉在线的 WebSocket 连接。
       pm2 restart csp-api --update-env
