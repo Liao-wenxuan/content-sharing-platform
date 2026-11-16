@@ -17,6 +17,8 @@ import { useRelativeTime } from '@/composables/useRelativeTime'
 defineProps<{
   items: NotificationItem[]
   loading: boolean
+  /** 拉取失败：不能显示「还没有新消息」——那是撒谎，用户会以为真没人互动 */
+  error: boolean
   notifyUnread: number
   chatUnread: number
 }>()
@@ -53,7 +55,13 @@ function initial(name?: string) {
       >
     </div>
 
-    <div v-if="loading" class="bell-state">加载中…</div>
+    <div v-if="loading && !items.length" class="bell-state">加载中…</div>
+
+    <!-- 拉失败 ≠ 没有消息。说清楚是网络问题，并把「去消息页」留在下面 -->
+    <div v-else-if="error && !items.length" class="bell-state bell-empty">
+      <p>消息暂时加载不出来</p>
+      <span>可能是网络慢了，点下面的「查看全部消息」再试一次</span>
+    </div>
 
     <ul v-else-if="items.length" class="bell-list">
       <li v-for="item in items" :key="item.id">

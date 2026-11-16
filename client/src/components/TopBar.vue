@@ -89,14 +89,27 @@ watch(bellUnread, (next, prev) => {
 })
 
 onMounted(() => {
-  // 未登录时铃铛整个不渲染，订阅了也没人看
-  if (auth.isLoggedIn) startNotifications()
+  // 未登录时铃铛整个不渲染，订阅了也没人看。
+  // 预览数据在这里就预取：等用户点开再发请求，慢链路上要干等十秒。
+  if (auth.isLoggedIn) {
+    startNotifications()
+    void loadBellPreview()
+  }
 })
 
 // 登录 / 登出（含刷新后恢复登录态）时重新决定要不要订阅
 watch(
   () => auth.isLoggedIn,
-  (loggedIn) => (loggedIn ? startNotifications() : stopNotifications())
+  (loggedIn) => {
+    if (loggedIn) {
+      startNotifications()
+      void loadBellPreview(true)
+    } else {
+      stopNotifications()
+      bellItems.value = []
+      bellOpen.value = false
+    }
+  }
 )
 
 const keyword = ref('')
@@ -293,27 +306,48 @@ function goPublish() {
 const bellOpen = ref(false)
 const bellItems = ref<NotificationItem[]>([])
 const bellLoading = ref(false)
+const bellError = ref(false)
+let lastBellLoadAt = 0
+let bellReqSeq = 0
 
-async function loadBellPreview() {
+/** 网络慢时不能让面板永远转圈：给它一个上限，超时就给出口 */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('bell timeout')), ms))
+  ])
+}
+
+async function loadBellPreview(force = false) {
   if (!auth.isLoggedIn) return
+  // 已经有内容就别在每次点开时重新等一遍网络 —— 线上实测这条请求
+  // 偶尔要 8~12 秒，那段时间里「点铃铛」看起来就跟坏了没区别。
+  if (!force && bellItems.value.length && Date.now() - lastBellLoadAt < 60_000) return
+
+  const seq = ++bellReqSeq
   bellLoading.value = true
+  bellError.value = false
   try {
     // 不传 category：铃铛看的是「最近发生了什么」，不是某一个分类。
     // 也不写回 useNotifications 的单例 list —— 消息页切分类会改那份，
     // 两边共用一份会在用户切 Tab 时把铃铛内容也换掉。
-    const res = await notificationsApi.list({ page: 1, pageSize: 6 })
+    const res = await withTimeout(notificationsApi.list({ page: 1, pageSize: 6 }), 6000)
+    if (seq !== bellReqSeq) return
     bellItems.value = res?.list ?? []
+    lastBellLoadAt = Date.now()
   } catch {
-    bellItems.value = []
+    if (seq !== bellReqSeq) return
+    // 保留旧数据：一次链路抖动不该把已经显示出来的通知清空
+    bellError.value = true
   } finally {
-    bellLoading.value = false
+    if (seq === bellReqSeq) bellLoading.value = false
   }
 }
 
 async function markBellRead() {
   await markNotificationsRead()
-  // 面板是独立数据，标完重新拉一次，红点和条目才同时落地
-  await loadBellPreview()
+  // 面板是独立数据，标完强制重拉一次，红点和条目才同时落地
+  await loadBellPreview(true)
 }
 
 function closeBell() {
@@ -504,7 +538,7 @@ function onOutsideClick(e: MouseEvent) {
         placement="bottom-end"
         :width="340"
         popper-class="message-bell-popper"
-        @show="loadBellPreview"
+        @show="loadBellPreview()"
       >
         <template #reference>
           <el-badge :value="bellUnread" :hidden="bellUnread === 0" :max="99" class="bell-badge">
@@ -519,6 +553,7 @@ function onOutsideClick(e: MouseEvent) {
         <MessageBellPanel
           :items="bellItems"
           :loading="bellLoading"
+          :error="bellError"
           :notify-unread="notifyUnread"
           :chat-unread="chatUnread"
           @open-item="openBellItem"

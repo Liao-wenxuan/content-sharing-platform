@@ -161,25 +161,27 @@ async function publishDemoContent() {
  * 09-messages 又拍成空态 —— 而且脚本只是打印一句「注意」照样 exit 0。
  * 这里按服务端给的 Retry-After 等一次再试，让配图不靠赌时间窗。
  */
-async function authPost(path, data) {
-  let res = await page.request.post(`${API}${path}`, { data })
+async function postWithRetry(path, data, headers = {}) {
+  let res = await page.request.post(`${API}${path}`, { data, headers })
   if (res.status() === 429) {
+    // 登录和写操作各有一把限流器，窗口都是 1 分钟级；连续造数据很容易撞上。
+    // 按服务端给的 Retry-After 等一次再试，否则配图会悄悄少掉半屏内容。
     const seconds = Number(res.headers()['retry-after']) || 65
     const waitMs = Math.min(70000, Math.max(1000, seconds * 1000))
-    console.log(`  ${path} 撞登录限流，等 ${Math.round(waitMs / 1000)}s 后重试`)
+    console.log(`  ${path} 撞限流，等 ${Math.round(waitMs / 1000)}s 后重试`)
     await new Promise((r) => setTimeout(r, waitMs))
-    res = await page.request.post(`${API}${path}`, { data })
+    res = await page.request.post(`${API}${path}`, { data, headers })
   }
   return res
 }
 
 async function ensureAccount(email, password, nickname) {
-  const reg = await authPost('/api/auth/register', { email, password, nickname })
+  const reg = await postWithRetry('/api/auth/register', { email, password, nickname })
   const body = reg.status() < 300 ? await reg.json() : null
   if (body?.accessToken) return { token: body.accessToken, id: body.userInfo.id }
 
   // 已存在就直接登录（脚本可重复跑）
-  const login = await authPost('/api/auth/login', { email, password })
+  const login = await postWithRetry('/api/auth/login', { email, password })
   if (login.status() >= 300) throw new Error(`${email} 既注册不了也登不上：${login.status()}`)
   const b = await login.json()
   return { token: b.accessToken, id: b.userInfo.id }
@@ -286,7 +288,7 @@ async function seedRelationships() {
       ['收藏', `/api/posts/${postId}/favorite`],
       ['关注', `/api/users/${myId}/follow`]
     ]) {
-      const r = await page.request.post(`${API}${url}`, { headers: auth2, data: {} })
+      const r = await postWithRetry(url, {}, auth2)
       if (r.status() >= 300) issues.push(`互动（${verb}）失败 ${r.status()}`)
     }
     console.log('  消息中心互动数据：赞 / 收藏 / 评论 / 关注')
