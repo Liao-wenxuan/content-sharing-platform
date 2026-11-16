@@ -17,6 +17,7 @@ import {
   unreadTotalFor,
   validateMessageContent
 } from '../lib/chat'
+import { unreadCountFor } from '../lib/notify'
 
 /**
  * WebSocket 服务端
@@ -96,11 +97,16 @@ export function attachWebSocketServer(httpServer: HttpServer): WsServerHandle {
     hub.add(userId, socket)
 
     // 告诉前端「你连上了」+ 当前未读总数 + 哪些人在线（用来置灰离线用户）
+    // notifyUnread 搭同一帧下发：WS 建连本身就要走一次 TCP+TLS（高延迟链路上
+    // 这一下可能就是 1~2 秒），建完之后再单独发一个 HTTP /unread-count 等于
+    // 又多付一次往返。握手时顺手读一次 SQLite 计数（微秒级）塞进来，
+    // 前端 ready 到达即可点亮角标，HTTP 只留作 WS 连不上时的兜底。
     sendTo(socket, {
       type: 'ready',
       payload: {
         userId,
         unreadTotal: unreadTotalFor(userId),
+        notifyUnread: unreadCountFor(userId),
         onlineUserIds: hub.onlineUserIds()
       }
     })

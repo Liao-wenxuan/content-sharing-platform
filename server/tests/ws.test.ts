@@ -181,6 +181,26 @@ describe('握手鉴权', () => {
     expect(ready.payload.userId).toBe(accounts.alice.id)
     expect(Array.isArray(ready.payload.onlineUserIds)).toBe(true)
   })
+
+  it('ready 帧带上通知未读数，供慢链路首屏角标秒出', async () => {
+    // 造一条未读通知，避免「恰好为 0」的假阳性
+    db.prepare(
+      `INSERT OR IGNORE INTO notifications (user_id, actor_id, type, post_id, comment_id, content)
+       VALUES (?, ?, 'like', 0, 0, NULL)`
+    ).run(accounts.alice.id, accounts.bob.id)
+    const expected = (
+      db
+        .prepare(`SELECT COUNT(*) AS c FROM notifications WHERE user_id = ? AND read_at IS NULL`)
+        .get(accounts.alice.id) as any
+    ).c
+    expect(expected).toBeGreaterThan(0)
+
+    const c = openAs('alice')
+    clients.push(c)
+    const ready = await c.waitFor('ready')
+    // 与库里实时计数一致：服务端 handshake 时读的就是这个值
+    expect(ready.payload.notifyUnread).toBe(expected)
+  })
 })
 
 describe('离线补偿 sync', () => {

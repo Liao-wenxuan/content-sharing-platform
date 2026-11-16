@@ -220,6 +220,39 @@ describe('WS 帧驱动未读数', () => {
     expect(wsHandlers.has('notification')).toBe(true)
   })
 
+  it('ready 帧带来的 notifyUnread 直接点亮角标，且不再多发一次 HTTP', async () => {
+    // WS 慢建连的链路上，ready 帧自带权威未读数是首屏角标秒出的关键：
+    // 拿到就直接用，不该再为同一个数字单独发一次 /unread-count。
+    vi.mocked(notificationsApi.unreadCount).mockResolvedValue({ unreadCount: 0 })
+    const { start, unreadCount } = useNotifications()
+    start()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(unreadCount.value).toBe(0)
+    const callsAfterStart = vi.mocked(notificationsApi.unreadCount).mock.calls.length
+
+    wsHandlers.get('ready')!({ notifyUnread: 4 })
+
+    expect(unreadCount.value).toBe(4)
+    expect(vi.mocked(notificationsApi.unreadCount).mock.calls.length).toBe(callsAfterStart)
+  })
+
+  it('ready 帧没带 notifyUnread（旧服务端）时回退到 HTTP', async () => {
+    vi.mocked(notificationsApi.unreadCount).mockResolvedValue({ unreadCount: 6 })
+    const { start, unreadCount } = useNotifications()
+    start()
+    await Promise.resolve()
+    await Promise.resolve()
+    vi.mocked(notificationsApi.unreadCount).mockClear()
+
+    wsHandlers.get('ready')!({})
+
+    expect(notificationsApi.unreadCount).toHaveBeenCalled()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(unreadCount.value).toBe(6)
+  })
+
   it('收到帧时直接覆盖，而不是 +1', async () => {
     vi.mocked(notificationsApi.unreadCount).mockResolvedValue({ unreadCount: 1 })
     const { start, unreadCount } = useNotifications()

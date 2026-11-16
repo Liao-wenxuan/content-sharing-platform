@@ -129,9 +129,16 @@ function start() {
     // 服务端给的是权威未读数，直接覆盖而不是 +1
     unreadCount.value = payload.unreadCount
   })
-  // 登录态变化（比如刚登出）要把数字清掉，否则铃铛会一直挂着别人的未读
-  onWsMessage('ready', () => {
-    void loadUnreadCount()
+  // ready 帧里已经带了通知未读数（服务端握手时顺手读的 SQLite 计数）。
+  // 直接用它点亮角标，不再为这一点发 HTTP —— 慢链路上 WS 建连已经要花
+  // 1~2 秒，建完再单独拉一次 /unread-count 等于又多付一次往返。
+  // 旧服务端还没带这个字段时回退到 HTTP，保证滚动发布期间不会开天窗。
+  onWsMessage('ready', (payload: { notifyUnread?: number }) => {
+    if (typeof payload?.notifyUnread === 'number') {
+      unreadCount.value = payload.notifyUnread
+    } else {
+      void loadUnreadCount()
+    }
   })
 }
 

@@ -69,8 +69,18 @@ export type ClientMessage =
 // ===== 服务端 → 客户端 =====
 
 export type ServerMessage =
-  /** 握手成功，告诉前端你是谁、一共有多少未读 */
-  | { type: 'ready'; payload: { userId: number; unreadTotal: number; onlineUserIds: number[] } }
+  /** 握手成功，告诉前端你是谁、一共有多少未读
+   *  unreadTotal 是私信未读，notifyUnread 是通知未读 —— 铃铛显示两者之和。
+   *  两个都塞在 ready 里下发，是为了让慢链路上角标能秒出（省一次 HTTP 往返）。 */
+  | {
+      type: 'ready'
+      payload: {
+        userId: number
+        unreadTotal: number
+        notifyUnread: number
+        onlineUserIds: number[]
+      }
+    }
   /** 断线重连后的离线补偿：这段时间错过的会话和消息一次补齐 */
   | { type: 'sync'; payload: { conversations: WsConversation[]; messages: WsMessage[] } }
   /** 收到新消息。tempId 用于把「发送中」的那条换成真实消息 */

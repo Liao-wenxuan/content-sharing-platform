@@ -62,7 +62,9 @@ export class FakeWebSocket {
   }
 
   /** 服务端确认连接可用 */
-  emitReady(payload: { onlineUserIds?: number[]; unreadTotal?: number } = {}): void {
+  emitReady(
+    payload: { onlineUserIds?: number[]; unreadTotal?: number; notifyUnread?: number } = {}
+  ): void {
     this.emitFrame({
       type: 'ready',
       payload: { onlineUserIds: [], unreadTotal: 0, ...payload }
