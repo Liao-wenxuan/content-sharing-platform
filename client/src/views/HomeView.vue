@@ -345,6 +345,17 @@ watch(isFollowFeed, () => loadFeed(true))
     background-color var(--dur-fast) var(--ease-out-expo);
 }
 
+/*
+ * Element Plus 对 tab 列表里「第一个 .el-tabs__item」单独清掉了 padding-left
+ * （内部选择器优先级高于通用的 .el-tabs__item）。注意 active-bar 不是 tab，
+ * 所以 :first-child 匹配不到它，必须用 id 精准命中这个首 tab。
+ * 结果：推荐胶囊左边贴字、右边留白 16px，文字中心比胶囊中心左偏 8px，
+ * 短绿线（left:50% 按胶囊居中）跟着歪。补回左 padding 让文字真正在胶囊居中。
+ */
+.channel-tabs :deep(#tab-recommend) {
+  padding-left: 16px;
+}
+
 .channel-tabs :deep(.el-tabs__item:hover) {
   color: var(--foreground);
 }

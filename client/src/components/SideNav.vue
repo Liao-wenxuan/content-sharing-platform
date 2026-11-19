@@ -109,16 +109,18 @@ function handleCommand(command: string) {
     <!-- 主导航 -->
     <el-menu :default-active="activeMenu" :router="true" class="nav-menu">
       <el-menu-item v-for="item in visibleItems" :key="item.path" :index="item.path">
-        <el-icon><component :is="item.icon" /></el-icon>
+        <!-- 未读角标挂在图标上（导航角标惯例：贴图标右上），不是挂在文字上——
+             后者会把红点推到菜单项中部，看着像飘在半空 -->
         <el-badge
           v-if="item.path === '/messages' && messageUnread > 0"
           :value="messageUnread"
           :max="99"
           class="nav-badge"
         >
-          <span>{{ item.label }}</span>
+          <el-icon><component :is="item.icon" /></el-icon>
         </el-badge>
-        <span v-else>{{ item.label }}</span>
+        <el-icon v-else><component :is="item.icon" /></el-icon>
+        <span>{{ item.label }}</span>
       </el-menu-item>
     </el-menu>
 
@@ -223,8 +225,10 @@ function handleCommand(command: string) {
 }
 
 .nav-menu :deep(.nav-badge .el-badge__content) {
-  top: 3px;
-  right: -9px;
+  /* badge 包的是图标。EP 默认 transform 把角标右移自身半宽多，红点会飘到
+     图标右边 ~14px；用 right 往回推，让红点中心落在图标右上角。 */
+  top: 0;
+  right: 14px;
   border: none;
   font-size: var(--fs-2xs);
 }
