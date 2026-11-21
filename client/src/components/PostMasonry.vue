@@ -575,8 +575,10 @@ function markCoverBroken(postId: number) {
  * <a class="card"> 的兄弟节点。把面/描边/hover 挂到共同的壳上，
  * 才能让「整张卡」作为一个整体浮起，同时不制造嵌套交互控件。
  *
- * 无阴影（工业 HUD 原则）：层级靠面 + 描边建立，hover 时面上浮半档、
- * 描边转强调色。列间距 18px / 行间距 26px 容得下 4px 上浮，不碰邻居。
+ * 无阴影（工业 HUD 原则）：层级靠面 + 描边建立，hover 时面上浮一档、
+ * 描边转强调色。列间距 18px / 行间距 26px；2026-11-21 上浮从 4px
+ * 加到 7px —— 垂直方向上 26px 行距容得下，水平方向卡面本身不变宽，
+ * 不会碰邻居。4px 太轻，肉眼几乎读不出，7px 才看得出卡片离开原位。
  */
 .card-wrap {
   position: relative;
@@ -593,7 +595,7 @@ function markCoverBroken(postId: number) {
 
 .card-wrap:hover,
 .card-wrap:focus-within {
-  transform: translateY(-4px);
+  transform: translateY(-7px);
   border-color: var(--card-face-border-hover);
   background: var(--card-face-hover);
 }
@@ -634,13 +636,20 @@ function markCoverBroken(postId: number) {
   object-fit: cover;
   display: block;
   /* ease（默认贝塞尔）是最平庸的曲线：出刀不快、收尾不净。
-     换成 ease-out-expo —— 起步快、落点稳，看得出「被拿起来」而不是「在滑动」。 */
-  transition: transform var(--dur-standard) var(--ease-out-expo);
+     换成 ease-out-expo —— 起步快、落点稳，看得出「被拿起来」而不是「在滑动」。
+     2026-11-21：加入 filter 过渡。filter 和 transform 一样走合成器，
+     不触发 layout / paint，符合「动画只动合成器属性」的纪律。 */
+  transition:
+    transform var(--dur-standard) var(--ease-out-expo),
+    filter var(--dur-standard) var(--ease-out-expo);
 }
 
 .card:hover .cover img,
 .card:focus-visible .cover img {
-  transform: scale(1.04);
+  /* zoom 1.04 → 1.07，与卡片 7px 抬升同一档强度；
+     brightness 只加 5%，再多会让浅色封面过曝、角标文字看不清。 */
+  transform: scale(1.07);
+  filter: brightness(1.05);
 }
 
 /* 6 张一循环制造瀑布流高度差 */
@@ -720,7 +729,8 @@ function markCoverBroken(postId: number) {
   border-radius: 50%;
   backdrop-filter: blur(2px);
   /* 卡片 hover 时角标跟着放大 —— 参考动效里「卡片被拿起来」的同一套手感，
-     封面 zoom 1.04、角标 1.1，差值让角标有浮出来的层次 */
+     封面 zoom 1.07、角标 1.12，差值 0.05 让角标有浮出来的层次。
+     2026-11-21：两者随封面一起上调，维持原有差值。 */
   transition:
     transform var(--dur-fast) var(--ease-out-expo),
     opacity var(--dur-fast) var(--ease-out-expo);
@@ -728,7 +738,7 @@ function markCoverBroken(postId: number) {
 
 .card:hover .play-badge,
 .card:focus-visible .play-badge {
-  transform: scale(1.1);
+  transform: scale(1.12);
 }
 
 /* hover 时右下角要让位给「话题预览胶囊」（.peek），否则两者叠在右下角。
@@ -950,8 +960,12 @@ function markCoverBroken(postId: number) {
    */
   min-height: calc(2 * 1.45em);
   /* 跟着卡片一起亮：给出「这条被选中了」的第二个通道。
-     对纯图片网格来说，多一层文字反馈比只动图片更好辨认。 */
-  transition: color var(--dur-fast) var(--ease-out-expo);
+     对纯图片网格来说，多一层文字反馈比只动图片更好辨认。
+     2026-11-21：hover 时右移 2px，与封面 zoom、卡面上浮
+     形成由内到外的三层反馈。位移很小，不触发重排。 */
+  transition:
+    color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
 }
 
 .card:hover .title,
@@ -967,6 +981,7 @@ function markCoverBroken(postId: number) {
    * 深色主题 #c6ca4c / 浅色主题 #5f6417，两个方向都过 AA。
    */
   color: var(--accent);
+  transform: translateX(2px);
 }
 
 .title .hit {
