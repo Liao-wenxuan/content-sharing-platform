@@ -257,7 +257,9 @@ describe('空态三种，不能合并成一句「暂无数据」', () => {
     await flushPromises()
 
     expect(w.text()).not.toContain('还没有收藏')
-    expect(w.find('.skeleton-stub').exists()).toBe(true)
+    // 加载指示器从 ElSkeleton 换成了三点弹跳 loader（Uiverse / mobinkakei），
+    // 断言的是同一个语义：加载中要有可见反馈，不能闪空态。
+    expect(w.find('.sg-loader-wrap').exists()).toBe(true)
 
     resolve(page([11]) as never)
     await flushPromises()
