@@ -38,14 +38,14 @@ export const DEFAULT_SETTINGS: UserSettings = {
   autoplayMedia: false,
 
   /*
-   * 默认深色，不是 'system'。
+   * 2026-11-24 视觉换轨：默认浅色（生活杂志的纸白底），不是 'system'。
    *
-   * index.html 的 <html class="dark"> 已经先落好了，避免首屏浅色闪烁；
-   * 「跟随系统」是用户主动去选的选项。反过来做的话首次访问会在
-   * 浅色和深色之间随机跳 —— 那不是尊重系统，是把首屏配色交给一个
-   * 用户还没表达过的偏好。
+   * index.html 不再带 class="dark"，useTheme 的默认也是 light ——
+   * 三处（index.html / useTheme / 这里）必须一致，否则首屏会闪一下
+   * 深色再跳浅色，或者设置页显示的偏好和实际主题对不上。
+   * 「跟随系统」和深色都是用户主动去选的选项。
    */
-  themeMode: 'dark',
+  themeMode: 'light',
   density: 'normal',
   fontScale: 100,
 

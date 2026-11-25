@@ -126,11 +126,10 @@ describe('useUserSettings', () => {
     expect(prefs.settings.value).toEqual(DEFAULT_SETTINGS)
   })
 
-  it('⚠️ **默认是 dark，不是 system**', async () => {
-    // index.html 的 <html class="dark"> 先落好，避免首屏浅色闪烁。
-    // 默认跟随系统的话，首次访问会在浅深之间随机跳 ——
-    // 那不是尊重系统，是把首屏配色交给用户还没表达过的偏好
-    expect(DEFAULT_SETTINGS.themeMode).toBe('dark')
+  it('⚠️ **默认是 light，不是 system**（2026-11-24 视觉换轨）', async () => {
+    // index.html 不再带 class="dark"，useTheme 与这里都默认 light，
+    // 三处一致才不会首屏闪一下深色再跳浅色。深色/跟随系统是用户主动选项。
+    expect(DEFAULT_SETTINGS.themeMode).toBe('light')
   })
 
   it('默认状态不需要登录也能拿到一份完整偏好', async () => {
@@ -246,26 +245,26 @@ describe('useUserSettings', () => {
    * 以前顶栏切换只写 localStorage，刷新时 load() 用服务端的
    * themeMode（还是 dark）把界面按回深色 —— 用户会觉得开关坏了。
    */
-  it('⚠️ 顶栏切主题会同步进偏好，刷新后不会再被按回深色', async () => {
+  it('⚠️ 顶栏切主题会同步进偏好，刷新后不会再被按回默认色', async () => {
     const { prefs } = await freshModule()
     await prefs.load()
 
     const { useTheme } = await import('@/composables/useTheme')
-    useTheme().toggleTheme() // dark -> light
+    useTheme().toggleTheme() // 默认 light -> dark
 
     // ① 偏好层当场就知道，不等保存
-    expect(prefs.settings.value.themeMode).toBe('light')
+    expect(prefs.settings.value.themeMode).toBe('dark')
 
     // ② 保存出去的正是刷新后服务端会回传的那一份
     const save = vi.mocked((await import('@/api/settings')).settingsApi.save)
     await prefs.saveNow()
     const calls = save.mock.calls
-    expect(calls[calls.length - 1][0].themeMode).toBe('light')
+    expect(calls[calls.length - 1][0].themeMode).toBe('dark')
 
-    // ③ 模拟刷新：重新拉一次偏好，界面仍是浅色
+    // ③ 模拟刷新：重新拉一次偏好，界面仍是切换后的深色
     await prefs.load(true)
-    expect(useTheme().theme.value).toBe('light')
-    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(useTheme().theme.value).toBe('dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
   it('游客切主题只存本地，不发必失败的 PUT /settings', async () => {
@@ -280,8 +279,9 @@ describe('useUserSettings', () => {
 
     const { useTheme } = await import('@/composables/useTheme')
     useTheme().toggleTheme()
-    expect(prefs.settings.value.themeMode).toBe('light')
-    expect(localStorage.getItem('themeMode')).toBe('light')
+    // 默认已是 light，toggle 后切成 dark
+    expect(prefs.settings.value.themeMode).toBe('dark')
+    expect(localStorage.getItem('themeMode')).toBe('dark')
 
     // 防抖 250ms 之后 saveNow 应该已经跑过，但不能真的发请求
     await new Promise((r) => setTimeout(r, 350))

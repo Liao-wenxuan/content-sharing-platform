@@ -689,7 +689,7 @@ watch(activeScope, async (scope) => {
                 而数据库里确实存了那个地址（界面上却看不出来）。
               -->
               <div class="avatar-wrap">
-                <el-avatar :size="72" :src="profileUser.avatar || undefined" class="avatar" alt="">
+                <el-avatar :size="88" :src="profileUser.avatar || undefined" class="avatar" alt="">
                   {{ avatarText(profileUser.nickname) }}
                 </el-avatar>
                 <button
@@ -1188,7 +1188,9 @@ watch(activeScope, async (scope) => {
    两个同名规则互相覆盖会把这里的背景图冲掉、相机按钮也失去定位祖先 */
 .profile-cover {
   position: relative;
-  height: 168px;
+  /* 2026-11-22 沉浸横幅：168 → 180px。多出的 12px 让头像是「压在横幅下沿」
+     而不是「贴着横幅底边」，配合 .profile-grid 的 -56px 上浮才有层次 */
+  height: 180px;
   border-radius: var(--radius-lg);
   overflow: hidden;
   background-color: var(--surface-2);
@@ -1200,11 +1202,33 @@ watch(activeScope, async (scope) => {
   margin-bottom: 20px;
 }
 
+/*
+ * 细网格纹理层：给默认封面加一层「蓝图」质感，和资料 HUD 语言呼应。
+ * 用 ::after 而不是改 SVG —— 用户上传封面时 <img> 是 DOM 中的兄弟节点，
+ * 默认 z-index 相同、文档顺序在后，会自然盖住这层纹理；
+ * 而默认封面（只有 background-image）则能透出网格。
+ * 纯装饰，不挡相机按钮（按钮 z-index 更高）。
+ */
+.profile-cover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
 .profile-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  /* 用户上传的封面要盖住 ::after 网格纹理。
+     伪元素默认绘制在普通流内容之上，img 不提层的话网格会浮在用户照片上。 */
+  position: relative;
+  z-index: 1;
 }
 
 /* 默认封面图常驻在背景上（内联 background-image），用户封面 <img> 会盖住它；
@@ -1289,9 +1313,11 @@ watch(activeScope, async (scope) => {
   background: var(--surface-3);
   color: var(--foreground);
   /* 原来是 --fs-display(32px)：首字比昵称还大，层级整个反了 */
-  font-size: var(--fs-lg);
+  font-size: var(--fs-xl);
   font-weight: 600;
-  border: 3px solid var(--card);
+  /* 2026-11-22 沉浸横幅：头像 72 → 88px（模板 :size），描边 3 → 4px。
+     4px 描边把头像从横幅上「切」出来，是重叠层次感的关键。 */
+  border: 4px solid var(--card);
   box-shadow: var(--shadow-md);
   flex-shrink: 0;
 }
@@ -1377,18 +1403,23 @@ watch(activeScope, async (scope) => {
 }
 
 /* 统计改成带竖线分隔的三块：数字放大、标签退后，
-   不再是一整行糊在一起的小字 */
+   不再是一整行糊在一起的小字。
+   2026-11-22 沉浸横幅：上下各加一条细线，把数据从资料区里「框」成
+   一条独立档案带；竖线间距 22 → 26px，和横幅的留白节奏对齐。 */
 .stats {
   display: flex;
   align-items: center;
   gap: 0;
   margin-top: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
   font-size: var(--fs-sm);
   color: var(--muted-foreground);
 }
 
 .stats .stat {
-  padding: 0 22px;
+  padding: 0 26px;
   border-left: 1px solid var(--border-soft);
   white-space: nowrap;
 }

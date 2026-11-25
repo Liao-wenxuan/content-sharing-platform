@@ -53,12 +53,12 @@ beforeEach(() => {
 })
 
 describe('useTheme', () => {
-  it('默认深色，且立刻落到 <html>', async () => {
+  it('默认浅色，且立刻落到 <html>（2026-11-24 视觉换轨）', async () => {
     const { useTheme } = await freshTheme()
     const t = useTheme()
-    expect(t.mode.value).toBe('dark')
-    expect(t.theme.value).toBe('dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(t.mode.value).toBe('light')
+    expect(t.theme.value).toBe('light')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
   })
 
   it('setMode(light) 同时改 class、colorScheme 和 localStorage', async () => {
@@ -117,7 +117,8 @@ describe('useTheme', () => {
     const t = useTheme()
     t.toggleTheme()
     t.toggleTheme()
-    expect(seen).toEqual(['light', 'dark'])
+    // 默认已是 light，两次 toggle 先切 dark 再切回 light
+    expect(seen).toEqual(['dark', 'light'])
   })
 
   it('silent 同步不回调，避免偏好层来回写', async () => {
