@@ -1,17 +1,17 @@
 /* ============================================================
- * Element Plus 主题映射（工业 HUD · Flat + Outline）
+ * Element Plus 主题映射（生活杂志 · 纸白 + 砖红）
  * ------------------------------------------------------------
- * 目标：把 Element Plus 默认的「圆角 + 阴影 + 蓝色」压回
- *       参照项目的设计语言 —— 实心炭色面 / 1px 描边 / 无阴影 /
- *       唯一彩色是黄绿 #c6ca4c。
+ * 2026-11-25 视觉换轨后续：主色 --el-color-primary 早已跟着
+ * theme.css 的 --accent 换成砖红，但 light-N / dark-2 色阶还停在
+ * 旧苔绿 #aeb978 —— 于是「发表评论」这类 primary 按钮的某些状态
+ * 仍显示苔绿色。这次按新主色重算整套色阶。
  *
  * 为什么用 `html.dark` / `html:not(.dark)` 而不是 `:root`：
  *   Element Plus 自带的 `element-plus/theme-chalk/dark/css-vars.css`
  *   用的是 `html.dark`（特异度 0,1,1），比 `:root`（0,1,0）高。
- *   如果我们只写 `:root`，用户切到深色时会被 Element Plus 的变量
- *   覆盖掉。保持同特异度才能稳定接管。
+ *   只写 `:root` 会在切深色时被 Element Plus 的变量覆盖。
  *
- * 约定：应用默认深色（index.html 的 <html class="dark">）。
+ * 约定：2026-11-24 起默认浅色（index.html 无 dark class），深色仍可切。
  * ============================================================ */
 
 /* ---------- 深色（默认） ---------- */
@@ -27,12 +27,14 @@ html.dark {
    * 换主色时要连同浅色模式那一组一起重算。
    */
   --el-color-primary: var(--accent);
-  --el-color-primary-light-3: #d7da82;
-  --el-color-primary-light-5: #e3e5a6;
-  --el-color-primary-light-7: #eeefc9;
-  --el-color-primary-light-8: #f4f4db;
-  --el-color-primary-light-9: #f9faed;
-  --el-color-primary-dark-2: #9ea23d;
+  /* 2026-11-25 按新主色 #e8796a 重算（混白 N/10 / 混黑 0.2），
+     旧值是苔绿 #aeb978 的色阶，导致 primary 按钮状态色发绿 */
+  --el-color-primary-light-3: #efa197;
+  --el-color-primary-light-5: #f4bcb5;
+  --el-color-primary-light-7: #f8d7d2;
+  --el-color-primary-light-8: #fae4e1;
+  --el-color-primary-light-9: #fdf2f0;
+  --el-color-primary-dark-2: #ba6155;
 
   --el-color-success: #3fb950;
   --el-color-warning: #d29922;
@@ -112,12 +114,14 @@ html:not(.dark) {
    * 换了 primary 只需重算这一组。
    */
   --el-color-primary: var(--accent);
-  --el-color-primary-light-3: #8f935d;
-  --el-color-primary-light-5: #afb28b;
-  --el-color-primary-light-7: #cfd1b9;
-  --el-color-primary-light-8: #dfe0d1;
-  --el-color-primary-light-9: #eff0e8;
-  --el-color-primary-dark-2: #4c5012;
+  /* 2026-11-25 按新主色 #b83a28 重算（混白 N/10 / 混黑 0.2），
+     旧值是黄绿 #7d8220 的色阶 —— 这是「发表评论」按钮发绿的根因 */
+  --el-color-primary-light-3: #cd7569;
+  --el-color-primary-light-5: #dc9d94;
+  --el-color-primary-light-7: #eac4bf;
+  --el-color-primary-light-8: #f1d8d4;
+  --el-color-primary-light-9: #f8ebea;
+  --el-color-primary-dark-2: #932e20;
 
   --el-color-success: #1a7f37;
   --el-color-warning: #9a6700;
@@ -488,10 +492,11 @@ html.dark .el-badge__content--danger {
   opacity: 0.7;
 }
 
-/* 按钮：主按钮 hover 变暗（黄绿提亮会溢出到看不清字） */
+/* 按钮：主按钮 hover 变暗（砖红提亮会溢出到看不清字）。
+ * fallback 用中性灰而不是旧黄绿：万一 --accent-dim 丢失，也不会蹦出前任颜色。 */
 .el-button--primary:not(.is-disabled):hover {
-  background-color: var(--accent-dim, #9ea23d);
-  border-color: var(--accent-dim, #9ea23d);
+  background-color: var(--accent-dim, #6b6b6b);
+  border-color: var(--accent-dim, #6b6b6b);
 }
 
 /* 次要 / 文字按钮：描边语言 */
