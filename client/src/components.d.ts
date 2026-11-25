@@ -51,6 +51,7 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es/components/upload/index')['ElUpload']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
     ErrorBoundary: typeof import('./components/ErrorBoundary.vue')['default']
+    MagazineHero: typeof import('./components/MagazineHero.vue')['default']
     MessageBellPanel: typeof import('./components/MessageBellPanel.vue')['default']
     MobileNav: typeof import('./components/MobileNav.vue')['default']
     PostMasonry: typeof import('./components/PostMasonry.vue')['default']

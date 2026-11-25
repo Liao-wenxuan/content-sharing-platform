@@ -1,16 +1,14 @@
 <script setup lang="ts">
 /**
- * 发现页（对标小红书 explore 布局）
+ * 发现页（2026-11-25 方向 A「主编精选」杂志骨架）
  *
- * 与上一版的差别：
- * - 去掉「发现」大标题 + 副标题：首页直接以频道栏起头，把纵向空间让给瀑布流
- * - 去掉第二层分类胶囊：合并成一层频道栏（居中 + 强调色短下划线）
- * - 内容列从 1080px 放宽到 1560px，栅格 4 列 → 6 列
- * - 卡片改成「图优先」：封面图（圆角、无边框）+ 两行标题 + 作者/点赞行
- * - 无图笔记也保留等高占位块，栅格不再参差不齐
- * - 瀑布流抽成 PostMasonry 组件，和搜索页共用
- * - 关注流：同一个页面切成 ?channel=follow（侧栏「关注」入口）
- *   关注流不显示内容频道栏 —— 订阅流按时间排，再按话题筛一遍没有意义
+ * 首屏结构：杂志报头 → 封面故事 → 本期精选 → 完整瀑布流。
+ * 前三块由 MagazineHero 组件从真实 feed 数据生成（不造数据），
+ * 后面仍是原样无限浏览的瀑布流 —— 杂志骨架是首屏视觉锤，不替代 feed。
+ *
+ * 保留的全部交互：频道切换、推荐流（换一批/不感兴趣）、关注流、
+ * 分页加载更多、空态与错误态。关注流不显示杂志骨架（订阅流按时间排，
+ * 给它套「本期精选」等于把时间序伪装成编辑挑选，语义就乱了）。
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from '@/utils/element'
@@ -21,6 +19,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFeed } from '@/composables/useFeed'
 import { useUserSettings } from '@/composables/useUserSettings'
 import PostMasonry from '@/components/PostMasonry.vue'
+import MagazineHero from '@/components/MagazineHero.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
 const route = useRoute()
@@ -70,6 +69,23 @@ const visibleLoadingMore = computed(() =>
   isRecommended.value ? feed.loadingMore.value : loadingMore.value
 )
 const visibleHasMore = computed(() => (isRecommended.value ? feed.hasMore.value : hasMore.value))
+
+/**
+ * 杂志骨架占用的笔记（封面故事 + 3 篇精选）。
+ * 瀑布流必须跳过这几条，否则首屏一滚就看到同一篇笔记出现两次。
+ * 这里的取法必须和 MagazineHero 内部一致：第一条有图的当封面，其后三条精选。
+ * 关注流不套杂志骨架，所以不占用任何笔记。
+ */
+const magazineIds = computed(() => {
+  if (isFollowFeed.value) return new Set<number>()
+  const list = visiblePosts.value
+  const hero = list.find((p) => p.imageUrls?.length)
+  if (!hero) return new Set<number>()
+  const used = [hero, ...list.filter((p) => p.id !== hero.id).slice(0, 3)]
+  return new Set(used.map((p) => p.id))
+})
+/** 瀑布流主体：剔掉杂志已展示的笔记 */
+const masonryPosts = computed(() => visiblePosts.value.filter((p) => !magazineIds.value.has(p.id)))
 
 // 频道（对齐小红书首页频道栏）
 const channels = [
@@ -267,14 +283,23 @@ watch(isFollowFeed, () => loadFeed(true))
         <el-button v-else type="primary" plain @click="router.push('/')"> 去发现页看看 </el-button>
       </el-empty>
 
-      <!-- 推荐理由 + 不感兴趣只在登录后的推荐流出现 -->
-      <PostMasonry
-        v-else
-        :posts="visiblePosts"
-        :reasons="showFeedMeta ? feed.reasons.value : undefined"
-        :dismissable="showFeedMeta"
-        @dismiss="onDismiss"
-      />
+      <template v-else>
+        <!-- 首屏杂志骨架：报头 + 封面故事 + 本期精选（关注流不套，语义见顶部注释） -->
+        <MagazineHero
+          v-if="!isFollowFeed"
+          :posts="visiblePosts"
+          :channel-label="channels.find((c) => c.key === homeTabs.category)?.label"
+        />
+
+        <!-- 推荐理由 + 不感兴趣只在登录后的推荐流出现 -->
+        <PostMasonry
+          :posts="masonryPosts"
+          :reasons="showFeedMeta ? feed.reasons.value : undefined"
+          :dismissable="showFeedMeta"
+          :uniform-ratio="6"
+          @dismiss="onDismiss"
+        />
+      </template>
 
       <div v-if="visiblePosts.length > 0" class="pager">
         <template v-if="visibleHasMore">

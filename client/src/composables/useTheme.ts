@@ -52,7 +52,9 @@ function readStoredMode(): ThemeMode {
   } catch {
     // 隐私模式 / SSR：拿不到就用默认值，不能因此让整个应用起不来
   }
-  return 'dark'
+  // 2026-11-24 视觉换轨：默认浅色（纸白内容社区）。
+  // 深色仍可一键切换并持久化，只是不再是首次访问的默认态。
+  return 'light'
 }
 
 const mode = ref<ThemeMode>(readStoredMode())

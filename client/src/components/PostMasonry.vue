@@ -29,6 +29,11 @@ const props = defineProps<{
   reasons?: Record<number, string>
   /** 是否显示「不感兴趣」按钮。只有推荐流该有，搜索结果不该有 */
   dismissable?: boolean
+  /**
+   * 统一封面比例档位（对应 RATIOS / .ratio-N）。
+   * 不传＝6 档循环的高低差瀑布流；传 6＝16:9 横图整齐网格（B站式，首页主编精选用）。
+   */
+  uniformRatio?: number
 }>()
 
 const emit = defineEmits<{ dismiss: [postId: number] }>()
@@ -139,7 +144,12 @@ const showFilterHint = ref(false)
 const colWidth = computed(() => (gridWidth.value - GAP * (colCount.value - 1)) / colCount.value)
 
 const columns = computed(() => {
-  const buckets = distributeToColumns(visiblePosts.value, colCount.value, colWidth.value)
+  const buckets = distributeToColumns(
+    visiblePosts.value,
+    colCount.value,
+    colWidth.value,
+    props.uniformRatio
+  )
   return buckets
 })
 
@@ -575,48 +585,54 @@ function markCoverBroken(postId: number) {
  * <a class="card"> 的兄弟节点。把面/描边/hover 挂到共同的壳上，
  * 才能让「整张卡」作为一个整体浮起，同时不制造嵌套交互控件。
  *
- * 无阴影（工业 HUD 原则）：层级靠面 + 描边建立，hover 时面上浮半档、
- * 描边转强调色。列间距 18px / 行间距 26px 容得下 4px 上浮，不碰邻居。
+ * 2026-11-24 视觉换轨（生活杂志）：浅色下卡片是纯白纸卡 + 柔和投影，
+ * 图贴边铺满占主导；深色下沿用 token 里的 none 投影 + 描边（HUD 保留）。
+ * 两套语言共用同一份 DOM，靠 --card-face* / --shadow token 分流。
+ * hover 上浮 6px + 投影加深，像把一张卡片拿起来。列间距够，不碰邻居。
  */
 .card-wrap {
   position: relative;
   display: block;
   padding: var(--card-face-pad);
   border: 1px solid var(--card-face-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-card, var(--radius-md));
   background: var(--card-face);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
   transition:
     transform var(--dur-standard) var(--ease-out-expo),
     border-color var(--dur-fast) var(--ease-out-expo),
-    background-color var(--dur-fast) var(--ease-out-expo);
+    background-color var(--dur-fast) var(--ease-out-expo),
+    box-shadow var(--dur-standard) var(--ease-out-expo);
 }
 
 .card-wrap:hover,
 .card-wrap:focus-within {
-  transform: translateY(-4px);
+  transform: translateY(-6px);
   border-color: var(--card-face-border-hover);
   background: var(--card-face-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .card {
   display: block;
   color: inherit;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-card, var(--radius-md));
 }
 
 .card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-card, var(--radius-md));
 }
 
-/* 封面：内嵌在陈列卡面里，圆角收一档与卡面形成内外层次 */
+/* 封面：贴边铺满，只留顶部圆角与卡面同心 —— 图是这张卡的主角 */
 .cover {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-card, var(--radius-md)) var(--radius-card, var(--radius-md)) 0 0;
   /*
    * 封面加载时的占位色。
    *
@@ -662,22 +678,31 @@ function markCoverBroken(postId: number) {
 .ratio-5 {
   aspect-ratio: 5 / 6;
 }
+/* B站式统一片单：16:9 横封面，首页主编精选开 uniformRatio=6 时用 */
+.ratio-6 {
+  aspect-ratio: 16 / 9;
+}
 
-/* 无图占位：保持和封面同样的比例，栅格才不会高低不齐 */
+/* 无图占位：保持和封面同样的比例，栅格才不会高低不齐。
+ * 2026-11-24 换轨：灰噪点渐变换成暖纸色纯底 + 左下角分类 chip，
+ * 加载态不再像「后台占位符」，延续杂志感。 */
 .cover-blank {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+  justify-content: flex-start;
   width: 100%;
   height: 100%;
-  background: linear-gradient(140deg, var(--muted), var(--secondary));
+  padding: 14px;
+  background: var(--surface-2);
 }
 
 .blank-tag {
-  font-size: var(--fs-sm);
-  color: var(--muted-foreground);
-  padding: 0 14px;
-  text-align: center;
+  font-size: var(--fs-2xs);
+  color: var(--text-2);
+  background: var(--card-face);
+  border: 1px solid var(--card-face-border);
+  border-radius: var(--radius-full);
+  padding: 3px 12px;
 }
 
 .count-badge {
@@ -930,9 +955,11 @@ function markCoverBroken(postId: number) {
 
 /* ===== 标题 ===== */
 .title {
-  margin: 8px 0 6px;
-  font-size: var(--fs-base);
-  line-height: 1.45;
+  margin: 10px var(--card-text-pad, 0px) 8px;
+  /* 2026-11-24 换轨：标题是杂志的「文章名」，要比作者/日期高一档 */
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
   color: var(--foreground);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -948,7 +975,7 @@ function markCoverBroken(postId: number) {
    * 代价是只有一行的卡片底部空一行半 —— 用一次留白换整列的齐，
    * 而瀑布流本身每一列高度都不等，卡片整体高矮看不出来。
    */
-  min-height: calc(2 * 1.45em);
+  min-height: calc(2 * 1.4em);
   /* 跟着卡片一起亮：给出「这条被选中了」的第二个通道。
      对纯图片网格来说，多一层文字反馈比只动图片更好辨认。 */
   transition: color var(--dur-fast) var(--ease-out-expo);
@@ -984,6 +1011,7 @@ function markCoverBroken(postId: number) {
   align-items: center;
   gap: 5px;
   min-width: 0;
+  margin: 0 var(--card-text-pad, 0px) 12px;
 }
 
 .author {
@@ -1020,7 +1048,7 @@ function markCoverBroken(postId: number) {
 }
 
 .nickname {
-  font-size: var(--fs-xs);
+  font-size: 11px;
   color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;

@@ -8,14 +8,19 @@
  */
 import type { Post } from '@/api/posts'
 
-/** 6 张一循环的封面比例，和 CSS 里的 .ratio-N 一一对应 */
+/**
+ * 封面比例档位，和 CSS 里的 .ratio-N 一一对应。
+ * 前 6 档制造瀑布流高低差；第 7 档（16/9 横图）给「B站式统一片单网格」用，
+ * 首页主编精选开 uniformRatio=6 时全部卡片走这一档，整齐无落差。
+ */
 export const RATIOS = [
   [1, 1],
   [3, 4],
   [4, 5],
   [3, 5],
   [2, 3],
-  [5, 6]
+  [5, 6],
+  [16, 9]
 ] as const
 
 export const MIN_COL_WIDTH = 232
@@ -54,14 +59,19 @@ export function estimateHeight(contentLength: number, ratio: number, colWidth: n
 export function distributeToColumns(
   posts: Post[],
   colCount: number,
-  colWidth: number
+  colWidth: number,
+  /** 统一封面比例。传了就所有卡片同比例（杂志式整齐网格），不传则按 6 档循环制造高低差 */
+  uniformRatio?: number
 ): MasonryItem[][] {
   const n = Math.max(1, colCount)
   const buckets: MasonryItem[][] = Array.from({ length: n }, () => [])
   const heights = new Array<number>(n).fill(0)
 
   posts.forEach((post, i) => {
-    const item: MasonryItem = { post, ratio: i % RATIOS.length }
+    const item: MasonryItem = {
+      post,
+      ratio: uniformRatio === undefined ? i % RATIOS.length : uniformRatio % RATIOS.length
+    }
     let target = 0
     for (let c = 1; c < n; c++) {
       if (heights[c] < heights[target]) target = c

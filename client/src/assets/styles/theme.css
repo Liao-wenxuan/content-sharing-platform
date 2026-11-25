@@ -1,27 +1,27 @@
 /* ============================================================
- * Design System — 终末地工业 HUD 风格（Flat + Outline）
+ * Design System — 生活杂志（纸白 + 大图 + 有温度的唯一彩色）
  * ------------------------------------------------------------
- * 设计语言参考 zmd-charge（终端 HUD）：
- *   纯色底（无渐变光斑）· 层级靠描边 · 文字靠透明度分层 ·
- *   唯一彩色是黄绿强调色
+ * 2026-11-24 视觉换轨：从「工业 HUD」换成「生活杂志」。
+ * 旧的 HUD 语言（描边分层 / 白透明度分层 / 黄绿强调色）属于
+ * 开发者仪表盘，放在内容社区里就是「学生作业感」——界面在前、
+ * 内容在后。新语言让图片唱主角、界面退到幕后：
  *
- * 照抄了参照项目 HudTheme.axaml 的三条核心原则：
- *   1. 胶囊/卡片是实心深炭色，**不用渐变**
- *   2. 文字纯白，层级靠 **Opacity** 而不是另一支灰
- *   3. 整个界面只有一个彩色：强调色。其余全是中性灰阶
+ *   1. 默认浅色：暖白纸底 #f7f7f4，白卡靠柔和投影浮起来
+ *   2. 唯一彩色是砖红陶土色：浅色 #b83a28 / 深色 #e8796a，
+ *      两个方向都实测过 WCAG AA 4.5:1（见各自主题段注释）
+ *   3. 层级靠「纸白卡 + 投影」而不是描边；深色主题保留原样可切
  *
- * 为什么背景不是纯黑（#000）而是 #19191B：
- *   强调色 #c6ca4c 是中亮度黄绿，在纯黑上对比度只有 3.5:1，
- *   达不到 WCAG AA 的 4.5:1（正文）/ 3:1（大字）。
- *   换成暖炭色 #19191B 之后对比度到 5.4:1 —— 参照项目本身
- *   也是这么做的（它没选纯黑）。
+ * 所有 token 名和兼容层都保留，只换值：几十个组件自动继承新语言，
+ * 一行业务代码不用动。深色主题（.dark）仍可用，只是不再是默认。
  *
  * 关键 token：
- *   --accent   低饱和苔绿（唯一彩色：关注 / 选中 / 强调）
- *   --surface-* 四级面（page / 1 / 2 / 3），靠明度差分层级
- *   --text-1/2/3 同一个白的三档透明度，不引入新的灰
- *   --radius-*  离散圆角档位，每个尺寸都有存在理由
- *   --fs-*      6 档字号，11~16 不再挤成一团（见下）
+ *   --accent         唯一彩色（砖红 / 珊瑚红，按主题分档）
+ *   --surface-*      四级面（page / 1 / 2 / 3）
+ *   --card-face*     内容卡面族（浅色下 pad=0，图贴边铺满）
+ *   --shadow-*       纸感层叠投影（浅色）/ none（深色 HUD 保留）
+ *   --text-1/2/3     主文 / 次级 / 辅助三档
+ *   --radius-*       离散圆角档位，每个尺寸都有存在理由
+ *   --fs-*           6 档字号，11~16 不再挤成一团（见下）
  * ============================================================ */
 
 :root {
@@ -47,19 +47,18 @@
   --border-soft: #2a2a2d; /* 分隔线（比 border 更弱） */
   --border-strong: #4a4a4f; /* hover / 强调描边 */
   --input: #1e1e20;
-  --ring: rgba(174, 185, 120, 0.55);
+  --ring: rgba(232, 121, 106, 0.55);
 
   /* —— 强调色：全站唯一彩色 ——
-   * 2026-11-14 从荧光黄绿 #c6ca4c 调成低饱和苔绿 #aeb978：
-   * 饱和度 55% → 32%，暗底上不再刺眼；亮度略降，深色文字压上去
-   * 和亮色文字压暗底两个方向都仍远高于 AA 4.5:1。
-   * 下方 / 其它文件里提到的 #c6ca4c 及其对比度数字是**调整前的 axe 实测**，
-   * 保留作为「当初为什么这么定」的记录，不代表当前值。
+   * 2026-11-24 视觉换轨：从苔绿 #aeb978 换成亮珊瑚红 #e8796a，
+   * 和浅色主题的砖红 #b83a28 保持同一支色系（有社区温度）。
+   * 对比度实测：压暖炭底 6.16:1 / 压卡面 5.51:1 / 暖炭字压色块 6.16:1，
+   * 三个方向都过 AA 4.5:1。下方提到苔绿的数字是换轨前的 axe 实测记录。
    */
-  --accent: #aeb978;
+  --accent: #e8796a;
   --accent-foreground: #19191b; /* 强调色上的文字 = 底色，保证对比 */
-  --accent-dim: #939d5f; /* 强调色的暗态（hover 反而变暗） */
-  --accent-muted: rgba(174, 185, 120, 0.12); /* 强调色 12% 作背景 */
+  --accent-dim: #cf6455; /* 强调色的暗态（hover 反而变暗） */
+  --accent-muted: rgba(232, 121, 106, 0.12); /* 强调色 12% 作背景 */
 
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
@@ -125,9 +124,10 @@
   --card-face-border: #3a3a3f; /* 静止描边：提到常规 border 档，纯色占位卡轮廓才立得住 */
   --card-face-border-hover: var(--accent); /* hover 描边转强调色——导航信号 */
   --card-face-pad: 8px; /* 封面与卡面之间的留白：让图「摆进去」而不是贴边 */
+  --card-text-pad: 10px; /* 深色 HUD：文字留白略窄，和原卡面 pad 视觉等价 */
 
   /* 频道胶囊：选中态给一个极淡的强调底面，作为「你在哪」的第二个信号 */
-  --channel-active-bg: rgba(174, 185, 120, 0.12);
+  --channel-active-bg: rgba(232, 121, 106, 0.12);
 
   /* —— 字号：6 档 ——
      原来 11/12/13/14/15/16 六档挤在 6px 内，区分度不足，
@@ -199,83 +199,82 @@
 }
 
 /* ============================================================
- * Light Theme — 米白底 + 同样靠描边分层
- * 不是纯白：纯白上 #c6ca4c 的对比度只有 1.7:1，完全不可用。
+ * Light Theme — 纸白生活杂志（2026-11-24 视觉换轨后的默认主题）
+ * ------------------------------------------------------------
+ * 从「工业 HUD」换成「生活杂志」：
+ *   - 页面底是暖白纸色而非纯白：白卡能浮起来，长时间看不刺眼
+ *   - 唯一彩色从苔绿换成砖红陶土色 #b83a28 —— 有社区的温度
+ *     对比度实测：文字压纸白 5.33:1 / 白字压色块 5.72:1，双向过 AA
+ *   - 层级从「描边」改成「纸白卡 + 柔和投影」，像一页页叠起来的杂志
+ * 不是纯白：纯白底上白卡没有边界，投影也读不出来。
  * ============================================================ */
 :root:not(.dark) {
-  --background: #ecece8;
-  --surface-1: #ffffff;
-  --surface-2: #f4f4f0;
-  --surface-3: #e6e6e1;
+  --background: #f7f7f4; /* 暖白纸底：让白卡浮起来 */
+  --surface-1: #ffffff; /* 卡面：纯白 */
+  --surface-2: #f2f2ee; /* 面板：比纸底略深 */
+  --surface-3: #eaeae5; /* 交互底：hover / 分段控件 */
   --card: #ffffff;
-  --card-foreground: #111111;
+  --card-foreground: #1a1a18;
   --popover: #ffffff;
-  --popover-foreground: #111111;
-  --muted: #f4f4f0;
-  --secondary: #e6e6e1;
-  --secondary-foreground: #111111;
-  --primary: #111111;
+  --popover-foreground: #1a1a18;
+  --muted: #f2f2ee;
+  --secondary: #eaeae5;
+  --secondary-foreground: #1a1a18;
+  --primary: #1a1a18;
   --primary-foreground: #ffffff;
 
-  --border: #d8d8d2;
-  --border-soft: #e6e6e1;
-  --border-strong: #b4b4ac;
+  --border: #e4e4de;
+  --border-soft: #ebebe6;
+  --border-strong: #c9c9c0;
   --input: #ffffff;
-  --ring: rgba(154, 158, 34, 0.5);
+  --ring: rgba(184, 58, 40, 0.45);
 
-  /*
-   * 浅色底下同一个黄绿会看不清，改用它的暗态。
-   *
-   * ⚠️ 这一档后来又往下调了一格，从 #7d8220 变成 #5f6417。
-   * axe 实测 #7d8220 两个方向都不够：
-   *   - 当按钮填充色，白字压上去只有 4.13:1（全站 50 处）
-   *   - 当文字色，压在 --surface-2 上只有 3.74:1（17 处）
-   * 它卡在中间调，两头都不够用。#5f6417 两个方向都是 6.32:1。
-   */
-  --accent: #5f6417;
-  --accent-dim: #4c5011;
-  --accent-muted: rgba(93, 100, 23, 0.12);
+  /* 砖红陶土：唯一彩色，双向 AA 达标（见顶部注释） */
+  --accent: #b83a28;
+  --accent-dim: #9e2f20;
+  --accent-muted: rgba(184, 58, 40, 0.1);
   --accent-foreground: #ffffff;
 
   --destructive: #c62f33;
   --destructive-text: #b32c30;
   --warning: #9a4407;
   --success: #15803d;
-  /* 浅色底的淡染色是接近白的，强调色必须换更深的一档（见暗色下的注释） */
-  --accent-on-muted: #4c5011;
+  --accent-on-muted: #9e2f20;
 
-  --foreground: #111111;
-  --text-1: rgba(17, 17, 17, 1);
-  --text-2: rgba(17, 17, 17, 0.62);
-  /* 深色下算出来要 0.485，浅色底更亮、需要 >= 0.595 */
-  --text-3: rgba(17, 17, 17, 0.6);
-  --muted-foreground: rgba(17, 17, 17, 0.62);
+  --foreground: #1a1a18;
+  --text-1: rgba(26, 26, 24, 1);
+  --text-2: rgba(26, 26, 24, 0.66);
+  --text-3: rgba(26, 26, 24, 0.6);
+  --muted-foreground: rgba(26, 26, 24, 0.66);
   --text-on-accent: #ffffff;
 
-  --chip-border: #cfcfc8;
+  --chip-border: #deded7;
   --chip-text: var(--text-2);
 
-  /* 陈列卡面（浅色）：静止面接近白，靠描边分层；hover 再深半档 */
+  /* 陈列卡面：纯白卡 + 轻描边（投影由组件层给，见 PostMasonry） */
   --card-face: #ffffff;
-  --card-face-hover: #fafaf7;
-  --card-face-border: #e2e2dc;
-  --card-face-border-hover: var(--accent);
-  --card-face-pad: 8px;
-  --channel-active-bg: rgba(93, 100, 23, 0.1);
+  --card-face-hover: #ffffff;
+  --card-face-border: #e8e8e2;
+  --card-face-border-hover: #e2c9c3;
+  --card-face-pad: 0px; /* 大图贴边铺满：图才是主角 */
+  --radius-card: 16px; /* 纸卡大圆角；深色主题不定义，回退到 --radius-md(10px) */
+  --card-text-pad: 14px; /* 图贴边，但标题/作者行要有自己的留白 */
+  --channel-active-bg: rgba(184, 58, 40, 0.08);
 
-  --shadow-sm: none;
-  --shadow: none;
-  --shadow-md: none;
-  --shadow-lg: none;
+  /* 纸感层叠：柔和投影替代描边分层 */
+  --shadow-sm: 0 1px 3px rgba(40, 35, 30, 0.05);
+  --shadow: 0 2px 12px rgba(40, 35, 30, 0.07);
+  --shadow-md: 0 6px 20px rgba(40, 35, 30, 0.1);
+  --shadow-lg: 0 12px 32px rgba(40, 35, 30, 0.14);
 
-  --glass-bg: transparent;
+  --glass-bg: var(--surface-1);
   --glass-bg-strong: #ffffff;
-  --glass-bg-weak: transparent;
-  --glass-border: #d8d8d2;
-  --glass-border-dk: #e6e6e1;
+  --glass-bg-weak: var(--surface-2);
+  --glass-border: var(--border);
+  --glass-border-dk: var(--border-soft);
   --glass-highlight: transparent;
-  --glass-shadow: none;
-  --glass-shadow-light: none;
+  --glass-shadow: var(--shadow-sm);
+  --glass-shadow-light: var(--shadow-sm);
 }
 
 /* ============================================================

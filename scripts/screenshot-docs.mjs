@@ -59,6 +59,19 @@ page.on('response', (r) => {
 async function goto(pathname, anchor) {
   await page.goto(`${BASE}${pathname}`, { waitUntil: 'networkidle' })
   if (anchor) await page.locator(anchor).first().waitFor({ state: 'visible', timeout: 15000 })
+  /*
+   * 2026-11-24 视觉换轨后，浅色是默认主题。登录态会从服务端设置恢复
+   * 用户保存的 dark 偏好，导致配图深浅混杂。统一用 UI 切回浅色，
+   * 让 22 张 README 配图和线上首次访问看到的默认态一致。
+   */
+  if (await page.evaluate(() => document.documentElement.classList.contains('dark'))) {
+    await page
+      .locator('[aria-label="切换主题"]')
+      .first()
+      .click()
+      .catch(() => {})
+    await page.waitForTimeout(350)
+  }
   // 让图片解码完，否则会拍到半张图
   await page.waitForTimeout(700)
 }

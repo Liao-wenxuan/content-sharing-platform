@@ -129,9 +129,7 @@ function handleCommand(command: string) {
       <template v-if="auth.isLoggedIn">
         <p class="footer-tip">记录当下，分享生活</p>
       </template>
-      <el-button v-else type="primary" class="login-btn" @click="handleCommand('login')">
-        登录 / 注册
-      </el-button>
+      <el-button v-else class="login-btn" @click="handleCommand('login')"> 登录 / 注册 </el-button>
     </div>
   </aside>
 </template>
@@ -238,10 +236,11 @@ function handleCommand(command: string) {
   color: var(--accent);
 }
 
-/* ===== 底部 ===== */
+/* ===== 底部 =====
+ * 2026-11-24 换轨：去掉顶部分隔线，登录入口从「后台面板的独立区块」
+ * 变成导航的自然延续；也不再用实心砖红，让顶栏「发布笔记」是全站唯一主按钮。 */
 .side-footer {
   padding-top: 16px;
-  border-top: 1px solid var(--border);
 }
 
 .footer-tip {
