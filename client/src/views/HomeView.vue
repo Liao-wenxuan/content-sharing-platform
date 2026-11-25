@@ -78,10 +78,11 @@ const visibleHasMore = computed(() => (isRecommended.value ? feed.hasMore.value 
  */
 const magazineIds = computed(() => {
   if (isFollowFeed.value) return new Set<number>()
-  const list = visiblePosts.value
-  const hero = list.find((p) => p.imageUrls?.length)
+  // 和 MagazineHero 完全一致：封面和精选都只取有图的，否则无图帖会显示破图
+  const list = visiblePosts.value.filter((p) => p.imageUrls?.length)
+  const hero = list[0]
   if (!hero) return new Set<number>()
-  const used = [hero, ...list.filter((p) => p.id !== hero.id).slice(0, 3)]
+  const used = list.slice(0, 4)
   return new Set(used.map((p) => p.id))
 })
 /** 瀑布流主体：剔掉杂志已展示的笔记 */

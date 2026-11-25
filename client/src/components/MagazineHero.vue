@@ -26,8 +26,10 @@ const router = useRouter()
 const hero = computed(() => props.posts.find((p) => p.imageUrls?.length) ?? null)
 /** 本期精选：封面之后的三条 */
 const picks = computed(() => {
-  if (!hero.value) return props.posts.slice(0, 3)
-  return props.posts.filter((p) => p.id !== hero.value!.id).slice(0, 3)
+  // 只取有图的：无图帖当精选会变成破图 alt 文字（线上视频帖就没有 imageUrls）
+  const withCover = props.posts.filter((p) => p.imageUrls?.length)
+  if (!hero.value) return withCover.slice(0, 3)
+  return withCover.filter((p) => p.id !== hero.value!.id).slice(0, 3)
 })
 
 /** 标题取第一行，正文取剩下的（真实笔记是「标题\n\n正文」结构） */
