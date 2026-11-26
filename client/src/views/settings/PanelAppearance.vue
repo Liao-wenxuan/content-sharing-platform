@@ -208,7 +208,8 @@ function pick(next: ThemeMode) {
 
 .mode-desc {
   font-size: var(--fs-xs);
-  color: var(--text-3);
+  /* a11y: --text-3 (0.6 alpha) 在浅色底上只有 4.42:1，达不到 WCAG AA；用 text-2 保 4.5+ */
+  color: var(--text-2);
   line-height: 1.5;
 }
 

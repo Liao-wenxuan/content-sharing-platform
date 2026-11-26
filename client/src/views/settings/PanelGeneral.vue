@@ -152,7 +152,8 @@ const FONT_OPTIONS = [
 
 .radio-desc {
   font-size: var(--fs-xs);
-  color: var(--text-3);
+  /* a11y: --text-3 (0.6 alpha) 在浅色底上只有 4.45:1，差 0.05 达不到 WCAG AA；用 text-2 保 4.5+ */
+  color: var(--text-2);
 }
 
 .sub {
