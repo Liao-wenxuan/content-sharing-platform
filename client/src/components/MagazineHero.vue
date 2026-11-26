@@ -118,12 +118,13 @@ function cover(post: Post) {
 
 <template>
   <header v-if="slides.length" class="mag">
-    <!-- 刊头 -->
+    <!-- 刊头：压成单行（品牌 + 期号/日期），高度约 110px → 50px，
+         把首屏空间让给轮播图，而不是一片空白 -->
     <div class="masthead">
       <div class="brand">拾<small>A LIFE JOURNAL</small></div>
       <div class="issue">
-        生活提案 · 第 <b>{{ issueNo }}</b> 期<br />
-        {{ today }} · {{ channelLabel || '为你推荐' }}
+        第 <b>{{ issueNo }}</b> 期 · <span class="date">{{ today }} · </span
+        >{{ channelLabel || '为你推荐' }}
       </div>
     </div>
 
@@ -198,27 +199,34 @@ function cover(post: Post) {
   margin-bottom: 34px;
 }
 
-/* ===== 刊头 ===== */
+/* ===== 刊头 =====
+ * 单行紧凑版：品牌与期号/日期同一行，上下留白收到最小。
+ * 原来 52px 品牌 + 两行期号 + 36px 上下 padding = 110px 高，
+ * 首屏最贵的一屏被一块「只有 logo 和日期」的空白吃掉，
+ * 用户反馈「这一部分高度太高」。现在约 50px，杂志感还在，地方让给轮播。
+ */
 .masthead {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
-  padding: 22px 4px 14px;
+  gap: 16px;
+  padding: 2px 4px 10px;
   border-bottom: 3px double var(--mag-ink);
 }
 .brand {
   font-family: var(--mag-serif);
-  font-size: 52px;
+  font-size: 34px;
   line-height: 1;
-  letter-spacing: -2px;
+  letter-spacing: -1px;
   color: var(--red);
+  flex-shrink: 0;
 }
 .brand small {
-  display: block;
+  display: inline;
   font-family: var(--mag-serif);
-  font-size: 11px;
-  letter-spacing: 4px;
-  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-left: 10px;
   color: var(--mag-sub);
 }
 .issue {
@@ -226,11 +234,12 @@ function cover(post: Post) {
   font-size: 12px;
   color: var(--mag-sub);
   text-align: right;
-  line-height: 1.7;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 .issue b {
   color: var(--red);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 /* ===== 推荐轮播 ===== */
@@ -413,6 +422,29 @@ function cover(post: Post) {
 
 /* 窄屏：推荐轮播改竖排 */
 @media (max-width: 900px) {
+  /* 刊头再收一档：期号一行放不下就换行，不能顶出横向滚动 */
+  .masthead {
+    gap: 10px;
+    padding: 0 4px 8px;
+  }
+  .brand {
+    font-size: 26px;
+  }
+  .brand small {
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    margin-left: 6px;
+  }
+  .issue {
+    font-size: 10px;
+    white-space: normal;
+    max-width: 62%;
+  }
+  /* 窄屏放不下「期号 + 完整日期 + 频道」，日期让位：
+     保留期号和频道名，一行读完，报头才收得住 */
+  .issue .date {
+    display: none;
+  }
   .cover-story {
     grid-template-columns: 1fr;
     gap: 20px;
