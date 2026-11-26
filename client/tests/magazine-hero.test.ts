@@ -3,11 +3,14 @@
  *
  * 组件刚合进来时函数覆盖率是 2/13 —— 一整块「封面故事 + 四图轮播」是首屏视觉锤，
  * 却没有任何测试守着。这里把交互面全点一遍：
- *  - hero / picks 只取有图的笔记，且 picks 不含封面自己；
+ *  - slides 只取有图的笔记，无图帖不能当封面；
  *  - 左右切换是环形的，换频道导致 slides 变短时越界 index 要被拉回；
  *  - 自动轮播在暂停 / 标签页隐藏 / reduced-motion 下都停；
  *  - 键盘只在轮播区响应，方向键要 preventDefault 不抢全局；
- *  - 点封面与点精选都跳真实详情，后者先把轮播切到对应那张。
+ *  - 点封面跳真实详情（轮播当前是哪张就跳哪张）。
+ *
+ * 2026-11-26 起「本期精选」静态卡已删除：页面只保留轮播 + 下方内容卡，
+ * 所以这里不再断言 picks（.pick-figure 应当不存在）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
@@ -66,17 +69,15 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('MagazineHero 封面与精选', () => {
-  it('封面取第一条有图笔记，精选不含封面且跳过无图帖', () => {
+describe('MagazineHero 封面与轮播数据', () => {
+  it('封面取第一条有图笔记，无图帖跳过，且不再有精选卡', () => {
     const noCover = post(1, { imageUrls: [], imageThumbs: [] })
     const w = mountHero([noCover, post(2), post(3), post(4), post(5)])
     expect(coverSrc(w)).toBe('/img/2.jpg')
-    const picks = w.findAll('.pick-figure img')
-    expect(picks.map((p) => p.attributes('src'))).toEqual([
-      '/img/3.jpg',
-      '/img/4.jpg',
-      '/img/5.jpg'
-    ])
+    // 轮播最多 4 张，全部来自有图帖（2/3/4/5）
+    expect(w.findAll('.dot')).toHaveLength(4)
+    // 本期精选已删除：同一页面不再出现第二种卡片风格
+    expect(w.findAll('.pick-figure')).toHaveLength(0)
     w.unmount()
   })
 
@@ -200,15 +201,15 @@ describe('MagazineHero 轮播交互', () => {
     w.unmount()
   })
 
-  it('点封面与点精选都跳详情，精选先把轮播切到对应张', async () => {
+  it('点封面跳详情，跳的是轮播当前那张', async () => {
     const w = mountHero([post(1), post(2), post(3)])
     await w.find('.cover-figure').trigger('click')
     expect(push).toHaveBeenCalledWith('/post/1')
 
-    const picks = w.findAll('.pick-figure')
-    await picks[1].trigger('click')
+    // 切到第三张再点封面：跳的必须是当前这张，而不是第一张
+    await w.findAll('.dot')[2].trigger('click')
+    await w.find('.cover-figure').trigger('click')
     expect(push).toHaveBeenCalledWith('/post/3')
-    expect(coverSrc(w)).toBe('/img/3.jpg')
     w.unmount()
   })
 })
