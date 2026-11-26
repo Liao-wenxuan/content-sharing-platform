@@ -2,13 +2,17 @@
 /**
  * 发现页（2026-11-25 方向 A「主编精选」杂志骨架）
  *
- * 首屏结构：杂志报头 → 封面故事 → 本期精选 → 完整瀑布流。
+ * 首屏结构：杂志报头 → 4 图推荐轮播 → 完整内容卡片流（**仅「推荐」频道**）。
  * 前三块由 MagazineHero 组件从真实 feed 数据生成（不造数据），
  * 后面仍是原样无限浏览的瀑布流 —— 杂志骨架是首屏视觉锤，不替代 feed。
  *
+ * 其余频道（穿搭 / 美食 / 彩妆 / 影视 …）不套轮播：它们是用户自己圈定的
+ * 主题，进频道就是要「一屏平铺看全」，再压一个占半屏的封面故事只会
+ * 把内容挤到折叠线以下。频道页统一平铺，也和彩妆 / 影视现有的样子一致。
+ *
  * 保留的全部交互：频道切换、推荐流（换一批/不感兴趣）、关注流、
  * 分页加载更多、空态与错误态。关注流不显示杂志骨架（订阅流按时间排，
- * 给它套「本期精选」等于把时间序伪装成编辑挑选，语义就乱了）。
+ * 给它套「编辑推荐」等于把时间序伪装成编辑挑选，语义就乱了）。
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from '@/utils/element'
@@ -71,14 +75,16 @@ const visibleLoadingMore = computed(() =>
 const visibleHasMore = computed(() => (isRecommended.value ? feed.hasMore.value : hasMore.value))
 
 /**
- * 杂志骨架占用的笔记（封面故事 + 3 篇精选）。
+ * 轮播推荐占用的笔记（有图帖的前 4 条）。
  * 瀑布流必须跳过这几条，否则首屏一滚就看到同一篇笔记出现两次。
- * 这里的取法必须和 MagazineHero 内部一致：第一条有图的当封面，其后三条精选。
- * 关注流不套杂志骨架，所以不占用任何笔记。
+ * 取法必须和 MagazineHero 内部的 slides 一致：有图帖前 4 条。
+ *
+ * 只有「推荐」频道套轮播骨架（见下方模板注释），其余频道一律平铺，
+ * 所以也只有推荐频道需要让位，别的频道少让 4 条否则会凭空丢笔记。
  */
 const magazineIds = computed(() => {
-  if (isFollowFeed.value) return new Set<number>()
-  // 和 MagazineHero 完全一致：封面和精选都只取有图的，否则无图帖会显示破图
+  if (!isRecommended.value) return new Set<number>()
+  // 和 MagazineHero.slides 完全一致：只取有图的，否则会显示破图
   const list = visiblePosts.value.filter((p) => p.imageUrls?.length)
   const hero = list[0]
   if (!hero) return new Set<number>()
@@ -285,9 +291,13 @@ watch(isFollowFeed, () => loadFeed(true))
       </el-empty>
 
       <template v-else>
-        <!-- 首屏杂志骨架：报头 + 封面故事 + 本期精选（关注流不套，语义见顶部注释） -->
+        <!--
+          首屏骨架只给「推荐」：报头 + 4 图轮播是推荐位的视觉锤。
+          穿搭 / 美食 / 彩妆 / 影视等频道直接平铺内容卡，不套轮播
+          （频道是用户主动圈的主题，进来看的是「全」，不是「精选」）。
+        -->
         <MagazineHero
-          v-if="!isFollowFeed"
+          v-if="isRecommended"
           :posts="visiblePosts"
           :channel-label="channels.find((c) => c.key === homeTabs.category)?.label"
         />

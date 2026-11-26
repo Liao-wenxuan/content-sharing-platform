@@ -31,7 +31,7 @@ const props = defineProps<{
   dismissable?: boolean
   /**
    * 统一封面比例档位（对应 RATIOS / .ratio-N）。
-   * 不传＝6 档循环的高低差瀑布流；传 6＝16:9 横图整齐网格（B站式，首页主编精选用）。
+   * 不传＝6 档循环的高低差瀑布流；传 6＝16:9 横图整齐网格（B站式，首页用）。
    */
   uniformRatio?: number
   /**
@@ -41,7 +41,7 @@ const props = defineProps<{
   maxCols?: number
   /**
    * 杂志排版模式：卡片按「分类+日期 / 衬线大标题 / 文·作者」渲染，
-   * 和首页上方 MagazineHero 的精选卡同一套形式。只首页开，其他页照旧。
+   * 和首页上方轮播封面同一套排版语言。只首页开，其他页照旧。
    */
   editorial?: boolean
 }>()
@@ -993,7 +993,7 @@ function markCoverBroken(postId: number) {
   transform: scale(1.08);
 }
 
-/* ===== 杂志模式：和 MagazineHero 精选卡同一套排版语言 =====
+/* ===== 杂志模式：和首页轮播封面同一套排版语言 =====
  * 分类/日期一行 → 衬线标题 → 文/作者署名。
  * 只在首页开（editorial prop），搜索页等仍用下面紧凑的 .foot。
  */

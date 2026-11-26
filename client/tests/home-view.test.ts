@@ -162,10 +162,24 @@ const PostMasonryStub = {
     '<div v-for="p in posts" :key="p.id" class="card">{{ p.id }}</div></div>'
 }
 
+/**
+ * 轮播骨架只在「推荐」频道出现。
+ *
+ * 必须 stub 掉：真实组件要求「有图帖」才渲染，而测试里的帖子都没有图，
+ * 不 stub 的话两条用例都会因为「没有图」而看不到骨架 —— 测试绿着，
+ * 频道判断写错也发现不了。
+ */
+const MagazineHeroStub = {
+  props: ['posts', 'channelLabel'],
+  template: '<div class="mag-stub" />'
+}
+
 const mounted: ReturnType<typeof mount>[] = []
 
 function mountView() {
-  const w = mount(HomeView, { global: { stubs: { ...stubs, PostMasonry: PostMasonryStub } } })
+  const w = mount(HomeView, {
+    global: { stubs: { ...stubs, PostMasonry: PostMasonryStub, MagazineHero: MagazineHeroStub } }
+  })
   mounted.push(w)
   return w
 }
@@ -200,6 +214,28 @@ describe('HomeView 发现流（时间序频道）', () => {
     expect(getFeed).toHaveBeenCalledWith({ page: 1, pageSize: 30, category: 'food' })
     expect(w.find('.channel-tabs').exists()).toBe(true)
     expect(w.findAll('.card')).toHaveLength(2)
+  })
+
+  it('频道页不套轮播骨架，直接平铺', async () => {
+    // 穿搭 / 美食 / 彩妆 / 影视等频道是用户主动圈的主题，
+    // 进来看的是「一屏平铺」，不是「编辑精选」
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.mag-stub').exists()).toBe(false)
+  })
+
+  it('频道页没有轮播，就不能再给轮播让位少渲染 4 条', async () => {
+    // 轮播会占用前 4 条有图笔记；频道页没有轮播却仍让位的话，
+    // 首屏会凭空少 4 条 —— 页面不报错，只是内容没了
+    getFeed.mockResolvedValueOnce({
+      list: [1, 2, 3, 4, 5, 6].map((id) => ({ ...mkPost(id), imageUrls: [`/img/${id}.jpg`] })),
+      pagination: { page: 1, pageSize: 30, total: 6, hasMore: false }
+    } as any)
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.findAll('.card')).toHaveLength(6)
   })
 
   it('切频道会重载，而且带上新的 category', async () => {
@@ -265,6 +301,14 @@ describe('HomeView 发现流（时间序频道）', () => {
  * 出错时的表现恰恰是卡片照样渲染、只是推荐没了。
  */
 describe('HomeView 推荐流', () => {
+  it('「推荐」频道渲染轮播骨架', async () => {
+    // 轮播是推荐位的视觉锤，其余频道不套（见发现流用例）
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.mag-stub').exists()).toBe(true)
+  })
+
   it('「推荐」频道调 feedApi，而不是时间序的 getFeed', async () => {
     const w = mountView()
     await flushPromises()

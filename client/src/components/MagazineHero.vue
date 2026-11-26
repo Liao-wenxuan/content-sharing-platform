@@ -1,6 +1,10 @@
 <script setup lang="ts">
 /**
- * 杂志报头 + 封面故事 + 本期精选（2026-11-25 方向 A「主编精选」）
+ * 杂志报头 + 推荐轮播（2026-11-26 改：删掉本期精选静态卡，
+ * 页面只保留「轮播推荐 + 下面正常内容卡」两种风格）
+ *
+ * 只在「推荐」频道使用。穿搭 / 美食 / 彩妆 / 影视等主题频道一律平铺内容卡，
+ * 不套轮播 —— 频道是用户主动圈的主题，进来看的是「全」，不是「精选」。
  *
  * 为什么单独成组件：
  *   HomeView 已经管了三路 feed（推荐 / 关注 / 频道）+ 分页 + 空态，
@@ -22,26 +26,20 @@ const props = defineProps<{
 
 const router = useRouter()
 
-/** 封面故事：feed 第一条有图的笔记（纯文字帖当封面没有视觉冲击） */
-const hero = computed(() => props.posts.find((p) => p.imageUrls?.length) ?? null)
-/** 本期精选：封面之后的三条 */
-const picks = computed(() => {
-  // 只取有图的：无图帖当精选会变成破图 alt 文字（线上视频帖就没有 imageUrls）
-  const withCover = props.posts.filter((p) => p.imageUrls?.length)
-  if (!hero.value) return withCover.slice(0, 3)
-  return withCover.filter((p) => p.id !== hero.value!.id).slice(0, 3)
-})
-
 /**
- * 封面轮播：封面故事 + 本期精选 = 4 张，左右切换，文字跟着图走。
- * slides 必须由 hero + picks 派生，不另存一份数据 —— 换频道/换一批后
- * feed 变了，轮播内容自动跟着变，不会出现「图和文字对不上」。
+ * 推荐轮播：feed 前 4 条有图的笔记，左右切换，文字跟着图走。
+ * 2026-11-26 按用户要求改成「只有轮播推荐 + 下面正常内容卡」两种风格，
+ * 删掉了原来和轮播内容重复的「本期精选」静态卡区。
+ *
+ * slides 从 posts 实时派生，不另存一份数据 —— 换频道/换一批后自动跟着变。
+ * 只取有图的：无图帖当封面会变成破图 alt 文字（线上视频帖就没有 imageUrls）。
  */
+const slides = computed(() => props.posts.filter((p) => p.imageUrls?.length).slice(0, 4))
+/** 当前展示的那张；列表为空时退化成 undefined，模板用 v-if 挡住 */
+const current = computed(() => slides.value[active.value] ?? slides.value[0])
 const active = ref(0)
 const paused = ref(false)
 const reducedMotion = ref(false)
-const slides = computed(() => (hero.value ? [hero.value, ...picks.value] : []))
-const current = computed(() => slides.value[active.value] ?? hero.value)
 
 /** 换频道后 slides 变短，把越界的 index 拉回来 */
 watch(slides, (list) => {
@@ -99,12 +97,6 @@ function open(post: Post) {
   router.push(`/post/${post.id}`)
 }
 
-/** 点精选卡：先让轮播跳到对应那张，再进详情 */
-function openPick(post: Post, index: number) {
-  goTo(index + 1)
-  open(post)
-}
-
 /** 期号：用當天在一年中的第几周，稳定不需要后端 */
 const issueNo = computed(() => {
   const now = new Date()
@@ -125,7 +117,7 @@ function cover(post: Post) {
 </script>
 
 <template>
-  <header v-if="hero" class="mag">
+  <header v-if="slides.length" class="mag">
     <!-- 刊头 -->
     <div class="masthead">
       <div class="brand">拾<small>A LIFE JOURNAL</small></div>
@@ -135,11 +127,11 @@ function cover(post: Post) {
       </div>
     </div>
 
-    <!-- 封面故事轮播：4 张图轮着上，右侧文字跟着切 -->
+    <!-- 推荐轮播：4 张图轮着上，右侧文字跟着切 -->
     <section
       class="cover-story"
       tabindex="0"
-      :aria-label="`封面故事轮播，第 ${active + 1} / ${slides.length} 张`"
+      :aria-label="`推荐轮播，第 ${active + 1} / ${slides.length} 张`"
       @mouseenter="paused = true"
       @mouseleave="paused = false"
       @focusin="paused = true"
@@ -168,7 +160,7 @@ function cover(post: Post) {
         </template>
 
         <!-- 指示条：杂志目录感的小横条，不是圆点 -->
-        <div v-if="slides.length > 1" class="dots" role="tablist" aria-label="封面故事切换">
+        <div v-if="slides.length > 1" class="dots" role="tablist" aria-label="推荐内容切换">
           <button
             v-for="(_, i) in slides"
             :key="i"
@@ -184,39 +176,11 @@ function cover(post: Post) {
       </div>
 
       <div class="cover-copy" :key="current.id">
-        <div class="kicker">封面故事 · {{ current.topicTag || '生活' }}</div>
+        <div class="kicker">本期推荐 · {{ current.topicTag || '生活' }}</div>
         <h1>{{ split(current).title }}</h1>
         <p class="lead">{{ split(current).excerpt }}</p>
         <!-- 署名用杂志的「文 / 某某」，不出现点赞数——那是社区硬符号，会破功 -->
         <div class="byline">文 / {{ current.author?.nickname || '社区用户' }}</div>
-      </div>
-    </section>
-
-    <!-- 本期精选 -->
-    <section v-if="picks.length" class="picks">
-      <div class="section-head"><b>本期精选</b></div>
-      <div class="pick-grid">
-        <article v-for="(p, i) in picks" :key="p.id" class="pick">
-          <div class="pick-num">0{{ i + 1 }}</div>
-          <button
-            type="button"
-            class="pick-figure"
-            :aria-label="`阅读：${split(p).title}`"
-            @click="openPick(p, i)"
-          >
-            <img :src="cover(p)" :alt="split(p).title" />
-          </button>
-          <div class="pick-meta">
-            <span>{{ p.topicTag || '生活' }}</span>
-            <span
-              >{{ new Date(p.createdAt).getMonth() + 1 }}月{{
-                new Date(p.createdAt).getDate()
-              }}日</span
-            >
-          </div>
-          <h3>{{ split(p).title }}</h3>
-          <div class="pick-by">文 / {{ p.author?.nickname || '社区用户' }}</div>
-        </article>
       </div>
     </section>
   </header>
@@ -269,7 +233,7 @@ function cover(post: Post) {
   font-size: 15px;
 }
 
-/* ===== 封面故事 ===== */
+/* ===== 推荐轮播 ===== */
 .cover-story {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
@@ -278,8 +242,7 @@ function cover(post: Post) {
   align-items: center;
   padding: 30px 4px;
 }
-.cover-figure,
-.pick-figure {
+.cover-figure {
   display: block;
   width: 100%;
   padding: 0;
@@ -378,8 +341,7 @@ function cover(post: Post) {
   width: 28px;
   background: var(--red);
 }
-.cover-figure img,
-.pick-figure img {
+.cover-figure img {
   /* scoped 下必须显式写全：全局 img 规则穿不进来，
      object-fit 掉回 fill 会把 320x480 的竖图拉进横框，左右留灰边 */
   width: 100%;
@@ -388,8 +350,7 @@ function cover(post: Post) {
   object-fit: cover;
   transition: transform 0.4s var(--ease-out-expo, ease);
 }
-.cover-figure:hover img,
-.pick-figure:hover img {
+.cover-figure:hover img {
   transform: scale(1.04);
 }
 .kicker {
@@ -435,97 +396,22 @@ function cover(post: Post) {
   opacity: 0.72;
 }
 
-/* ===== 本期精选 ===== */
-.section-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0 4px 20px;
-}
-.section-head b {
-  font-family: var(--mag-serif);
-  font-size: 24px;
-  color: var(--mag-ink);
-}
-.section-head::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-.pick-grid {
-  display: grid;
-  /* minmax(0,1fr) 而不是裸 1fr：1fr 的最小尺寸是 auto，
-     卡片里的长标题/作者行会把列撑到内容宽度，第三张直接跑出屏幕。
-     实测撑到 480px/列（应为 375px），溢出 292px。 */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 26px;
-  min-width: 0;
-}
-.pick {
-  position: relative;
-  min-width: 0;
-  border-top: 2px solid var(--mag-ink);
-  padding-top: 22px;
-}
-.pick-num {
-  position: absolute;
-  top: 6px;
-  right: 0;
-  font-family: var(--mag-serif);
-  font-size: 14px;
-  color: var(--red);
-}
-.pick-figure {
-  height: 210px;
-  border-radius: var(--radius-sm);
-  margin-bottom: 14px;
-}
-.pick-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--red);
-  letter-spacing: 1px;
-  margin-bottom: 9px;
-}
-.pick h3 {
-  font-family: var(--mag-serif);
-  font-size: 20px;
-  line-height: 1.4;
-  margin-bottom: 10px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.pick-by {
-  font-size: 11px;
-  color: var(--mag-sub);
-}
-
 /* 深色主题：辅助文字提亮一档，避免「大标题很亮、期号发灰」的层次混乱；
    刊头双线用中描边，纯白在深底上太抢。 */
 :global(.dark) .masthead {
   border-bottom-color: var(--border-strong);
 }
 :global(.dark) .issue,
-:global(.dark) .brand small,
-:global(.dark) .pick-by {
+:global(.dark) .brand small {
   color: var(--text-1);
   opacity: 0.82;
 }
-:global(.dark) .kicker,
-:global(.dark) .pick-meta {
+:global(.dark) .kicker {
   color: var(--accent);
   opacity: 1;
 }
-/* 深色下近黑的封面图加一圈浅描边，避免融进背景 */
-:global(.dark) .pick-figure {
-  outline: 1px solid var(--border-soft);
-}
 
-/* 窄屏：封面故事改竖排，精选两列 */
+/* 窄屏：推荐轮播改竖排 */
 @media (max-width: 900px) {
   .cover-story {
     grid-template-columns: 1fr;
@@ -544,10 +430,6 @@ function cover(post: Post) {
   }
   .cover-copy h1 {
     font-size: 30px;
-  }
-  .pick-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
   }
 }
 </style>
