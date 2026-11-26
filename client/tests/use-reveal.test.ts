@@ -17,9 +17,12 @@ import { useReveal } from '@/composables/useReveal'
 /** 可手动触发的 IntersectionObserver 桩 */
 let observed: Element[] = []
 let trigger: ((entries: Partial<IntersectionObserverEntry>[]) => void) | null = null
+/** 记录观察器参数：阈值写错会让整列永远不入场 */
+let lastOptions: IntersectionObserverInit | null = null
 
 class FakeObserver {
-  constructor(cb: IntersectionObserverCallback) {
+  constructor(cb: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+    lastOptions = options ?? null
     trigger = (entries) => cb(entries as IntersectionObserverEntry[], this as any)
   }
   observe(el: Element) {
@@ -67,6 +70,7 @@ describe('useReveal', () => {
   beforeEach(() => {
     observed = []
     trigger = null
+    lastOptions = null
     vi.stubGlobal('IntersectionObserver', FakeObserver)
     document.documentElement.classList.remove('motion-ready')
   })
@@ -103,6 +107,16 @@ describe('useReveal', () => {
     expect(document.querySelectorAll('.is-revealed')).toHaveLength(0)
     // 没触发就不该 unobserve，否则元素再滚进来时动画不会重放
     expect(observed).toHaveLength(3)
+  })
+
+  it('阈值必须是 0：整列露出一点就要入场，否则首屏只剩轮播', async () => {
+    mountReveal()
+    await nextTick()
+
+    // 瀑布流观察的是整列（可达 2000px+），按 8% 算要露出近 200px；
+    // 1080×630 的窗口首屏只露出 100px 左右，永远够不到 ——
+    // 整列锁在 opacity:0，用户会以为首页只有一张大图
+    expect(lastOptions?.threshold).toBe(0)
   })
 
   it('错峰延迟有上限：第 9 个元素不能比第 7 个更晚', async () => {

@@ -171,7 +171,9 @@ function cover(post: Post) {
   --mag-sub: var(--text-2);
   --red: var(--accent);
   --line: var(--border);
-  margin-bottom: 34px;
+  /* 轮播与卡片流之间不留太大空档：矮窗口下这一段直接决定首屏能不能
+     看到第一行卡片，26px 够分隔，又不把内容推到折叠线以下 */
+  margin-bottom: 26px;
 }
 
 /* ===== 推荐轮播 =====
@@ -201,7 +203,15 @@ function cover(post: Post) {
   min-width: 0;
 }
 .cover-figure {
-  height: 430px;
+  /*
+   * 高度跟着视口走，而不是写死 430px。
+   *
+   * 写死时在 1080×630 这种矮窗口里，轮播一个人占满首屏（卡片第一行在
+   * y=670，整屏 630 根本看不到），用户会以为首页只有一张大图。
+   * 42vh 让矮窗口自动收图、大屏仍然铺满；下限 260px 保证手机不扁，
+   * 上限 430px 保住杂志跨页的视觉重量。
+   */
+  height: clamp(260px, 42vh, 430px);
   /* 印刷跨页感：封面图收成小圆角，接近纸的直角 */
   border-radius: 3px;
 }
