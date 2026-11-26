@@ -447,9 +447,9 @@ watch(activeCategory, (cat) => {
 </template>
 
 <style scoped>
+/* 2026-11-26：铺满可用宽度，不再挤在 1080px 中间。 */
 .messages {
-  max-width: var(--content-max-width);
-  margin: 0 auto;
+  width: 100%;
   padding-bottom: 48px;
 }
 

@@ -42,7 +42,6 @@ declare module 'vue' {
     ElResult: typeof import('element-plus/es/components/result/index')['ElResult']
     ElSegmented: typeof import('element-plus/es/components/segmented/index')['ElSegmented']
     ElSelect: typeof import('element-plus/es/components/select/index')['ElSelect']
-    ElSkeleton: typeof import('element-plus/es/components/skeleton/index')['ElSkeleton']
     ElSwitch: typeof import('element-plus/es/components/switch/index')['ElSwitch']
     ElTabPane: typeof import('element-plus/es/components/tabs/index')['ElTabPane']
     ElTabs: typeof import('element-plus/es/components/tabs/index')['ElTabs']

@@ -298,6 +298,8 @@ watch(isFollowFeed, () => loadFeed(true))
           :reasons="showFeedMeta ? feed.reasons.value : undefined"
           :dismissable="showFeedMeta"
           :uniform-ratio="6"
+          :max-cols="3"
+          :editorial="true"
           @dismiss="onDismiss"
         />
       </template>

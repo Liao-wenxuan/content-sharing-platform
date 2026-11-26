@@ -440,9 +440,9 @@ onMounted(reload)
 </template>
 
 <style scoped>
+/* 2026-11-26：铺满可用宽度，不再挤在 1560px 中间。 */
 .fav-manage {
-  max-width: var(--content-max-width-wide);
-  margin: 0 auto;
+  width: 100%;
   padding: 24px 0 48px;
 }
 

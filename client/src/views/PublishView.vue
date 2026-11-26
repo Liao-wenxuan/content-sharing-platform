@@ -947,9 +947,10 @@ async function handleSubmit() {
 </template>
 
 <style scoped>
+/* 2026-11-26：铺满可用宽度，不再挤在 1080px 中间。
+   App.vue 的 .content 已有 24px 左右 padding，这里不需要自己留边。 */
 .publish {
-  max-width: var(--content-max-width);
-  margin: 0 auto;
+  width: 100%;
   padding-bottom: 48px;
 }
 

@@ -234,6 +234,22 @@ const showMutual = computed(() => !isOwner.value && isFollowing.value && isFollo
 /** 获赞与收藏：目前只累计获赞，收藏数等收藏模块落地后并进来 */
 const likeCountTotal = computed(() => posts.value.reduce((sum, p) => sum + (p.likeCount ?? 0), 0))
 
+/**
+ * 个性徽章：全部从真实数据算，有门槛才亮 —— 人人都有就等于没有。
+ * 数据不够就一个都不显示，绝不为了「丰富」去造假的身份标签。
+ */
+const badges = computed(() => {
+  const n = posts.value.length
+  const likes = likeCountTotal.value
+  const fans = followerCount.value
+  const out: { label: string; icon: string }[] = []
+  if (n >= 10) out.push({ label: '创作达人', icon: '✦' })
+  if (likes >= 100) out.push({ label: '高赞作者', icon: '♥' })
+  if (fans >= 5) out.push({ label: '人气用户', icon: '✧' })
+  if (n === 0) out.push({ label: '新来的', icon: '○' })
+  return out
+})
+
 async function toggleFollow() {
   const changed = await toggleFollowRaw()
   // 推荐卡是页面加载时拿的快照：刚关注上的人还留在里面会显得很蠢，
@@ -774,6 +790,14 @@ watch(activeScope, async (scope) => {
                   </el-button>
                 </div>
 
+                <!-- 个性徽章：数据够才显示，hover 有抬起反馈 -->
+                <div v-if="badges.length" class="badges">
+                  <span v-for="b in badges" :key="b.label" class="badge" :title="b.label">
+                    <span class="badge-icon">{{ b.icon }}</span
+                    >{{ b.label }}
+                  </span>
+                </div>
+
                 <div class="stats">
                   <button type="button" class="stat stat-link" @click="goFollowList('following')">
                     <b>{{ followingCount }}</b> 关注
@@ -1115,9 +1139,9 @@ watch(activeScope, async (scope) => {
 </template>
 
 <style scoped>
+/* 2026-11-26：铺满可用宽度，不再挤在 1080px 中间。 */
 .profile {
-  max-width: var(--content-max-width);
-  margin: 0 auto;
+  width: 100%;
 }
 
 .guest-card {
@@ -1214,10 +1238,16 @@ watch(activeScope, async (scope) => {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  /* 2026-11-26：网格纹理 + 右下角砖红光晕，给封面一点品牌温度。
+     只是静态渐变，不加动画 —— 花哨的闪烁会毁掉内容社区的安静感。 */
   background-image:
+    radial-gradient(circle at 85% 115%, var(--accent-muted) 0%, transparent 55%),
     linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background-size:
+    100% 100%,
+    28px 28px,
+    28px 28px;
 }
 
 .profile-cover img {
@@ -1397,6 +1427,38 @@ watch(activeScope, async (scope) => {
   color: var(--muted-foreground);
 }
 
+/* ===== 个性徽章（2026-11-26）=====
+   数据达标才显示，砖红描边 + hover 抬起，和全站强调色同源。 */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-full);
+  color: var(--accent);
+  background: var(--accent-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+  transition:
+    transform 0.2s var(--ease-out-expo, ease),
+    box-shadow 0.2s var(--ease-out-expo, ease);
+}
+.badge:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.badge-icon {
+  font-size: 12px;
+}
+
 .copy-btn {
   padding: 0;
   height: auto;
@@ -1437,20 +1499,30 @@ watch(activeScope, async (scope) => {
   font-variant-numeric: tabular-nums;
 }
 
-/* 关注 / 粉丝改成可点的：button 元素天然带键盘可达和 focus-visible，
-   样式抹平成和普通 span 一致，不让交互性体现在视觉上 */
+/* 关注 / 粉丝可点：2026-11-26 起给明确的 hover 反馈
+   （数字变砖红 + 整块轻抬），让「这个能点」一眼看得出，不用猜。 */
 .stat-link {
-  padding: 0;
+  padding: 6px 10px;
+  margin: -6px -10px;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
   color: inherit;
   cursor: pointer;
-  transition: color 0.15s;
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s var(--ease-out-expo, ease);
 }
-
 .stat-link:hover {
-  color: var(--foreground);
+  background: var(--accent-muted);
+  transform: translateY(-2px);
+}
+.stat-link:hover b {
+  color: var(--accent);
+}
+.stat-link b {
+  transition: color 0.18s ease;
 }
 
 .mutual-tag {

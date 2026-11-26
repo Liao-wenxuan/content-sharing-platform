@@ -1,17 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" preserveAspectRatio="xMidYMid slice" role="img" aria-label="默认主页封面">
+  <!--
+    2026-11-26：从靛蓝+青色（#1c2242/#818cf8/#22d3ee，旧候选方向的配色）
+    换成暖炭+砖红陶土，和「生活杂志」的纸白+砖红语言统一。
+    形状结构（渐变 / 光晕 / 同心圆 / 网格）全部保留，只换颜色。
+  -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1c2242"/>
-      <stop offset="0.5" stop-color="#141a33"/>
-      <stop offset="1" stop-color="#0d1426"/>
+      <stop offset="0" stop-color="#3d2a26"/>
+      <stop offset="0.5" stop-color="#2a1e1c"/>
+      <stop offset="1" stop-color="#1e1716"/>
     </linearGradient>
     <radialGradient id="glowA" cx="0.18" cy="0.18" r="0.58">
-      <stop offset="0" stop-color="#818cf8" stop-opacity="0.26"/>
-      <stop offset="1" stop-color="#818cf8" stop-opacity="0"/>
+      <stop offset="0" stop-color="#b83a28" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#b83a28" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="glowB" cx="0.86" cy="0.88" r="0.52">
-      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.15"/>
-      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+      <stop offset="0" stop-color="#e8a07a" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#e8a07a" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
@@ -22,7 +27,7 @@
   <rect width="1600" height="400" fill="url(#bg)"/>
   <rect width="1600" height="400" fill="url(#glowA)"/>
   <rect width="1600" height="400" fill="url(#glowB)"/>
-  <g fill="none" stroke="#c7d2fe" stroke-opacity="0.07" stroke-width="1.5">
+  <g fill="none" stroke="#e8b4a6" stroke-opacity="0.09" stroke-width="1.5">
     <circle cx="1210" cy="40" r="170"/>
     <circle cx="1210" cy="40" r="260"/>
     <circle cx="1210" cy="40" r="350"/>

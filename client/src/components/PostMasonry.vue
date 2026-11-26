@@ -34,6 +34,16 @@ const props = defineProps<{
    * 不传＝6 档循环的高低差瀑布流；传 6＝16:9 横图整齐网格（B站式，首页主编精选用）。
    */
   uniformRatio?: number
+  /**
+   * 最大列数。不传＝按容器宽度自动算（搜索页等照旧）；
+   * 首页传 3，让 16:9 封面有足够宽度，不再挤成 6 列小图。
+   */
+  maxCols?: number
+  /**
+   * 杂志排版模式：卡片按「分类+日期 / 衬线大标题 / 文·作者」渲染，
+   * 和首页上方 MagazineHero 的精选卡同一套形式。只首页开，其他页照旧。
+   */
+  editorial?: boolean
 }>()
 
 const emit = defineEmits<{ dismiss: [postId: number] }>()
@@ -70,7 +80,10 @@ onMounted(() => {
   resizeObserver = new ResizeObserver((entries) => {
     const w = entries[0].contentRect.width
     gridWidth.value = w
-    colCount.value = computeColCount(w)
+    // maxCols 只压上限：窄屏仍按宽度算（最少 2 列），宽屏不至于挤成 6 列
+    colCount.value = props.maxCols
+      ? Math.min(computeColCount(w), props.maxCols)
+      : computeColCount(w)
   })
   resizeObserver.observe(gridRef.value)
 })
@@ -252,6 +265,12 @@ function coverSrc(post: Post): string {
   return post.imageThumbs?.[0] || post.imageUrls[0]
 }
 
+/** 杂志模式的登载日期：11月24日 */
+function issueDate(post: Post): string {
+  const d = new Date(post.createdAt)
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
 /** 话题标签是否命中当前搜索词 */
 function tagMatched(post: Post): boolean {
   const kw = props.highlight?.trim().toLowerCase()
@@ -424,8 +443,14 @@ function markCoverBroken(postId: number) {
             </div>
           </div>
 
+          <!-- 杂志模式：图下先给分类 + 登载日期，和上方便精选同一套信息结构 -->
+          <div v-if="editorial" class="ed-meta">
+            <span>{{ item.post.topicTag || '生活' }}</span>
+            <span>{{ issueDate(item.post) }}</span>
+          </div>
+
           <!-- 标题：两行截断，命中关键词高亮 -->
-          <p class="title">
+          <p class="title" :class="{ 'title--editorial': editorial }">
             <span
               v-for="(seg, si) in segments(item.post.content)"
               :key="si"
@@ -459,8 +484,13 @@ function markCoverBroken(postId: number) {
           </button>
         </el-tooltip>
 
-        <!-- 作者 + 时间 + 点赞：挤在一行里 -->
-        <div class="foot">
+        <!-- 杂志模式：署名走「文 / 作者」，和上方精选一致，不重复头像/时间/点赞 -->
+        <div v-if="editorial" class="ed-byline">
+          文 / {{ item.post.author?.nickname || '社区用户' }}
+        </div>
+
+        <!-- 普通模式：作者 + 时间 + 点赞：挤在一行里 -->
+        <div v-else class="foot">
           <!--
             有作者才给链接。
             之前这里是 `div @click` + 弹一句「这条笔记没有关联作者」，
@@ -961,6 +991,34 @@ function markCoverBroken(postId: number) {
   background: var(--accent);
   /* 只动 transform / opacity / color，不碰 layout 属性 */
   transform: scale(1.08);
+}
+
+/* ===== 杂志模式：和 MagazineHero 精选卡同一套排版语言 =====
+ * 分类/日期一行 → 衬线标题 → 文/作者署名。
+ * 只在首页开（editorial prop），搜索页等仍用下面紧凑的 .foot。
+ */
+.ed-meta {
+  display: flex;
+  justify-content: space-between;
+  margin: 14px var(--card-text-pad, 0px) 8px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--accent);
+}
+.title--editorial {
+  font-family: Georgia, 'Songti SC', 'Noto Serif CJK SC', serif;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.45;
+  /* 标题两行 + 署名，行高比普通模式松 */
+  min-height: calc(2 * 1.45em);
+}
+.ed-byline {
+  margin: 4px var(--card-text-pad, 0px) 16px;
+  font-family: Georgia, 'Songti SC', serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--text-2);
 }
 
 /* ===== 标题 ===== */
