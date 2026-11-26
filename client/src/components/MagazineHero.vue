@@ -10,7 +10,7 @@
  * 内容全部来自真实笔记：封面取第一条，精选取接下来三条。
  * 点任意一张都跳真实详情页 —— 不是静态 demo 的假链接。
  */
-import { computed } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Post } from '@/api/posts'
 
@@ -32,6 +32,63 @@ const picks = computed(() => {
   return withCover.filter((p) => p.id !== hero.value!.id).slice(0, 3)
 })
 
+/**
+ * 封面轮播：封面故事 + 本期精选 = 4 张，左右切换，文字跟着图走。
+ * slides 必须由 hero + picks 派生，不另存一份数据 —— 换频道/换一批后
+ * feed 变了，轮播内容自动跟着变，不会出现「图和文字对不上」。
+ */
+const active = ref(0)
+const paused = ref(false)
+const reducedMotion = ref(false)
+const slides = computed(() => (hero.value ? [hero.value, ...picks.value] : []))
+const current = computed(() => slides.value[active.value] ?? hero.value)
+
+/** 换频道后 slides 变短，把越界的 index 拉回来 */
+watch(slides, (list) => {
+  if (active.value >= list.length) active.value = 0
+})
+function go(delta: number) {
+  if (slides.value.length < 2) return
+  active.value = (active.value + delta + slides.value.length) % slides.value.length
+}
+function goTo(i: number) {
+  if (i >= 0 && i < slides.value.length) active.value = i
+}
+
+let timer: ReturnType<typeof setInterval> | null = null
+function stopAuto() {
+  if (timer) clearInterval(timer)
+  timer = null
+}
+function startAuto() {
+  stopAuto()
+  if (reducedMotion.value || slides.value.length < 2) return
+  timer = setInterval(() => {
+    if (!paused.value && !document.hidden) go(1)
+  }, 5000)
+}
+onMounted(() => {
+  // matchMedia 在真实浏览器里一定有；jsdom/老环境没有时退化为「不减少动效」，
+  // 不能因此抛错把整个组件树带崩（HomeView 的测试就栽在这）。
+  reducedMotion.value =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  startAuto()
+})
+onBeforeUnmount(stopAuto)
+
+/** 键盘左右键：轮播区获得焦点时才响应，不抢全局方向键 */
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    go(-1)
+  }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    go(1)
+  }
+}
+
 /** 标题取第一行，正文取剩下的（真实笔记是「标题\n\n正文」结构） */
 function split(post: Post) {
   const parts = String(post.content || '').split('\n')
@@ -40,6 +97,12 @@ function split(post: Post) {
 
 function open(post: Post) {
   router.push(`/post/${post.id}`)
+}
+
+/** 点精选卡：先让轮播跳到对应那张，再进详情 */
+function openPick(post: Post, index: number) {
+  goTo(index + 1)
+  open(post)
 }
 
 /** 期号：用當天在一年中的第几周，稳定不需要后端 */
@@ -72,22 +135,60 @@ function cover(post: Post) {
       </div>
     </div>
 
-    <!-- 封面故事 -->
-    <section class="cover-story">
-      <button
-        type="button"
-        class="cover-figure"
-        :aria-label="`阅读封面故事：${split(hero).title}`"
-        @click="open(hero)"
-      >
-        <img :src="cover(hero)" :alt="split(hero).title" />
-      </button>
-      <div class="cover-copy">
-        <div class="kicker">封面故事 · {{ hero.topicTag || '生活' }}</div>
-        <h1>{{ split(hero).title }}</h1>
-        <p class="lead">{{ split(hero).excerpt }}</p>
+    <!-- 封面故事轮播：4 张图轮着上，右侧文字跟着切 -->
+    <section
+      class="cover-story"
+      tabindex="0"
+      :aria-label="`封面故事轮播，第 ${active + 1} / ${slides.length} 张`"
+      @mouseenter="paused = true"
+      @mouseleave="paused = false"
+      @focusin="paused = true"
+      @focusout="paused = false"
+      @keydown="onKeydown"
+    >
+      <div class="cover-stage">
+        <button
+          type="button"
+          class="cover-figure"
+          :aria-label="`阅读：${split(current).title}`"
+          @click="open(current)"
+        >
+          <!-- key 绑 post.id：切换时强制重建 img，过渡动画才有「换页」感 -->
+          <img :key="current.id" :src="cover(current)" :alt="split(current).title" />
+        </button>
+
+        <!-- 左右箭头：细线圆钮，hover 才实化，不抢图的视觉权重 -->
+        <template v-if="slides.length > 1">
+          <button type="button" class="nav-arrow nav-prev" aria-label="上一张" @click="go(-1)">
+            <span aria-hidden="true">‹</span>
+          </button>
+          <button type="button" class="nav-arrow nav-next" aria-label="下一张" @click="go(1)">
+            <span aria-hidden="true">›</span>
+          </button>
+        </template>
+
+        <!-- 指示条：杂志目录感的小横条，不是圆点 -->
+        <div v-if="slides.length > 1" class="dots" role="tablist" aria-label="封面故事切换">
+          <button
+            v-for="(_, i) in slides"
+            :key="i"
+            type="button"
+            role="tab"
+            class="dot"
+            :class="{ 'is-active': i === active }"
+            :aria-label="`第 ${i + 1} 张：${split(slides[i]).title}`"
+            :aria-selected="i === active"
+            @click="goTo(i)"
+          />
+        </div>
+      </div>
+
+      <div class="cover-copy" :key="current.id">
+        <div class="kicker">封面故事 · {{ current.topicTag || '生活' }}</div>
+        <h1>{{ split(current).title }}</h1>
+        <p class="lead">{{ split(current).excerpt }}</p>
         <!-- 署名用杂志的「文 / 某某」，不出现点赞数——那是社区硬符号，会破功 -->
-        <div class="byline">文 / {{ hero.author?.nickname || '社区用户' }}</div>
+        <div class="byline">文 / {{ current.author?.nickname || '社区用户' }}</div>
       </div>
     </section>
 
@@ -101,7 +202,7 @@ function cover(post: Post) {
             type="button"
             class="pick-figure"
             :aria-label="`阅读：${split(p).title}`"
-            @click="open(p)"
+            @click="openPick(p, i)"
           >
             <img :src="cover(p)" :alt="split(p).title" />
           </button>
@@ -187,10 +288,95 @@ function cover(post: Post) {
   cursor: pointer;
   overflow: hidden;
 }
+/* 轮播舞台：图 + 箭头 + 指示条共用定位祖先 */
+.cover-stage {
+  position: relative;
+  min-width: 0;
+}
 .cover-figure {
   height: 430px;
   /* 印刷跨页感：封面图收成小圆角，接近纸的直角 */
   border-radius: 3px;
+}
+
+/* 切换淡入：只动 opacity，不碰 layout。reduced-motion 下由全局兜底关掉 */
+.cover-figure img,
+.cover-copy {
+  animation: mag-fade 0.45s var(--ease-out-expo, ease);
+}
+@keyframes mag-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 细线箭头：静止态留 0.35 透明度当「这里能切」的信号，
+   hover 图区才实化 —— 完全隐藏的话首次访问的用户根本不知道能滑 */
+.nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.35;
+  transition:
+    opacity 0.2s ease,
+    background-color 0.2s ease;
+}
+.cover-stage:hover .nav-arrow,
+.nav-arrow:focus-visible {
+  opacity: 1;
+}
+.nav-arrow:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+.nav-prev {
+  left: 14px;
+}
+.nav-next {
+  right: 14px;
+}
+
+/* 指示条：小横条，激活态变砖红并加宽 —— 杂志目录感 */
+.dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+.dot {
+  width: 16px;
+  height: 3px;
+  padding: 0;
+  border: none;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition:
+    width 0.25s var(--ease-out-expo, ease),
+    background-color 0.2s ease;
+}
+.dot.is-active {
+  width: 28px;
+  background: var(--red);
 }
 .cover-figure img,
 .pick-figure img {
@@ -348,6 +534,13 @@ function cover(post: Post) {
   }
   .cover-figure {
     height: 260px;
+  }
+  /* 触屏没有 hover，箭头常驻 */
+  .nav-arrow {
+    opacity: 0.85;
+    width: 34px;
+    height: 34px;
+    font-size: 22px;
   }
   .cover-copy h1 {
     font-size: 30px;
