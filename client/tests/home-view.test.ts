@@ -170,7 +170,7 @@ const PostMasonryStub = {
  * 频道判断写错也发现不了。
  */
 const MagazineHeroStub = {
-  props: ['posts', 'channelLabel'],
+  props: ['posts'],
   template: '<div class="mag-stub" />'
 }
 

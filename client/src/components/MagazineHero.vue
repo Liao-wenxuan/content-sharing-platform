@@ -1,17 +1,17 @@
 <script setup lang="ts">
 /**
- * 杂志报头 + 推荐轮播（2026-11-26 改：删掉本期精选静态卡，
- * 页面只保留「轮播推荐 + 下面正常内容卡」两种风格）
+ * 推荐轮播（2026-11-26 改：删掉本期精选静态卡与杂志报头，
+ * 首页顶部只留「顶栏 + 频道栏」两层，轮播直接作为内容第一屏）
  *
  * 只在「推荐」频道使用。穿搭 / 美食 / 彩妆 / 影视等主题频道一律平铺内容卡，
  * 不套轮播 —— 频道是用户主动圈的主题，进来看的是「全」，不是「精选」。
  *
  * 为什么单独成组件：
  *   HomeView 已经管了三路 feed（推荐 / 关注 / 频道）+ 分页 + 空态，
- *   再把杂志骨架塞进去会撑爆。这里只做「首屏视觉锤」这一件事，
+ *   再把轮播塞进去会撑爆。这里只做「首屏视觉锤」这一件事，
  *   数据由 HomeView 从真实 feed 传进来，不自己请求、不造数据。
  *
- * 内容全部来自真实笔记：封面取第一条，精选取接下来三条。
+ * 内容全部来自真实笔记：取前 4 条有图的。
  * 点任意一张都跳真实详情页 —— 不是静态 demo 的假链接。
  */
 import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
@@ -20,8 +20,6 @@ import type { Post } from '@/api/posts'
 
 const props = defineProps<{
   posts: Post[]
-  /** 当前频道名，显示在报头的「本期主题」 */
-  channelLabel?: string
 }>()
 
 const router = useRouter()
@@ -97,20 +95,6 @@ function open(post: Post) {
   router.push(`/post/${post.id}`)
 }
 
-/** 期号：用當天在一年中的第几周，稳定不需要后端 */
-const issueNo = computed(() => {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), 0, 1)
-  return String(
-    Math.ceil(((now.getTime() - start.getTime()) / 86400000 + start.getDay()) / 7)
-  ).padStart(2, '0')
-})
-const today = computed(() => {
-  const d = new Date()
-  const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日 · 星期${week}`
-})
-
 function cover(post: Post) {
   return post.imageThumbs?.[0] || post.imageUrls?.[0] || ''
 }
@@ -118,17 +102,8 @@ function cover(post: Post) {
 
 <template>
   <header v-if="slides.length" class="mag">
-    <!-- 刊头：压成单行（品牌 + 期号/日期），高度约 110px → 50px，
-         把首屏空间让给轮播图，而不是一片空白 -->
-    <div class="masthead">
-      <div class="brand">拾<small>A LIFE JOURNAL</small></div>
-      <div class="issue">
-        第 <b>{{ issueNo }}</b> 期 · <span class="date">{{ today }} · </span
-        >{{ channelLabel || '为你推荐' }}
-      </div>
-    </div>
-
-    <!-- 推荐轮播：4 张图轮着上，右侧文字跟着切 -->
+    <!-- 推荐轮播：4 张图轮着上，右侧文字跟着切。没有报头——
+         首页顶部只保留「顶栏 + 频道栏」两层，内容直接从这个轮播开始 -->
     <section
       class="cover-story"
       tabindex="0"
@@ -199,57 +174,17 @@ function cover(post: Post) {
   margin-bottom: 34px;
 }
 
-/* ===== 刊头 =====
- * 单行紧凑版：品牌与期号/日期同一行，上下留白收到最小。
- * 原来 52px 品牌 + 两行期号 + 36px 上下 padding = 110px 高，
- * 首屏最贵的一屏被一块「只有 logo 和日期」的空白吃掉，
- * 用户反馈「这一部分高度太高」。现在约 50px，杂志感还在，地方让给轮播。
+/* ===== 推荐轮播 =====
+ * 报头已删除：顶部只留「顶栏 + 频道栏」两层，轮播直接开场。
+ * 上下各留 22px，和频道栏的 16px 间距连起来约 38px，不贴边也不空。
  */
-.masthead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 2px 4px 10px;
-  border-bottom: 3px double var(--mag-ink);
-}
-.brand {
-  font-family: var(--mag-serif);
-  font-size: 34px;
-  line-height: 1;
-  letter-spacing: -1px;
-  color: var(--red);
-  flex-shrink: 0;
-}
-.brand small {
-  display: inline;
-  font-family: var(--mag-serif);
-  font-size: 10px;
-  letter-spacing: 2px;
-  margin-left: 10px;
-  color: var(--mag-sub);
-}
-.issue {
-  font-family: var(--mag-serif);
-  font-size: 12px;
-  color: var(--mag-sub);
-  text-align: right;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-.issue b {
-  color: var(--red);
-  font-size: 13px;
-}
-
-/* ===== 推荐轮播 ===== */
 .cover-story {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
   /* 加大图文间距，接近杂志跨页的呼吸感 */
   gap: 68px;
   align-items: center;
-  padding: 30px 4px;
+  padding: 22px 4px;
 }
 .cover-figure {
   display: block;
@@ -405,16 +340,7 @@ function cover(post: Post) {
   opacity: 0.72;
 }
 
-/* 深色主题：辅助文字提亮一档，避免「大标题很亮、期号发灰」的层次混乱；
-   刊头双线用中描边，纯白在深底上太抢。 */
-:global(.dark) .masthead {
-  border-bottom-color: var(--border-strong);
-}
-:global(.dark) .issue,
-:global(.dark) .brand small {
-  color: var(--text-1);
-  opacity: 0.82;
-}
+/* 深色主题：kicker 用强调色提亮一档，避免深底上发灰 */
 :global(.dark) .kicker {
   color: var(--accent);
   opacity: 1;
@@ -422,33 +348,10 @@ function cover(post: Post) {
 
 /* 窄屏：推荐轮播改竖排 */
 @media (max-width: 900px) {
-  /* 刊头再收一档：期号一行放不下就换行，不能顶出横向滚动 */
-  .masthead {
-    gap: 10px;
-    padding: 0 4px 8px;
-  }
-  .brand {
-    font-size: 26px;
-  }
-  .brand small {
-    font-size: 8px;
-    letter-spacing: 1.5px;
-    margin-left: 6px;
-  }
-  .issue {
-    font-size: 10px;
-    white-space: normal;
-    max-width: 62%;
-  }
-  /* 窄屏放不下「期号 + 完整日期 + 频道」，日期让位：
-     保留期号和频道名，一行读完，报头才收得住 */
-  .issue .date {
-    display: none;
-  }
   .cover-story {
     grid-template-columns: 1fr;
     gap: 20px;
-    padding: 22px 4px;
+    padding: 18px 4px;
   }
   .cover-figure {
     height: 260px;

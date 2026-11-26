@@ -2,9 +2,10 @@
 /**
  * 发现页（2026-11-25 方向 A「主编精选」杂志骨架）
  *
- * 首屏结构：杂志报头 → 4 图推荐轮播 → 完整内容卡片流（**仅「推荐」频道**）。
- * 前三块由 MagazineHero 组件从真实 feed 数据生成（不造数据），
- * 后面仍是原样无限浏览的瀑布流 —— 杂志骨架是首屏视觉锤，不替代 feed。
+ * 首屏结构：4 图推荐轮播 → 完整内容卡片流（**仅「推荐」频道**）。
+ * 轮播由 MagazineHero 组件从真实 feed 数据生成（不造数据），
+ * 后面仍是原样无限浏览的瀑布流 —— 轮播是首屏视觉锤，不替代 feed。
+ * 顶部只保留「顶栏 + 频道栏」两层，不再单独加杂志报头。
  *
  * 其余频道（穿搭 / 美食 / 彩妆 / 影视 …）不套轮播：它们是用户自己圈定的
  * 主题，进频道就是要「一屏平铺看全」，再压一个占半屏的封面故事只会
@@ -292,15 +293,11 @@ watch(isFollowFeed, () => loadFeed(true))
 
       <template v-else>
         <!--
-          首屏骨架只给「推荐」：报头 + 4 图轮播是推荐位的视觉锤。
+          轮播只给「推荐」：这是推荐位的视觉锤。
           穿搭 / 美食 / 彩妆 / 影视等频道直接平铺内容卡，不套轮播
           （频道是用户主动圈的主题，进来看的是「全」，不是「精选」）。
         -->
-        <MagazineHero
-          v-if="isRecommended"
-          :posts="visiblePosts"
-          :channel-label="channels.find((c) => c.key === homeTabs.category)?.label"
-        />
+        <MagazineHero v-if="isRecommended" :posts="visiblePosts" />
 
         <!-- 推荐理由 + 不感兴趣只在登录后的推荐流出现 -->
         <PostMasonry

@@ -1,5 +1,5 @@
 /**
- * 杂志报头 + 封面轮播测试
+ * 推荐轮播测试
  *
  * 组件刚合进来时函数覆盖率是 2/13 —— 一整块「封面故事 + 四图轮播」是首屏视觉锤，
  * 却没有任何测试守着。这里把交互面全点一遍：
@@ -9,8 +9,9 @@
  *  - 键盘只在轮播区响应，方向键要 preventDefault 不抢全局；
  *  - 点封面跳真实详情（轮播当前是哪张就跳哪张）。
  *
- * 2026-11-26 起「本期精选」静态卡已删除：页面只保留轮播 + 下方内容卡，
- * 所以这里不再断言 picks（.pick-figure 应当不存在）。
+ * 2026-11-26 起「本期精选」静态卡与杂志报头都已删除：
+ * 页面只保留「轮播 + 下方内容卡」，顶部只留顶栏和频道栏两层。
+ * 所以这里不再断言 picks / masthead（两者都应不存在）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
@@ -49,7 +50,7 @@ function post(id: number, opts: Partial<Post> = {}): Post {
 
 function mountHero(posts: Post[]) {
   return mount(MagazineHero, {
-    props: { posts, channelLabel: '测试频道' },
+    props: { posts },
     global: { stubs: { 'el-icon': ElIconStub } },
     attachTo: document.body
   })
@@ -101,10 +102,12 @@ describe('MagazineHero 封面与轮播数据', () => {
     w.unmount()
   })
 
-  it('报头显示期号、日期与频道名', () => {
+  it('不再渲染报头，轮播就是第一屏', () => {
+    // 三层（顶栏 / 频道栏 / 报头）太繁琐，报头已删：品牌在侧栏，
+    // 这里只剩轮播，不能又长出一块「拾 + 期号」占首屏高度
     const w = mountHero([post(1)])
-    expect(w.text()).toContain('测试频道')
-    expect(w.find('.issue').text()).toMatch(/第 \d+ 期/)
+    expect(w.find('.masthead').exists()).toBe(false)
+    expect(w.find('.cover-story').exists()).toBe(true)
     w.unmount()
   })
 })
