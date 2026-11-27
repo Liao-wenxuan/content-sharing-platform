@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-11-27T05:11:34.466Z",
-  "clientSrcHash": "69dd2cde8839ca4ec513943c9ddcb3e097d38acdf7298b7bcd09a9d27092a818",
+  "capturedAt": "2026-11-27T05:33:42.562Z",
+  "clientSrcHash": "f63d97c9f748e6fbb92304bed430db41ee27d8f5ee8664fb4e790b0dfa859e65",
   "shots": [
     {
       "file": "01-home.jpeg",
@@ -28,7 +28,7 @@
     },
     {
       "file": "08-profile.jpeg",
-      "bytes": 195140
+      "bytes": 196686
     },
     {
       "file": "09-messages.png",
@@ -56,7 +56,7 @@
     },
     {
       "file": "16-detail-comments.jpeg",
-      "bytes": 184208
+      "bytes": 184053
     },
     {
       "file": "26-feed-recommend.jpeg",
@@ -68,11 +68,11 @@
     },
     {
       "file": "28-image-compress.png",
-      "bytes": 95542
+      "bytes": 95525
     },
     {
       "file": "29-reveal-stagger.png",
-      "bytes": 734006
+      "bytes": 803138
     },
     {
       "file": "30-reveal-done.png",

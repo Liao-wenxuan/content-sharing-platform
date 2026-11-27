@@ -9,7 +9,8 @@
  * - 右侧新增「你可能感兴趣的人」栏，利用桌面端的横向空间
  * - 关注按钮 / 粉丝数 / 推荐关注全部接真接口（此前是本地 ref + 写死 mock）
  */
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
+import { GAP, computeColCount, distributeToColumns } from '@/utils/masonry'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/utils/element'
 import { Star, ChatDotRound, Edit, Plus, Camera, Loading } from '@element-plus/icons-vue'
@@ -608,6 +609,67 @@ const gridPosts = computed<Post[]>(() => {
   if (isLikedTab.value) return likedPosts.value
   return posts.value
 })
+
+/**
+ * 笔记/收藏/赞过共用瀑布流：和首页同一套最短列优先分列。
+ *
+ * 原来用 CSS grid + ratio-(index%3)：grid 每行行高由最高的卡决定，
+ * 矮卡下面空一片，视觉上还是等高网格（用户说「我要多列瀑布式」）。
+ * 这里按容器宽度算列数，再按 6 档封面比例把每张卡塞进当前最矮的列，
+ * 卡片高度真正错落，且屏幕阅读顺序仍是逐列从上到下。
+ */
+const gridRef = ref<HTMLElement | null>(null)
+const gridWidth = ref(0)
+let gridObserver: ResizeObserver | null = null
+
+/**
+ * 个人页比首页多一条右侧栏，内容区窄一截；用更小的列宽下限才能保持
+ * 和原来 CSS grid 一样的 4 列（原来 minmax(200px,1fr) 也是约 4 列）。
+ * 首页用默认 232px，这里传 180px，755px 内容区就出 4 列。
+ */
+const PROFILE_MIN_COL_WIDTH = 180
+const gridCols = computed(() => computeColCount(gridWidth.value, PROFILE_MIN_COL_WIDTH))
+const gridColWidth = computed(() => (gridWidth.value - GAP * (gridCols.value - 1)) / gridCols.value)
+/** 分列结果：每列一个数组，模板按列渲染，列内高度自然错落。
+ *  ratio 由 distributeToColumns 按 7 档循环给出（含 16:9 横图，增加错落感） */
+const masonryColumns = computed(() =>
+  distributeToColumns(gridPosts.value, gridCols.value, gridColWidth.value)
+)
+
+function measureGrid() {
+  if (gridRef.value) gridWidth.value = gridRef.value.clientWidth
+}
+
+/** 数据到了 .post-grid 才渲染（v-else），所以 observer 必须等 DOM 出现再挂；
+ *  只在 onMounted 挂的话首屏 gridPosts 为空、ref 还是 null，宽度永远测不到。
+ *  切 tab / 空态切换会换掉这个元素，所以每次先断旧再挂新。 */
+function observeGrid() {
+  gridObserver?.disconnect()
+  gridObserver = null
+  if (typeof ResizeObserver === 'undefined' || !gridRef.value) return
+  gridObserver = new ResizeObserver(measureGrid)
+  gridObserver.observe(gridRef.value)
+}
+
+onMounted(() => {
+  nextTick(() => {
+    measureGrid()
+    observeGrid()
+  })
+})
+
+// 笔记/收藏/赞过切换、异步数据到达、空态→有数据，都会让 grid 元素重新出现
+watch([gridPosts, activeTab], () =>
+  nextTick(() => {
+    measureGrid()
+    observeGrid()
+  })
+)
+
+onBeforeUnmount(() => {
+  gridObserver?.disconnect()
+  gridObserver = null
+})
 /** 只有「笔记」和「收藏」两栏有右侧控制条，其余 tab 不用留空行 */
 const showTabsBar = computed(() => activeTab.value === 'posts' || isFavTab.value)
 
@@ -922,35 +984,40 @@ watch(activeScope, async (scope) => {
 
             <el-empty v-else-if="gridPosts.length === 0" :description="emptyHint" />
 
-            <div v-else class="post-grid">
-              <router-link
-                v-for="(post, index) in gridPosts"
-                :key="post.id"
-                :to="`/post/${post.id}`"
-                class="post-link"
-              >
-                <el-card shadow="never" class="post-card" body-class="post-body">
-                  <div class="cover" :class="`ratio-${index % 3}`">
-                    <img
-                      v-if="post.imageUrls?.length"
-                      :src="post.imageUrls[0]"
-                      :alt="`${post.author?.nickname} 的笔记封面`"
-                      loading="lazy"
-                    />
-                    <span v-else class="cover-blank">纯文字</span>
-                  </div>
-                  <p class="content">{{ post.content }}</p>
-                  <div class="post-meta">
-                    <span class="stat">
-                      <el-icon><component :is="Star" /></el-icon>{{ post.likeCount }}
-                    </span>
-                    <span class="stat">
-                      <el-icon><component :is="ChatDotRound" /></el-icon>{{ post.commentCount }}
-                    </span>
-                    <span class="time">{{ formatTime(post.createdAt) }}</span>
-                  </div>
-                </el-card>
-              </router-link>
+            <!-- 瀑布流：按最短列优先分列，列内卡片高度错落。
+                 用 ref 监听容器宽度算列数，和首页 PostMasonry 同一套工具函数。 -->
+            <div v-else ref="gridRef" class="post-grid">
+              <div v-for="(col, colIndex) in masonryColumns" :key="colIndex" class="post-col">
+                <router-link
+                  v-for="item in col"
+                  :key="item.post.id"
+                  :to="`/post/${item.post.id}`"
+                  class="post-link"
+                >
+                  <el-card shadow="never" class="post-card" body-class="post-body">
+                    <div class="cover" :class="`ratio-${item.ratio}`">
+                      <img
+                        v-if="item.post.imageUrls?.length"
+                        :src="item.post.imageUrls[0]"
+                        :alt="`${item.post.author?.nickname} 的笔记封面`"
+                        loading="lazy"
+                      />
+                      <span v-else class="cover-blank">纯文字</span>
+                    </div>
+                    <p class="content">{{ item.post.content }}</p>
+                    <div class="post-meta">
+                      <span class="stat">
+                        <el-icon><component :is="Star" /></el-icon>{{ item.post.likeCount }}
+                      </span>
+                      <span class="stat">
+                        <el-icon><component :is="ChatDotRound" /></el-icon
+                        >{{ item.post.commentCount }}
+                      </span>
+                      <span class="time">{{ formatTime(item.post.createdAt) }}</span>
+                    </div>
+                  </el-card>
+                </router-link>
+              </div>
             </div>
           </div>
         </div>
@@ -1600,12 +1667,23 @@ watch(activeScope, async (scope) => {
   font-size: var(--fs-md);
 }
 
-/* ===== 笔记栅格 ===== */
+/* ===== 笔记瀑布流 =====
+ * 不用 CSS grid：行高由该行最高卡决定，矮卡下面空一片，看着还是等高网格。
+ * 这里外层 flex 平均分列，每列内部竖直堆叠、高度各走各的 —— 真瀑布流。
+ * 列数由 JS 按容器宽度算（computeColCount），和首页 PostMasonry 一致。 */
 .post-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  display: flex;
+  align-items: flex-start;
   gap: 16px;
-  align-items: start;
+  width: 100%;
+}
+
+.post-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* ===== 评论 tab：左侧笔记小图 + 右侧「我说的话」===== */
@@ -1735,17 +1813,35 @@ watch(activeScope, async (scope) => {
 
 .cover {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 1 / 1;
   background: var(--muted);
   overflow: hidden;
   border-radius: var(--radius-sm);
 }
 
-.ratio-1 {
+/* 7 档比例和 utils/masonry.ts 的 RATIOS 一一对应（分列高度估算靠它）。
+   原来只有 3 档，分列函数按 7 档估算高度、CSS 却只认 3 档，
+   两边对不上会让「最短列」算错，瀑布流底部参差不齐。 */
+.ratio-0 {
   aspect-ratio: 1 / 1;
+}
+.ratio-1 {
+  aspect-ratio: 3 / 4;
 }
 .ratio-2 {
   aspect-ratio: 4 / 5;
+}
+.ratio-3 {
+  aspect-ratio: 3 / 5;
+}
+.ratio-4 {
+  aspect-ratio: 2 / 3;
+}
+.ratio-5 {
+  aspect-ratio: 5 / 6;
+}
+.ratio-6 {
+  aspect-ratio: 16 / 9;
 }
 
 .cover img {

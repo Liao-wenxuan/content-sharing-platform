@@ -199,6 +199,36 @@ afterEach(() => {
   while (mounted.length) mounted.pop()!.unmount()
 })
 
+describe('笔记瀑布流', () => {
+  it('笔记按列分组渲染，卡片封面带 7 档比例，不再是一行对齐的网格', async () => {
+    // 用户要「多列瀑布式」：原来 CSS grid 行高由最高卡决定，矮卡下面空一片。
+    // 现在用最短列优先分列，每列独立竖直堆叠。这里锁结构不锁列数
+    // （列数由 ResizeObserver 实测宽度决定，jsdom 里没有真实布局）。
+    const list = Array.from({ length: 8 }, (_, i) => ({
+      id: 900 + i,
+      content: `瀑布流笔记 ${i + 1}`,
+      imageUrls: [`/img/${i + 1}.jpg`],
+      imageThumbs: [],
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: new Date().toISOString(),
+      author: null,
+      topicTag: '家居'
+    }))
+    vi.mocked(postsApi.getMyPosts).mockResolvedValue({ user: ME, list, total: 8 } as never)
+
+    const w = mountView()
+    await flushPromises()
+
+    const cols = w.findAll('.post-col')
+    expect(cols.length).toBeGreaterThanOrEqual(2)
+    expect(w.findAll('.post-link')).toHaveLength(8)
+    // 封面比例来自 RATIOS 7 档，至少出现 3 种不同高度，才看得出瀑布错落
+    const ratios = w.findAll('.cover').map((c) => c.classes().find((cls) => /^ratio-\d$/.test(cls)))
+    expect(new Set(ratios).size).toBeGreaterThanOrEqual(3)
+  })
+})
+
 describe('打开编辑弹窗', () => {
   it('回填当前的昵称 / 头像 / 封面', async () => {
     // 不回填就是把用户已有的资料清空了 —— 打开弹窗那一刻就在丢数据
