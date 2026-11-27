@@ -33,8 +33,15 @@
 		reverse_proxy 127.0.0.1:3000
 	}
 
+	# /uploads 全是静态文件（上传的图片/视频/海报），没有鉴权也没有动态逻辑。
+	# 早先反代到 Node 让 express.static 读盘：每张 23KB 的缩略图都要走
+	# Caddy → Node → 磁盘 → Node → Caddy 一整圈，线上实测单张 0.5~0.8s，
+	# 首屏 12 张无论串行还是连接复用都要 13s。让 Caddy 直接 file_server 读，
+	# 省掉 Node 这一跳；缓存头这里一并给出，不再依赖 express.static 注入。
 	handle /uploads/* {
-		reverse_proxy 127.0.0.1:3000
+		root * {$CSP_UPLOAD_ROOT:/srv/csp/repo/server/uploads}
+		header Cache-Control "public, max-age=2592000, immutable"
+		file_server
 	}
 
 	handle {

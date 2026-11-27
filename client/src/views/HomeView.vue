@@ -111,6 +111,11 @@ const channels = [
   { key: 'video', label: '视频' }
 ]
 
+/** 内容少的频道到底后推荐的相邻频道，取当前频道之外的前 4 个 */
+const suggestChannels = computed(() =>
+  channels.filter((c) => c.key !== homeTabs.category && c.key !== 'video').slice(0, 4)
+)
+
 async function loadFeed(reset: boolean) {
   // 推荐流走自己的会话，不能进这条时间序的加载路径
   if (isRecommended.value) return feed.reload()
@@ -322,6 +327,29 @@ watch(isFollowFeed, () => loadFeed(true))
         <span v-else class="no-more">— 已经到底了 —</span>
       </div>
 
+      <!--
+        主题频道内容少时（彩妆 2 条 / 影视 2 条），一屏就到底，下面大片空白。
+        给几个别的频道入口，把「没内容了」变成「换个地方看看」。
+        推荐流/关注流不显示：它们有自己的「换一批」和关注引导。
+      -->
+      <div
+        v-if="!isFollowFeed && !isRecommended && visiblePosts.length > 0 && !visibleHasMore"
+        class="channel-suggest"
+      >
+        <p class="suggest-label">这个频道看完了，试试别的</p>
+        <div class="suggest-links">
+          <button
+            v-for="ch in suggestChannels"
+            :key="ch.key"
+            type="button"
+            class="suggest-chip"
+            @click="homeTabs.setCategory(ch.key)"
+          >
+            {{ ch.label }}
+          </button>
+        </div>
+      </div>
+
       <!-- 推荐流的解释入口：让人知道「推荐」不是随机的，也能改 -->
       <div v-if="isRecommended && visiblePosts.length > 0" class="feed-note">
         <router-link to="/interest" class="feed-note-link">这些推荐是怎么来的？</router-link>
@@ -465,5 +493,44 @@ watch(isFollowFeed, () => loadFeed(true))
 
 .feed-note-link:hover {
   color: var(--accent);
+}
+
+/* ===== 频道到底后的引导 ===== */
+.channel-suggest {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0 40px;
+}
+.suggest-label {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--muted-foreground);
+}
+.suggest-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.suggest-chip {
+  padding: 7px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface-1);
+  color: var(--text-1);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+.suggest-chip:hover,
+.suggest-chip:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-2px);
 }
 </style>

@@ -38,6 +38,8 @@ const current = computed(() => slides.value[active.value] ?? slides.value[0])
 const active = ref(0)
 const paused = ref(false)
 const reducedMotion = ref(false)
+/** 指示条 hover/focus 预览的是哪张；null＝不显示 */
+const preview = ref<number | null>(null)
 
 /** 换频道后 slides 变短，把越界的 index 拉回来 */
 watch(slides, (list) => {
@@ -135,7 +137,9 @@ function cover(post: Post) {
           </button>
         </template>
 
-        <!-- 指示条：杂志目录感的小横条，不是圆点 -->
+        <!-- 指示条：杂志目录感的小横条，不是圆点。
+             hover 在横条上浮出对应那张的缩略图 + 标题，鼠标不用点就知道切去哪 ——
+             纯文字标签在 16px 横条上放不下，预览图是最省地方的做法。 -->
         <div v-if="slides.length > 1" class="dots" role="tablist" aria-label="推荐内容切换">
           <button
             v-for="(_, i) in slides"
@@ -146,13 +150,28 @@ function cover(post: Post) {
             :class="{ 'is-active': i === active }"
             :aria-label="`第 ${i + 1} 张：${split(slides[i]).title}`"
             :aria-selected="i === active"
+            @mouseenter="preview = i"
+            @mouseleave="preview = null"
+            @focus="preview = i"
+            @blur="preview = null"
             @click="goTo(i)"
-          />
+          >
+            <span v-if="preview === i" class="dot-preview" aria-hidden="true">
+              <img :src="cover(slides[i])" :alt="split(slides[i]).title" />
+              <span class="preview-title">{{ split(slides[i]).title }}</span>
+            </span>
+          </button>
         </div>
       </div>
 
       <div class="cover-copy" :key="current.id">
-        <div class="kicker">本期推荐 · {{ current.topicTag || '生活' }}</div>
+        <div class="kicker">
+          <span class="kicker-no"
+            >{{ String(active + 1).padStart(2, '0') }} /
+            {{ String(slides.length).padStart(2, '0') }}</span
+          >
+          本期推荐 · {{ current.topicTag || '生活' }}
+        </div>
         <h1>{{ split(current).title }}</h1>
         <p class="lead">{{ split(current).excerpt }}</p>
         <!-- 署名用杂志的「文 / 某某」，不出现点赞数——那是社区硬符号，会破功 -->
@@ -280,6 +299,7 @@ function cover(post: Post) {
   gap: 7px;
 }
 .dot {
+  position: relative;
   width: 16px;
   height: 3px;
   padding: 0;
@@ -294,6 +314,63 @@ function cover(post: Post) {
 .dot.is-active {
   width: 28px;
   background: var(--red);
+}
+
+/* hover 预览：横条上方浮出小图 + 标题。
+ * 只用 opacity/transform，不碰 dot 自身的几何 —— 横条宽度动画不能被打断。
+ * pointer-events:none 防止预览图自己挡住鼠标、造成 hover 反复进出闪烁。 */
+.dot-preview {
+  position: absolute;
+  /* 浮在指示条上方 26px：既能看到预览，又不会盖住横条本身
+     （盖住的话用户 hover 时反而不知道自己指的是哪一条） */
+  bottom: 26px;
+  left: 50%;
+  display: block;
+  width: 150px;
+  padding: 6px;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  animation: dot-preview-in 0.18s ease forwards;
+  z-index: 3;
+}
+@keyframes dot-preview-in {
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+.dot-preview img {
+  display: block;
+  width: 100%;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+.preview-title {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-1);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 序号：01 / 04 用等宽数字，杂志目录感；切换时不会因位数变化抖动 */
+.kicker-no {
+  display: inline-block;
+  margin-right: 10px;
+  padding-right: 10px;
+  border-right: 1px solid currentColor;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
 }
 .cover-figure img {
   /* scoped 下必须显式写全：全局 img 规则穿不进来，
@@ -375,6 +452,10 @@ function cover(post: Post) {
   }
   .cover-copy h1 {
     font-size: 30px;
+  }
+  /* 触屏没有真正的 hover，点完指示条焦点会留住浮层挡住封面 —— 窄屏不显示 */
+  .dot-preview {
+    display: none;
   }
 }
 </style>

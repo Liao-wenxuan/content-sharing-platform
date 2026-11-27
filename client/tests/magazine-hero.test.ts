@@ -215,4 +215,38 @@ describe('MagazineHero 轮播交互', () => {
     expect(push).toHaveBeenCalledWith('/post/3')
     w.unmount()
   })
+
+  it('kicker 显示当前序号 / 总数，切换时跟着变', async () => {
+    const w = mountHero([post(1), post(2), post(3)])
+    expect(w.find('.kicker-no').text()).toBe('01 / 03')
+
+    await w.find('.nav-next').trigger('click')
+    expect(w.find('.kicker-no').text()).toBe('02 / 03')
+    w.unmount()
+  })
+
+  it('hover 指示条浮出对应那张的预览，移开就消失', async () => {
+    const w = mountHero([post(1), post(2), post(3)])
+    const dots = w.findAll('.dot')
+
+    expect(w.findAll('.dot-preview')).toHaveLength(0)
+    await dots[1].trigger('mouseenter')
+    const previews = w.findAll('.dot-preview')
+    expect(previews).toHaveLength(1)
+    expect(previews[0].find('img').attributes('src')).toBe('/img/2.jpg')
+    expect(previews[0].find('.preview-title').text()).toBe('标题 2')
+
+    await dots[1].trigger('mouseleave')
+    expect(w.findAll('.dot-preview')).toHaveLength(0)
+    w.unmount()
+  })
+
+  it('hover 预览不影响当前选中的那张', async () => {
+    const w = mountHero([post(1), post(2), post(3)])
+    await w.findAll('.dot')[2].trigger('mouseenter')
+    // 只是预览，没点：封面仍是第一张
+    expect(coverSrc(w)).toBe('/img/1.jpg')
+    expect(w.find('.kicker-no').text()).toBe('01 / 03')
+    w.unmount()
+  })
 })

@@ -246,7 +246,10 @@
   --foreground: #1a1a18;
   --text-1: rgba(26, 26, 24, 1);
   --text-2: rgba(26, 26, 24, 0.66);
-  --text-3: rgba(26, 26, 24, 0.6);
+  /* 0.6 压在 --surface-3(#eaeae5) 上 WCAG 只有 4.29:1，没到 AA 的 4.5；
+     卡片时间/点赞/辅助说明都在用这一档，按最差背景算取 0.64（4.85:1）。
+     和 text-2 的 0.66 只差一点，但字重/字号本身还有一层区分。 */
+  --text-3: rgba(26, 26, 24, 0.64);
   --muted-foreground: rgba(26, 26, 24, 0.66);
   --text-on-accent: #ffffff;
 

@@ -225,6 +225,23 @@ describe('HomeView 发现流（时间序频道）', () => {
     expect(w.find('.mag-stub').exists()).toBe(false)
   })
 
+  it('频道看完后给其它频道入口，不含当前频道', async () => {
+    // 彩妆/影视只有 2 条，一屏到底下面是空白；给几个快捷入口把
+    // 「没内容了」变成「换个地方看看」
+    const w = mountView()
+    await flushPromises()
+
+    const suggest = w.find('.channel-suggest')
+    expect(suggest.exists()).toBe(true)
+    const chips = w.findAll('.suggest-chip')
+    expect(chips.length).toBeGreaterThan(0)
+    expect(chips.every((c) => c.text() !== '美食')).toBe(true)
+
+    // 点 chip 直接切频道
+    await chips[0].trigger('click')
+    expect(useHomeTabsStore().category).not.toBe('food')
+  })
+
   it('频道页没有轮播，就不能再给轮播让位少渲染 4 条', async () => {
     // 轮播会占用前 4 条有图笔记；频道页没有轮播却仍让位的话，
     // 首屏会凭空少 4 条 —— 页面不报错，只是内容没了
@@ -307,6 +324,13 @@ describe('HomeView 推荐流', () => {
     await flushPromises()
 
     expect(w.find('.mag-stub').exists()).toBe(true)
+  })
+
+  it('「推荐」频道不显示频道引导（它有自己的「换一批」）', async () => {
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.channel-suggest').exists()).toBe(false)
   })
 
   it('「推荐」频道调 feedApi，而不是时间序的 getFeed', async () => {

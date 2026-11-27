@@ -14,7 +14,7 @@
 浏览器 ──HTTPS──> Caddy (:443)
                   ├── /assets/* / 任意路径 ──> client/dist 静态文件 + SPA fallback
                   ├── /api/*    ──reverse_proxy──> Node :3000 (pm2: csp-api)
-                  ├── /uploads/*──reverse_proxy──> Node :3000 (express.static)
+                  ├── /uploads/*──file_server───> 直接读 server/uploads（不过 Node）
                   └── /ws*      ──reverse_proxy──> Node :3000 (WebSocket)
                                                       │
                                                       └── SQLite 单文件（在 repo 外）
@@ -46,6 +46,7 @@ set -a; . deploy/.env; set +a
 #    （变量由环境注入，也可以直接替换成真实域名和静态根）
 export CSP_DOMAIN=csp.example.com
 export CSP_WEB_ROOT=/srv/csp/repo/client/dist
+export CSP_UPLOAD_ROOT=/srv/csp/repo/server/uploads   # /uploads/* 直接读盘，不经 Node
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 

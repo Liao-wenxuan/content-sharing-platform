@@ -231,13 +231,28 @@
   封顶统一在 JS 里算，CSS 只管「拿到多少延迟就等多少」。
 */
 
-/* 图片加载过渡：骨架底色 → 真图交叉淡入 */
+/* 图片加载过渡：骨架底色 → 模糊低清 → 真图淡入
+ *
+ * 慢网下图片要 0.5~3s 才到，纯 opacity 淡入让等待期只剩一块空底色，
+ * 用户看到的是「卡住了」。加一层 blur 过渡：图一到先糊着显示轮廓，
+ * 再聚焦到清晰 —— 和渐进式 JPEG 的体感一致，但不依赖服务端出多档图。
+ *
+ * 只动 filter + opacity，不碰 transform：合成层里重采样会把字和相邻图
+ * 弄糊（见上面 .sg-reveal 的注释），filter 在加载完成后归零，不留合成层。
+ * reduced-motion 由文件末尾的全局兜底接管，过渡归零但终态一样。
+ */
 .sg-img {
   opacity: 0;
-  transition: opacity var(--dur-medium) var(--ease-out-expo);
+  filter: blur(10px);
+  transform: none;
+  transition:
+    opacity var(--dur-medium) var(--ease-out-expo),
+    filter var(--dur-medium) var(--ease-out-expo);
 }
 .sg-img.is-loaded {
   opacity: 1;
+  /*  explicit none 而不是 blur(0)：部分浏览器对 blur(0) 仍保留合成层 */
+  filter: none;
 }
 
 /* ============================================================
