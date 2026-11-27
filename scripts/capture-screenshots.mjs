@@ -64,4 +64,22 @@ writeFileSync(
 
 console.log(`\n共 ${files.length} 张，写入 docs/screenshots/manifest.json`)
 console.log('界面代码哈希：' + manifest.clientSrcHash.slice(0, 16) + '…')
-console.log('收尾：node server/cleanup-test-data.mjs --yes   # 删掉脚本造的临时账号')
+
+// ===== 自动清理脚本造的临时数据和笔记 =====
+//
+// 以前这里只 print 一句「收尾：node server/cleanup-test-data.mjs --yes」让人手工跑。
+// 结果是四个子脚本造的 @test.local 账号和它们发的演示笔记一直留在 data.db 里，
+// 每跑一次配图就多 4 条同名笔记。推荐流按时间倒序，于是首页前几条全是
+// 「把周末空出来…」——轮播 4 张图里有 3 张标题相同、封面只在两张间来回切，
+// 用户看到的就是「轮播动不了」。
+//
+// 清理放在 manifest 之后：manifest 记的是界面代码哈希，和数据库无关；
+// 且配图已经拍完，清理失败不该把整批图判成失败。
+console.log('\n-- 清理脚本造的临时账号和笔记')
+try {
+  execFileSync('node', [path.join(ROOT, 'server', 'cleanup-test-data.mjs'), '--yes'], {
+    stdio: 'inherit'
+  })
+} catch (err) {
+  console.warn('⚠ 清理失败（不影响已拍好的配图）：', err.message)
+}

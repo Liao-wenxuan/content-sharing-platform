@@ -1,18 +1,18 @@
 {
-  "capturedAt": "2026-11-27T04:55:39.886Z",
+  "capturedAt": "2026-11-27T05:11:34.466Z",
   "clientSrcHash": "69dd2cde8839ca4ec513943c9ddcb3e097d38acdf7298b7bcd09a9d27092a818",
   "shots": [
     {
       "file": "01-home.jpeg",
-      "bytes": 241506
+      "bytes": 224797
     },
     {
       "file": "02-search.jpeg",
-      "bytes": 278317
+      "bytes": 228552
     },
     {
       "file": "03-detail.jpeg",
-      "bytes": 128881
+      "bytes": 165836
     },
     {
       "file": "04-login.png",
@@ -20,67 +20,67 @@
     },
     {
       "file": "06-home-logged-in.jpeg",
-      "bytes": 199034
+      "bytes": 230136
     },
     {
       "file": "07-publish.png",
-      "bytes": 94493
+      "bytes": 90957
     },
     {
       "file": "08-profile.jpeg",
-      "bytes": 213154
+      "bytes": 195140
     },
     {
       "file": "09-messages.png",
-      "bytes": 121466
+      "bytes": 84681
     },
     {
       "file": "10-settings.png",
-      "bytes": 83597
+      "bytes": 80432
     },
     {
       "file": "12-search-suggest.jpeg",
-      "bytes": 204927
+      "bytes": 234141
     },
     {
       "file": "13-favorites.jpeg",
-      "bytes": 377238
+      "bytes": 177079
     },
     {
       "file": "14-topic.jpeg",
-      "bytes": 219629
+      "bytes": 233711
     },
     {
       "file": "15-follows.jpeg",
-      "bytes": 58681
+      "bytes": 68407
     },
     {
       "file": "16-detail-comments.jpeg",
-      "bytes": 146471
+      "bytes": 184208
     },
     {
       "file": "26-feed-recommend.jpeg",
-      "bytes": 322828
+      "bytes": 247432
     },
     {
       "file": "27-interest.jpeg",
-      "bytes": 141800
+      "bytes": 120648
     },
     {
       "file": "28-image-compress.png",
-      "bytes": 95567
+      "bytes": 95542
     },
     {
       "file": "29-reveal-stagger.png",
-      "bytes": 670122
+      "bytes": 734006
     },
     {
       "file": "30-reveal-done.png",
-      "bytes": 627075
+      "bytes": 734091
     },
     {
       "file": "31-reveal-reduced.png",
-      "bytes": 627075
+      "bytes": 734091
     },
     {
       "file": "32-settings.png",
