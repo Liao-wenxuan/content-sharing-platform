@@ -201,19 +201,19 @@ onMounted(reload)
 <template>
   <div class="fav-manage">
     <header class="head">
-      <div class="head-copy">
-        <h1 class="title">收藏</h1>
-        <p class="subtitle">收藏只有自己可见，可以按主题归进收藏夹</p>
-      </div>
-      <div class="head-stats" aria-label="收藏概览">
-        <div class="stat">
-          <b class="stat-num">{{ allCount }}</b>
-          <span class="stat-label">篇收藏</span>
+      <div class="head-line">
+        <div class="head-copy">
+          <h1 class="title">收藏</h1>
+          <p class="subtitle">收藏只有自己可见，可以按主题归进收藏夹</p>
         </div>
-        <span class="stat-sep" aria-hidden="true"></span>
-        <div class="stat">
-          <b class="stat-num">{{ folders.length }}</b>
-          <span class="stat-label">个收藏夹</span>
+        <!-- 统计锚点和消息/发布页同一套：纯文本 + 大数字，不套白底卡 -->
+        <div class="head-stats" aria-label="收藏概览">
+          <span
+            ><b>{{ allCount }}</b> 篇收藏</span
+          >
+          <span
+            ><b>{{ folders.length }}</b> 个收藏夹</span
+          >
         </div>
       </div>
     </header>
@@ -446,14 +446,18 @@ onMounted(reload)
   padding: 24px 0 48px;
 }
 
-/* 页头：左边文案、右边概览数字，一个明确的视觉锚点。
-   原来只有一行小标题，整页从左往右「塌」下去，没有重心 */
+/* 页头：和消息/发布同一套布局语言 —— 标题+副标题在左、概览数字在右，
+   统计用纯文本不加白底卡，三页放一起看才是同一种页面。
+   原来这里是「白底卡包着两列大数字」，和消息页的纯文本统计明显不是一回事。 */
 .head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
   margin-bottom: 20px;
+}
+
+.head-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .head-copy {
@@ -462,53 +466,33 @@ onMounted(reload)
 
 .title {
   margin: 0;
-  font-size: var(--fs-xl);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: var(--fs-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--foreground);
 }
 
 .subtitle {
-  margin: 4px 0 0;
-  font-size: var(--fs-sm);
+  margin: 6px 0 0;
+  font-size: var(--fs-base);
   color: var(--muted-foreground);
 }
 
 .head-stats {
   display: flex;
-  align-items: center;
   gap: 18px;
-  flex-shrink: 0;
-  padding: 10px 18px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.stat-num {
-  font-family: var(--font-numeric);
-  font-size: var(--fs-xl);
-  font-weight: 600;
-  line-height: 1.1;
-  color: var(--foreground);
-}
-
-.stat-label {
-  font-size: var(--fs-2xs);
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
   color: var(--muted-foreground);
+  white-space: nowrap;
 }
 
-.stat-sep {
-  width: 1px;
-  height: 28px;
-  background: var(--border-soft);
+.head-stats b {
+  margin-right: 3px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ===== 筛选条 =====

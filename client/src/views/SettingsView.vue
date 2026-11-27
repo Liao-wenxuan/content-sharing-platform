@@ -333,8 +333,21 @@ onMounted(async () => {
 <template>
   <div class="settings">
     <header class="page-header">
-      <h1 class="page-title">设置</h1>
-      <p class="page-subtitle">账号、内容和外观偏好</p>
+      <div class="head-line">
+        <div>
+          <h1 class="page-title">设置</h1>
+          <p class="page-subtitle">账号、内容和外观偏好</p>
+        </div>
+        <!-- 统计锚点：和消息/发布页同一套语言，页头右侧不留空 -->
+        <div class="head-stats">
+          <span
+            ><b>{{ groups.length }}</b> 组设置</span
+          >
+          <span
+            ><b>{{ groups.reduce((n, g) => n + g.items.length, 0) }}</b> 个选项</span
+          >
+        </div>
+      </div>
     </header>
 
     <!-- 读取失败的提示：可关闭，且不挡住下面的界面 -->
@@ -579,19 +592,46 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* 2026-11-27：铺满可用宽度，和消息/发布/收藏同一套页面布局。
+   原来 max-width + margin auto 让设置缩在中间一条，和其余页对不齐。 */
 .settings {
-  max-width: var(--content-max-width);
-  margin: 0 auto;
+  width: 100%;
+  padding-bottom: 48px;
 }
 
 .load-alert {
   margin-bottom: 16px;
 }
 
+/* 页头与消息/发布同一套：标题+副标题在左、统计在右、下方细线收口 */
 .page-header {
-  margin-bottom: 24px;
-  padding-bottom: 18px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border-soft);
+}
+
+.head-line {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.head-stats {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.head-stats b {
+  margin-right: 3px;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {
@@ -599,13 +639,13 @@ onMounted(async () => {
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0;
-  color: var(--text-1);
+  color: var(--foreground);
 }
 
 .page-subtitle {
   margin: 6px 0 0;
   font-size: var(--fs-base);
-  color: var(--text-2);
+  color: var(--muted-foreground);
 }
 
 /* ===== 分组卡 ===== */

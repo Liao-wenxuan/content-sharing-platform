@@ -131,6 +131,20 @@ beforeEach(() => {
 })
 
 describe('加载与渲染', () => {
+  it('页头和消息/发布同一套：标题副标题在左、统计是纯文本在右', async () => {
+    // 收藏原来用「白底卡包着两列大数字」，和消息页的纯文本统计明显不是一回事。
+    // 这里只锁结构不锁数值：以后谁把 head-line 拆掉或给统计套回白框，立刻红。
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.head .head-line').exists()).toBe(true)
+    const stats = w.find('.head-stats')
+    expect(stats.exists()).toBe(true)
+    expect(stats.findAll('.stat')).toHaveLength(0) // 旧的白底 stat 块
+    expect(stats.text()).toContain('篇收藏')
+    expect(stats.text()).toContain('个收藏夹')
+  })
+
   it('首屏按「全部」拉第一页，并把夹列表一起拿回来', async () => {
     mountView()
     await flushPromises()
