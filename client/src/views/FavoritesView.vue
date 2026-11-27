@@ -443,7 +443,9 @@ onMounted(reload)
 /* 2026-11-26：铺满可用宽度，不再挤在 1560px 中间。 */
 .fav-manage {
   width: 100%;
-  padding: 24px 0 48px;
+  /* App.vue 的 .content 已经有 24px 顶部留白，这里再加 24px 会让
+     标题比消息/发布/设置低一截（实测 108px vs 84px）。只保留底部留白。 */
+  padding-bottom: 48px;
 }
 
 /* 页头：和消息/发布同一套布局语言 —— 标题+副标题在左、概览数字在右，
